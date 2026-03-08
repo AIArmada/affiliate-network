@@ -1,0 +1,31 @@
+{
+  "name": "aiarmada/affiliate-network",
+  "description": "Multi-merchant affiliate network and marketplace extension for AIArmada affiliates.",
+  "license": "MIT",
+  "homepage": "https://github.com/aiarmada/commerce",
+  "support": {
+    "issues": "https://github.com/aiarmada/commerce/issues",
+    "source": "https://github.com/aiarmada/commerce"
+  },
+  "require": {
+    "aiarmada/affiliates": "self.version"
+  },
+  "autoload": {
+    "psr-4": {
+      "AIArmada\\AffiliateNetwork\\": "src/",
+      "AIArmada\\AffiliateNetwork\\Database\\Factories\\": "database/factories/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "AIArmada\\AffiliateNetwork\\AffiliateNetworkServiceProvider"
+      ]
+    }
+  },
+  "config": {
+    "sort-packages": true
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}
