@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Listeners;
 
 use AIArmada\AffiliateNetwork\Http\Middleware\TrackNetworkLinkCookie;
+use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 use AIArmada\Orders\Events\CommissionAttributionRequired;
+use AIArmada\Orders\Models\Order;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
 /**
@@ -54,7 +57,7 @@ final class RecordNetworkConversionForOrder
         $clickedAt = $attribution['clicked_at'] ?? null;
 
         if ($clickedAt !== null && $attributionWindow > 0) {
-            $clickTime = \Carbon\CarbonImmutable::parse($clickedAt);
+            $clickTime = CarbonImmutable::parse($clickedAt);
 
             if ($clickTime->addHours($attributionWindow)->isPast()) {
                 return; // Click is outside attribution window
@@ -89,8 +92,8 @@ final class RecordNetworkConversionForOrder
     /**
      * Store network attribution data in the order for tracking/reporting.
      *
-     * @param  \AIArmada\Orders\Models\Order  $order
-     * @param  \AIArmada\AffiliateNetwork\Models\AffiliateOfferLink  $link
+     * @param  Order  $order
+     * @param  AffiliateOfferLink  $link
      * @param  array<string, mixed>  $attribution
      */
     private function storeAttributionInOrder($order, $link, array $attribution): void

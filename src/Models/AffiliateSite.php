@@ -7,6 +7,8 @@ namespace AIArmada\AffiliateNetwork\Models;
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateSiteFactory;
 use AIArmada\CommerceSupport\Traits\HasOwner;
 use AIArmada\CommerceSupport\Traits\HasOwnerScopeConfig;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,13 +25,13 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property string $status
  * @property string|null $verification_method
  * @property string|null $verification_token
- * @property \Carbon\CarbonImmutable|null $verified_at
+ * @property CarbonImmutable|null $verified_at
  * @property array<string, mixed>|null $settings
  * @property array<string, mixed>|null $metadata
- * @property \Carbon\CarbonImmutable $created_at
- * @property \Carbon\CarbonImmutable $updated_at
+ * @property CarbonImmutable $created_at
+ * @property CarbonImmutable $updated_at
  * @property-read Model|null $owner
- * @property-read \Illuminate\Database\Eloquent\Collection<int, AffiliateOffer> $offers
+ * @property-read Collection<int, AffiliateOffer> $offers
  */
 class AffiliateSite extends Model
 {

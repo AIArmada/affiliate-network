@@ -8,6 +8,7 @@ use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\Affiliates\Models\Affiliate;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -142,9 +143,9 @@ final class OfferManagementService
     /**
      * Get all offers an affiliate is approved for.
      *
-     * @return \Illuminate\Database\Eloquent\Collection<int, AffiliateOffer>
+     * @return Collection<int, AffiliateOffer>
      */
-    public function getApprovedOffers(Affiliate $affiliate): \Illuminate\Database\Eloquent\Collection
+    public function getApprovedOffers(Affiliate $affiliate): Collection
     {
         $approvedOfferIds = AffiliateOfferApplication::query()
             ->where('affiliate_id', $affiliate->id)

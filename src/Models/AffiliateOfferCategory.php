@@ -7,6 +7,8 @@ namespace AIArmada\AffiliateNetwork\Models;
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferCategoryFactory;
 use AIArmada\CommerceSupport\Traits\HasOwner;
 use AIArmada\CommerceSupport\Traits\HasOwnerScopeConfig;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -25,12 +27,12 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property string|null $icon
  * @property int $sort_order
  * @property bool $is_active
- * @property \Carbon\CarbonImmutable $created_at
- * @property \Carbon\CarbonImmutable $updated_at
+ * @property CarbonImmutable $created_at
+ * @property CarbonImmutable $updated_at
  * @property-read Model|null $owner
  * @property-read AffiliateOfferCategory|null $parent
- * @property-read \Illuminate\Database\Eloquent\Collection<int, AffiliateOfferCategory> $children
- * @property-read \Illuminate\Database\Eloquent\Collection<int, AffiliateOffer> $offers
+ * @property-read Collection<int, AffiliateOfferCategory> $children
+ * @property-read Collection<int, AffiliateOffer> $offers
  */
 class AffiliateOfferCategory extends Model
 {

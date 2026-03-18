@@ -204,6 +204,9 @@ $link = $service->createLink(
 
 // Options: target_url, sub_id, sub_id_2, sub_id_3, custom_parameters, expires_at, metadata
 
+// Note: metadata is the extension point if your application wants to carry
+// subject-specific context that may later be bridged into core affiliates flows.
+
 // Generate URLs
 $signedUrl = $service->generateTrackingUrl(AffiliateOfferLink $link): string;
 $directUrl = $service->buildDirectLink(AffiliateOfferLink $link): string;

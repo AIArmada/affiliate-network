@@ -150,6 +150,16 @@ This package integrates tightly with the core `aiarmada/affiliates` package:
 - Owner scoping respects affiliate ownership through relationship-based scoping
 - Commission structures complement affiliate-level configurations
 
+### Tracking Boundary
+
+`affiliate-network` does **not** depend on the core affiliates package's link or conversion field names such as `external_reference`, `value_minor`, or the subject-aware attribution fields.
+
+Instead, it keeps its own offer-level tracking boundary:
+
+- `AffiliateOfferLink` stores clicks, conversions, and aggregated revenue for marketplace/offer links
+- checkout integration stores `network_attribution` in order metadata
+- any optional bridge into core `aiarmada/affiliates` conversions must be implemented explicitly by the consuming application
+
 ## Requirements
 
 - PHP 8.4+

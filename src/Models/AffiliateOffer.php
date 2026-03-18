@@ -6,6 +6,8 @@ namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferFactory;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesBySiteOwner;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -31,15 +33,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $landing_url
  * @property array<string, mixed>|null $restrictions
  * @property array<string, mixed>|null $metadata
- * @property \Carbon\CarbonImmutable|null $starts_at
- * @property \Carbon\CarbonImmutable|null $ends_at
- * @property \Carbon\CarbonImmutable $created_at
- * @property \Carbon\CarbonImmutable $updated_at
+ * @property CarbonImmutable|null $starts_at
+ * @property CarbonImmutable|null $ends_at
+ * @property CarbonImmutable $created_at
+ * @property CarbonImmutable $updated_at
  * @property-read AffiliateSite $site
  * @property-read AffiliateOfferCategory|null $category
- * @property-read \Illuminate\Database\Eloquent\Collection<int, AffiliateOfferCreative> $creatives
- * @property-read \Illuminate\Database\Eloquent\Collection<int, AffiliateOfferApplication> $applications
- * @property-read \Illuminate\Database\Eloquent\Collection<int, AffiliateOfferLink> $links
+ * @property-read Collection<int, AffiliateOfferCreative> $creatives
+ * @property-read Collection<int, AffiliateOfferApplication> $applications
+ * @property-read Collection<int, AffiliateOfferLink> $links
  */
 class AffiliateOffer extends Model
 {

@@ -7,6 +7,7 @@ namespace AIArmada\AffiliateNetwork\Models;
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferLinkFactory;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByAffiliateOwner;
 use AIArmada\Affiliates\Models\Affiliate;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -27,10 +28,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $conversions
  * @property int $revenue
  * @property bool $is_active
- * @property \Carbon\CarbonImmutable|null $expires_at
+ * @property CarbonImmutable|null $expires_at
  * @property array<string, mixed>|null $metadata
- * @property \Carbon\CarbonImmutable $created_at
- * @property \Carbon\CarbonImmutable $updated_at
+ * @property CarbonImmutable $created_at
+ * @property CarbonImmutable $updated_at
  * @property-read AffiliateOffer $offer
  * @property-read Affiliate $affiliate
  * @property-read AffiliateSite|null $site

@@ -189,6 +189,12 @@ $stats = $linkService->getStats($link);
 // ]
 ```
 
+### Tracking Model Notes
+
+`OfferLinkService::recordConversion()` updates the package's own `AffiliateOfferLink` counters and revenue totals.
+
+It does not create or mutate core `aiarmada/affiliates` `AffiliateConversion` rows, so the newer core affiliates fields like `external_reference`, `value_minor`, and subject metadata are not required here.
+
 ## Categories
 
 ### Create Categories
@@ -278,6 +284,8 @@ To enable the integration, set the following environment variable or update your
 ```php
 // .env
 AFFILIATE_NETWORK_CHECKOUT_ENABLED=true
+
+When a network-attributed order converts, the listener stores network attribution details under `order.metadata.network_attribution` and increments the related `AffiliateOfferLink` conversion metrics.
 ```
 
 ### How it Works
