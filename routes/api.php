@@ -7,5 +7,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web'])->group(function (): void {
     Route::get('/affiliate-network/go/{code}', LinkRedirectController::class)
+        ->middleware('signed')
         ->name('affiliate-network.redirect');
 });

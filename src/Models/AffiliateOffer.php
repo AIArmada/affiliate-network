@@ -168,7 +168,7 @@ class AffiliateOffer extends Model
             return false;
         }
 
-        $now = now();
+        $now = CarbonImmutable::now();
 
         if ($this->starts_at !== null && $now->lt($this->starts_at)) {
             return false;

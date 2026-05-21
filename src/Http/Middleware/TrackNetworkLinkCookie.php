@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Http\Middleware;
 
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\Request;
 use JsonException;
@@ -35,7 +36,7 @@ final class TrackNetworkLinkCookie
         /** @var Response $response */
         $response = $next($request);
 
-        $cookieName = config('affiliate-network.cookies.name', 'anl_session');
+        $cookieName = config('affiliate-network.cookies.name', 'affiliate_network_link');
         $existingCookie = $request->cookie($cookieName);
         $linkCode = $this->resolveLinkCode($request);
 
@@ -62,7 +63,9 @@ final class TrackNetworkLinkCookie
      */
     private function resolveLinkCode(Request $request): ?string
     {
-        $keys = (array) config('affiliate-network.cookies.query_parameters', ['anl']);
+        $configuredKeys = (array) config('affiliate-network.cookies.query_parameters', ['anl']);
+        $primaryKey = (string) config('affiliate-network.links.parameter', 'anl');
+        $keys = array_values(array_unique([...$configuredKeys, $primaryKey]));
 
         foreach ($keys as $key) {
             $value = $request->query($key);
@@ -86,7 +89,7 @@ final class TrackNetworkLinkCookie
             'code' => $linkCode,
             'affiliate_id' => $affiliateId,
             'offer_id' => $offerId,
-            'clicked_at' => now()->toIso8601String(),
+            'clicked_at' => CarbonImmutable::now()->toIso8601String(),
         ], JSON_THROW_ON_ERROR);
     }
 

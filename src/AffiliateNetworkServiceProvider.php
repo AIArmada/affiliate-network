@@ -21,6 +21,7 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
         $package
             ->name('affiliate-network')
             ->hasConfigFile('affiliate-network')
+            ->runsMigrations()
             ->discoversMigrations()
             ->hasRoutes(['api']);
     }

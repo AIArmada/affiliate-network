@@ -11,7 +11,7 @@ return new class extends Migration
     public function up(): void
     {
         $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
-        $jsonType = config('affiliate-network.database.json_column_type', 'json');
+        $jsonType = config('affiliate-network.database.json_column_type', commerce_json_column_type('affiliate-network', 'json'));
 
         Schema::create($tablePrefix . 'offers', function (Blueprint $table) use ($jsonType): void {
             $table->uuid('id')->primary();

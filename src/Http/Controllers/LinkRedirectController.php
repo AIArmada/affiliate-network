@@ -30,6 +30,12 @@ final class LinkRedirectController
 
         $redirectUrl = $linkService->buildDirectLink($link);
 
+        $scheme = mb_strtolower(parse_url($redirectUrl, PHP_URL_SCHEME) ?? '');
+
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            abort(400, 'Invalid redirect target');
+        }
+
         return redirect()->away($redirectUrl);
     }
 }

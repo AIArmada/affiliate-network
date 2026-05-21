@@ -10,7 +10,7 @@ use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 use AIArmada\Orders\Events\CommissionAttributionRequired;
 use AIArmada\Orders\Models\Order;
 use Carbon\CarbonImmutable;
-use Illuminate\Http\Request;
+use Throwable;
 
 /**
  * Records network affiliate conversions when orders are completed.
@@ -22,12 +22,11 @@ final class RecordNetworkConversionForOrder
 {
     public function __construct(
         private readonly OfferLinkService $linkService,
-        private readonly Request $request,
     ) {}
 
     public function handle(CommissionAttributionRequired $event): void
     {
-        if (! config('affiliate-network.checkout.enabled', true)) {
+        if (! config('affiliate-network.checkout.enabled', false)) {
             return;
         }
 
@@ -56,11 +55,16 @@ final class RecordNetworkConversionForOrder
         $attributionWindow = config('affiliate-network.checkout.attribution_window_hours', 720); // 30 days
         $clickedAt = $attribution['clicked_at'] ?? null;
 
-        if ($clickedAt !== null && $attributionWindow > 0) {
-            $clickTime = CarbonImmutable::parse($clickedAt);
+        if (is_string($clickedAt) && $clickedAt !== '' && $attributionWindow > 0) {
+            try {
+                $clickTime = CarbonImmutable::parse($clickedAt);
 
-            if ($clickTime->addHours($attributionWindow)->isPast()) {
-                return; // Click is outside attribution window
+                if ($clickTime->addHours($attributionWindow)->isPast()) {
+                    return; // Click is outside attribution window
+                }
+            } catch (Throwable) {
+                // Malformed clicked_at from cookie — treat as expired to be safe.
+                return;
             }
         }
 
@@ -79,8 +83,8 @@ final class RecordNetworkConversionForOrder
      */
     private function getAttributionFromCookie(): ?array
     {
-        $cookieName = config('affiliate-network.cookies.name', 'anl_session');
-        $cookieValue = $this->request->cookie($cookieName);
+        $cookieName = config('affiliate-network.cookies.name', 'affiliate_network_link');
+        $cookieValue = request()->cookie($cookieName);
 
         if (! is_string($cookieValue)) {
             return null;
@@ -92,11 +96,9 @@ final class RecordNetworkConversionForOrder
     /**
      * Store network attribution data in the order for tracking/reporting.
      *
-     * @param  Order  $order
-     * @param  AffiliateOfferLink  $link
      * @param  array<string, mixed>  $attribution
      */
-    private function storeAttributionInOrder($order, $link, array $attribution): void
+    private function storeAttributionInOrder(Order $order, AffiliateOfferLink $link, array $attribution): void
     {
         $metadata = $order->metadata ?? [];
 
@@ -111,7 +113,7 @@ final class RecordNetworkConversionForOrder
             'offer_id' => $link->offer_id,
             'site_id' => $link->site_id,
             'clicked_at' => $attribution['clicked_at'] ?? null,
-            'converted_at' => now()->toIso8601String(),
+            'converted_at' => CarbonImmutable::now()->toIso8601String(),
         ];
 
         $order->update(['metadata' => $metadata]);

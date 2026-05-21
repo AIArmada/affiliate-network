@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Models\Concerns;
 
-use AIArmada\CommerceSupport\Contracts\OwnerResolverInterface;
+use AIArmada\CommerceSupport\Support\OwnerContext;
 use Illuminate\Database\Eloquent\Builder;
 use RuntimeException;
 
@@ -21,23 +21,35 @@ trait ScopesBySiteOwner
         }
 
         static::addGlobalScope('owner_via_site', function (Builder $builder): void {
-            $resolver = app(OwnerResolverInterface::class);
-            $owner = $resolver->resolve();
+            $owner = OwnerContext::resolve();
+            OwnerContext::assertResolvedOrExplicitGlobal(
+                $owner,
+                sprintf('%s requires an owner context or explicit global context.', $builder->getModel()::class),
+            );
+
+            $siteTable = config('affiliate-network.database.tables.sites', 'affiliate_network_sites');
 
             if ($owner === null) {
+                $builder->whereHas('site', function (Builder $query) use ($siteTable): void {
+                    $query->whereNull("{$siteTable}.owner_type")
+                        ->whereNull("{$siteTable}.owner_id");
+                });
+
                 return;
             }
 
-            $model = $builder->getModel();
-            $siteTable = config('affiliate-network.database.tables.sites', 'affiliate_network_sites');
-
             $builder->whereHas('site', function (Builder $query) use ($owner, $siteTable): void {
-                $query->where("{$siteTable}.owner_type", $owner->getMorphClass())
-                    ->where("{$siteTable}.owner_id", $owner->getKey());
+                $query->where(function (Builder $scopedQuery) use ($owner, $siteTable): void {
+                    $scopedQuery->where("{$siteTable}.owner_type", $owner->getMorphClass())
+                        ->where("{$siteTable}.owner_id", $owner->getKey());
 
-                if (config('affiliate-network.owner.include_global', false)) {
-                    $query->orWhereNull("{$siteTable}.owner_id");
-                }
+                    if (config('affiliate-network.owner.include_global', false)) {
+                        $scopedQuery->orWhere(function (Builder $globalQuery) use ($siteTable): void {
+                            $globalQuery->whereNull("{$siteTable}.owner_type")
+                                ->whereNull("{$siteTable}.owner_id");
+                        });
+                    }
+                });
             });
         });
 
@@ -46,19 +58,36 @@ trait ScopesBySiteOwner
                 return;
             }
 
-            $resolver = app(OwnerResolverInterface::class);
-            $owner = $resolver->resolve();
-
-            if ($owner === null) {
-                return;
-            }
+            $owner = OwnerContext::resolve();
+            OwnerContext::assertResolvedOrExplicitGlobal(
+                $owner,
+                sprintf('%s requires an owner context or explicit global context.', $model::class),
+            );
 
             $site = $model->site;
             if ($site === null) {
+                throw new RuntimeException('Cannot create record for an inaccessible or missing site.');
+            }
+
+            if ($owner === null) {
+                if ($site->owner_type !== null || $site->owner_id !== null) {
+                    throw new RuntimeException('Explicit global owner context is required for records linked to owned sites.');
+                }
+
                 return;
             }
 
-            if ($site->owner_id !== null && $site->owner_id !== $owner->getKey()) {
+            if ($site->owner_type === null || $site->owner_id === null) {
+                throw new RuntimeException('Explicit global owner context is required for records linked to global sites.');
+            }
+
+            $siteOwner = OwnerContext::fromTypeAndId((string) $site->owner_type, (string) $site->owner_id);
+
+            if ($siteOwner === null) {
+                throw new RuntimeException('Site owner could not be resolved.');
+            }
+
+            if ($siteOwner::class !== $owner::class || (string) $siteOwner->getKey() !== (string) $owner->getKey()) {
                 throw new RuntimeException('Cannot create record for a site owned by a different owner.');
             }
         });
@@ -68,19 +97,36 @@ trait ScopesBySiteOwner
                 return;
             }
 
-            $resolver = app(OwnerResolverInterface::class);
-            $owner = $resolver->resolve();
-
-            if ($owner === null) {
-                return;
-            }
+            $owner = OwnerContext::resolve();
+            OwnerContext::assertResolvedOrExplicitGlobal(
+                $owner,
+                sprintf('%s requires an owner context or explicit global context.', $model::class),
+            );
 
             $site = $model->site;
             if ($site === null) {
+                throw new RuntimeException('Cannot assign record to an inaccessible or missing site.');
+            }
+
+            if ($owner === null) {
+                if ($site->owner_type !== null || $site->owner_id !== null) {
+                    throw new RuntimeException('Explicit global owner context is required for records linked to owned sites.');
+                }
+
                 return;
             }
 
-            if ($site->owner_id !== null && $site->owner_id !== $owner->getKey()) {
+            if ($site->owner_type === null || $site->owner_id === null) {
+                throw new RuntimeException('Explicit global owner context is required for records linked to global sites.');
+            }
+
+            $siteOwner = OwnerContext::fromTypeAndId((string) $site->owner_type, (string) $site->owner_id);
+
+            if ($siteOwner === null) {
+                throw new RuntimeException('Site owner could not be resolved.');
+            }
+
+            if ($siteOwner::class !== $owner::class || (string) $siteOwner->getKey() !== (string) $owner->getKey()) {
                 throw new RuntimeException('Cannot assign record to a site owned by a different owner.');
             }
         });

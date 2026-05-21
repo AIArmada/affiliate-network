@@ -11,7 +11,6 @@ The package supports full multi-tenant operation via the `commerce-support` owne
 ```env
 AFFILIATE_NETWORK_OWNER_ENABLED=true
 AFFILIATE_NETWORK_OWNER_INCLUDE_GLOBAL=false
-AFFILIATE_NETWORK_OWNER_AUTO_ASSIGN=true
 ```
 
 Or in config:
@@ -20,7 +19,6 @@ Or in config:
 'owner' => [
     'enabled' => true,
     'include_global' => false,
-    'auto_assign_on_create' => true,
 ],
 ```
 
@@ -110,32 +108,32 @@ Use cases for global records:
 - Platform-level sites
 - Shared creatives
 
-## Auto-Assignment
+## Creating Owner-Scoped Records
 
-When `auto_assign_on_create` is `true`, new records automatically get the current owner:
+When owner mode is enabled, create records inside the intended owner context:
 
 ```php
-// Current owner is automatically assigned
-$site = AffiliateSite::create([
-    'name' => 'My Store',
-    'domain' => 'mystore.com',
-]);
+use AIArmada\CommerceSupport\Support\OwnerContext;
 
-// $site->owner_type and $site->owner_id are set automatically
+OwnerContext::withOwner($merchant, function (): void {
+    AffiliateSite::create([
+        'name' => 'My Store',
+        'domain' => 'mystore.com',
+    ]);
+});
 ```
 
 ## Bypassing Owner Scope
 
-For system/admin operations:
+For intentional system/admin operations, use explicit global context and a deliberate scope bypass:
 
 ```php
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
+use AIArmada\CommerceSupport\Support\OwnerContext;
 
-// Bypass owner scope
-$allSites = AffiliateSite::withoutGlobalScope('owner')->get();
-
-// Or use withoutGlobalScopes()
-$allSites = AffiliateSite::withoutGlobalScopes()->get();
+$allSites = OwnerContext::withOwner(null, fn () => AffiliateSite::query()
+    ->withoutOwnerScope()
+    ->get());
 ```
 
 ## Owner Resolver
