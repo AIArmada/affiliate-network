@@ -7,7 +7,7 @@ title: Installation
 ## Requirements
 
 - PHP 8.4+
-- Laravel 12+
+- Laravel 13+
 - `aiarmada/affiliates` package (for affiliate relationship)
 - `aiarmada/commerce-support` package (for owner traits)
 

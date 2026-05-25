@@ -39,17 +39,19 @@ final class OfferManagementService
 
         $data['site_id'] = (string) $validatedSite->getKey();
 
-        if (isset($data['category_id']) && $data['category_id'] !== null && $data['category_id'] !== '') {
+        $categoryId = $data['category_id'] ?? null;
+
+        if (is_scalar($categoryId) && (string) $categoryId !== '') {
             if (config('affiliate-network.owner.enabled', false)) {
                 /** @var AffiliateOfferCategory $validatedCategory */
                 $validatedCategory = OwnerWriteGuard::findOrFailForOwner(
                     AffiliateOfferCategory::class,
-                    (string) $data['category_id'],
+                    (string) $categoryId,
                     includeGlobal: (bool) config('affiliate-network.owner.include_global', false),
                     message: 'Category is not accessible in the current owner scope.',
                 );
             } else {
-                $validatedCategory = AffiliateOfferCategory::query()->whereKey((string) $data['category_id'])->firstOrFail();
+                $validatedCategory = AffiliateOfferCategory::query()->whereKey((string) $categoryId)->firstOrFail();
             }
 
             $data['category_id'] = (string) $validatedCategory->getKey();

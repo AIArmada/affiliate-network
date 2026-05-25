@@ -4,6 +4,42 @@ title: Overview
 
 # Affiliate Network Package
 
+## Purpose
+
+The `aiarmada/affiliate-network` package extends core affiliates into a multi-merchant affiliate marketplace with sites, offers, applications, creatives, and tracking links.
+
+## What this package owns
+
+- Merchant sites and site verification workflows
+- Affiliate offers, categories, creatives, applications, and network tracking links
+- Marketplace discovery flows and merchant/offer management services
+- Network-specific checkout attribution boundary and offer-level aggregated metrics
+
+## What this package does not own
+
+- Core affiliate attribution, commissions, payouts, or fraud models; those stay in `aiarmada/affiliates`
+- Filament marketplace/admin surfaces; those belong to `aiarmada/filament-affiliate-network`
+- General checkout, cart, or order persistence beyond its integration hooks
+
+## Related packages
+
+- [`aiarmada/affiliates`](../../affiliates/docs/01-overview.md) — affiliate identities and commission layer required by this package
+- [`aiarmada/filament-affiliate-network`](../../filament-affiliate-network/docs/01-overview.md) — Filament marketplace and merchant admin surfaces
+- [`aiarmada/filament-affiliates`](../../filament-affiliates/docs/01-overview.md) — complementary affiliate admin and portal UI
+- [`aiarmada/checkout`](../../checkout/docs/01-overview.md) — optional conversion recording bridge for sites using the Commerce checkout stack
+
+## Main models services or surfaces
+
+- **Models** — `AffiliateSite`, `AffiliateOffer`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferApplication`, `AffiliateOfferLink`
+- **Services** — site verification, offer management, and offer link generation/tracking
+- **Routes and middleware** — redirect and cookie-tracking flows for marketplace links
+
+## Owner scoping and security notes
+
+- Site and category records are owner-aware, while other records use relationship-based owner inheritance
+- Tracking metrics remain inside the affiliate-network boundary and should not be assumed to match core affiliates conversion schemas without an explicit application bridge
+- Offer, site, and application identifiers should still be resolved inside the current owner or relationship scope on write paths
+
 The `aiarmada/affiliate-network` package provides a complete multi-merchant affiliate network and marketplace system for Laravel. It extends the core `aiarmada/affiliates` package to enable merchants to publish offers and affiliates to discover and promote them.
 
 ## Key Features
@@ -163,6 +199,18 @@ Instead, it keeps its own offer-level tracking boundary:
 ## Requirements
 
 - PHP 8.4+
-- Laravel 12+
+- Laravel 13+
 - `aiarmada/affiliates` package
 - `aiarmada/commerce-support` package (for owner traits)
+
+## Read next
+
+- [Installation](02-installation.md)
+- [Configuration](03-configuration.md)
+- [Usage](04-usage.md)
+- [Models](05-models.md)
+- [Services](06-services.md)
+- [Multi-tenancy](07-multi-tenancy.md)
+- [API reference](08-api-reference.md)
+- [Testing and factories](09-testing-factories.md)
+- [Filament Affiliate Network overview](../../filament-affiliate-network/docs/01-overview.md)
