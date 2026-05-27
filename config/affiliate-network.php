@@ -20,7 +20,7 @@ return [
     */
     'database' => [
         'table_prefix' => $tablePrefix,
-        'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', env('COMMERCE_JSON_COLUMN_TYPE', 'json')),
+        'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', env('COMMERCE_JSON_COLUMN_TYPE', 'jsonb')),
         'tables' => $tables,
     ],
 
