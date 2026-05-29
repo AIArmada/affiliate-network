@@ -7,11 +7,14 @@ namespace AIArmada\AffiliateNetwork\Models;
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferApplicationFactory;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByAffiliateOwner;
 use AIArmada\Affiliates\Models\Affiliate;
+use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
+use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use OwenIt\Auditing\Contracts\Auditable;
 
 /**
  * @property string $id
@@ -28,10 +31,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property-read AffiliateOffer $offer
  * @property-read Affiliate $affiliate
  */
-class AffiliateOfferApplication extends Model
+class AffiliateOfferApplication extends Model implements Auditable
 {
+    use HasCommerceAudit;
     use HasFactory;
     use HasUuids;
+    use LogsCommerceActivity;
     use ScopesByAffiliateOwner;
 
     public const STATUS_PENDING = 'pending';

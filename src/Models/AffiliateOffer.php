@@ -6,6 +6,8 @@ namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferFactory;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesBySiteOwner;
+use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
+use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -13,6 +15,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use OwenIt\Auditing\Contracts\Auditable;
 
 /**
  * @property string $id
@@ -43,10 +46,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, AffiliateOfferApplication> $applications
  * @property-read Collection<int, AffiliateOfferLink> $links
  */
-class AffiliateOffer extends Model
+class AffiliateOffer extends Model implements Auditable
 {
+    use HasCommerceAudit;
     use HasFactory;
     use HasUuids;
+    use LogsCommerceActivity;
     use ScopesBySiteOwner;
 
     public const STATUS_DRAFT = 'draft';

@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferCreativeFactory;
+use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
+use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use OwenIt\Auditing\Contracts\Auditable;
 
 /**
  * @property string $id
@@ -30,10 +33,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable $updated_at
  * @property-read AffiliateOffer $offer
  */
-class AffiliateOfferCreative extends Model
+class AffiliateOfferCreative extends Model implements Auditable
 {
+    use HasCommerceAudit;
     use HasFactory;
     use HasUuids;
+    use LogsCommerceActivity;
 
     public const TYPE_BANNER = 'banner';
 

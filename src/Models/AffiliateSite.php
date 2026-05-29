@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateSiteFactory;
+use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
+use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use AIArmada\CommerceSupport\Traits\HasOwner;
 use AIArmada\CommerceSupport\Traits\HasOwnerScopeConfig;
 use Carbon\CarbonImmutable;
@@ -14,6 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use OwenIt\Auditing\Contracts\Auditable;
 
 /**
  * @property string $id
@@ -33,12 +36,14 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property-read Model|null $owner
  * @property-read Collection<int, AffiliateOffer> $offers
  */
-class AffiliateSite extends Model
+class AffiliateSite extends Model implements Auditable
 {
+    use HasCommerceAudit;
     use HasFactory;
     use HasOwner;
     use HasOwnerScopeConfig;
     use HasUuids;
+    use LogsCommerceActivity;
 
     protected static string $ownerScopeConfigKey = 'affiliate-network.owner';
 
