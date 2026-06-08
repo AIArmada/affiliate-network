@@ -24,7 +24,7 @@ return new class extends Migration
             $table->unsignedInteger('sort_order')->default(0);
             $table->boolean('is_active')->default(true);
 
-            $table->timestamps();
+            $table->timestampsTz();
 
             $table->index(['owner_type', 'owner_id', 'is_active']);
             $table->index('parent_id');

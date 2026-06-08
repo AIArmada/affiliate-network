@@ -37,9 +37,9 @@ return new class extends Migration
             $table->{$jsonType}('restrictions')->nullable();
             $table->{$jsonType}('metadata')->nullable();
 
-            $table->timestamp('starts_at')->nullable();
-            $table->timestamp('ends_at')->nullable();
-            $table->timestamps();
+            $table->timestampTz('starts_at')->nullable();
+            $table->timestampTz('ends_at')->nullable();
+            $table->timestampsTz();
 
             $table->unique(['site_id', 'slug']);
             $table->index('status');

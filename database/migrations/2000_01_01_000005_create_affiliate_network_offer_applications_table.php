@@ -22,10 +22,10 @@ return new class extends Migration
             $table->text('reason')->nullable();
             $table->text('rejection_reason')->nullable();
             $table->string('reviewed_by')->nullable();
-            $table->timestamp('reviewed_at')->nullable();
+            $table->timestampTz('reviewed_at')->nullable();
             $table->{$jsonType}('metadata')->nullable();
 
-            $table->timestamps();
+            $table->timestampsTz();
 
             $table->unique(['offer_id', 'affiliate_id']);
             $table->index(['affiliate_id', 'status']);

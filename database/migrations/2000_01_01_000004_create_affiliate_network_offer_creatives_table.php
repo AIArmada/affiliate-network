@@ -31,7 +31,7 @@ return new class extends Migration
             $table->unsignedInteger('sort_order')->default(0);
             $table->{$jsonType}('metadata')->nullable();
 
-            $table->timestamps();
+            $table->timestampsTz();
 
             $table->index(['offer_id', 'is_active']);
             $table->index('type');

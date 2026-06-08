@@ -23,12 +23,12 @@ return new class extends Migration
             $table->string('status')->default('pending');
             $table->string('verification_method')->nullable();
             $table->string('verification_token')->nullable();
-            $table->timestamp('verified_at')->nullable();
+            $table->timestampTz('verified_at')->nullable();
 
             $table->{$jsonType}('settings')->nullable();
             $table->{$jsonType}('metadata')->nullable();
 
-            $table->timestamps();
+            $table->timestampsTz();
 
             $table->index(['owner_type', 'owner_id', 'status']);
             $table->index('status');

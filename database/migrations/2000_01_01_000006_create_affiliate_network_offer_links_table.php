@@ -31,10 +31,10 @@ return new class extends Migration
             $table->unsignedBigInteger('revenue')->default(0);
 
             $table->boolean('is_active')->default(true);
-            $table->timestamp('expires_at')->nullable();
+            $table->timestampTz('expires_at')->nullable();
             $table->{$jsonType}('metadata')->nullable();
 
-            $table->timestamps();
+            $table->timestampsTz();
 
             $table->index(['affiliate_id', 'is_active']);
             $table->index(['offer_id', 'affiliate_id']);
