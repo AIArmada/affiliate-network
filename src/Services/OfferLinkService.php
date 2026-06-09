@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Services;
 
+use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\Affiliates\Models\Affiliate;
@@ -11,8 +12,21 @@ use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\URL;
 
+/**
+ * Offer Link Service — link lifecycle.
+ *
+ * BOUNDARY: This service owns URL signing, redirect handling, click attribution,
+ * and conversion recording for individual tracking links. It does NOT manage
+ * offer creation, applications, or approvals (see OfferManagementService).
+ *
+ * @see OfferManagementService for offer lifecycle operations.
+ */
 final class OfferLinkService
 {
+    public function __construct(
+        private readonly RecordNetworkConversion $recordNetworkConversionAction,
+    ) {}
+
     /**
      * Create a deep link for an affiliate to promote an offer.
      *
@@ -123,7 +137,7 @@ final class OfferLinkService
      */
     public function recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0): void
     {
-        $link->recordConversion($revenueMinor);
+        $this->recordNetworkConversionAction->execute($link, $revenueMinor);
     }
 
     /**

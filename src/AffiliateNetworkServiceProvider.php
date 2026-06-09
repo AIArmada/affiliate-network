@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork;
 
+use AIArmada\AffiliateNetwork\Console\Commands\ArchiveExpiredOffersCommand;
 use AIArmada\AffiliateNetwork\Http\Middleware\TrackNetworkLinkCookie;
 use AIArmada\AffiliateNetwork\Listeners\RecordNetworkConversionForOrder;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 use AIArmada\AffiliateNetwork\Services\OfferManagementService;
 use AIArmada\AffiliateNetwork\Services\SiteVerificationService;
+use AIArmada\AffiliateNetwork\Strategies\DnsVerificationStrategy;
+use AIArmada\AffiliateNetwork\Strategies\FileVerificationStrategy;
+use AIArmada\AffiliateNetwork\Strategies\MetaTagVerificationStrategy;
+use AIArmada\AffiliateNetwork\Support\SiteContentFetcher;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Support\Facades\Event;
 use Spatie\LaravelPackageTools\Package;
@@ -23,14 +28,20 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
             ->hasConfigFile('affiliate-network')
             ->runsMigrations()
             ->discoversMigrations()
-            ->hasRoutes(['api']);
+            ->hasRoutes(['api'])
+            ->hasCommands([
+                ArchiveExpiredOffersCommand::class,
+            ]);
     }
 
     public function packageRegistered(): void
     {
+        $this->app->singleton(SiteContentFetcher::class);
         $this->app->singleton(SiteVerificationService::class);
         $this->app->singleton(OfferManagementService::class);
         $this->app->singleton(OfferLinkService::class);
+
+        $this->registerVerificationStrategies();
     }
 
     public function packageBooted(): void
@@ -38,12 +49,15 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
         $this->bootCheckoutIntegration();
     }
 
-    /**
-     * Boot checkout integration (Scenario B support).
-     *
-     * Registers cookie tracking middleware and order conversion listener
-     * when the site uses the checkout package with network affiliate links.
-     */
+    private function registerVerificationStrategies(): void
+    {
+        $this->app->tag([
+            DnsVerificationStrategy::class,
+            MetaTagVerificationStrategy::class,
+            FileVerificationStrategy::class,
+        ], 'affiliate-network.site_verification_strategy');
+    }
+
     private function bootCheckoutIntegration(): void
     {
         if (! config('affiliate-network.checkout.enabled', false)) {
