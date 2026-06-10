@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Actions;
 
+use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Events\ApplicationSubmitted;
 use AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
@@ -37,7 +38,7 @@ final class ApplyToOffer
             ->first();
 
         if ($existing !== null) {
-            if ($existing->status === AffiliateOfferApplication::STATUS_REJECTED) {
+            if ($existing->status === ApplicationStatus::Rejected) {
                 $cooldownDays = config('affiliate-network.applications.cooldown_days', 7);
                 $canReapply = CarbonImmutable::parse($existing->updated_at)->addDays($cooldownDays)->isPast();
 
@@ -46,7 +47,7 @@ final class ApplyToOffer
                 }
 
                 $existing->update([
-                    'status' => AffiliateOfferApplication::STATUS_PENDING,
+                    'status' => ApplicationStatus::Pending,
                     'reason' => $reason,
                     'rejection_reason' => null,
                     'reviewed_by' => null,
@@ -63,10 +64,10 @@ final class ApplyToOffer
             return $existing;
         }
 
-        $status = AffiliateOfferApplication::STATUS_PENDING;
+        $status = ApplicationStatus::Pending;
 
         if (! $offer->requires_approval || config('affiliate-network.applications.auto_approve', false)) {
-            $status = AffiliateOfferApplication::STATUS_APPROVED;
+            $status = ApplicationStatus::Approved;
         }
 
         $application = AffiliateOfferApplication::create([
@@ -74,7 +75,8 @@ final class ApplyToOffer
             'affiliate_id' => $affiliate->id,
             'status' => $status,
             'reason' => $reason,
-            'reviewed_at' => $status === AffiliateOfferApplication::STATUS_APPROVED ? CarbonImmutable::now() : null,
+            'reviewed_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
+            'approved_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
         ]);
 
         event(new ApplicationSubmitted($application));

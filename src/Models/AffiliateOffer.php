@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferFactory;
+use AIArmada\AffiliateNetwork\Enums\OfferStatus;
+use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesBySiteOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
@@ -25,19 +27,21 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string $slug
  * @property string|null $description
  * @property string|null $terms
- * @property string $status
+ * @property OfferStatus $status
  * @property string $commission_type
  * @property int $commission_rate
  * @property string|null $currency
  * @property int|null $cookie_days
  * @property bool $is_featured
- * @property bool $is_public
+ * @property OfferVisibility $visibility
  * @property bool $requires_approval
  * @property string|null $landing_url
  * @property array<string, mixed>|null $restrictions
  * @property array<string, mixed>|null $metadata
  * @property CarbonImmutable|null $starts_at
  * @property CarbonImmutable|null $ends_at
+ * @property CarbonImmutable|null $published_at
+ * @property CarbonImmutable|null $archived_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read AffiliateSite $site
@@ -54,18 +58,6 @@ class AffiliateOffer extends Model implements Auditable
     use LogsCommerceActivity;
     use ScopesBySiteOwner;
 
-    public const STATUS_DRAFT = 'draft';
-
-    public const STATUS_PENDING = 'pending';
-
-    public const STATUS_ACTIVE = 'active';
-
-    public const STATUS_PAUSED = 'paused';
-
-    public const STATUS_EXPIRED = 'expired';
-
-    public const STATUS_REJECTED = 'rejected';
-
     protected $fillable = [
         'site_id',
         'category_id',
@@ -79,13 +71,15 @@ class AffiliateOffer extends Model implements Auditable
         'currency',
         'cookie_days',
         'is_featured',
-        'is_public',
+        'visibility',
         'requires_approval',
         'landing_url',
         'restrictions',
         'metadata',
         'starts_at',
         'ends_at',
+        'published_at',
+        'archived_at',
     ];
 
     public function getTable(): string
@@ -153,15 +147,18 @@ class AffiliateOffer extends Model implements Auditable
     protected function casts(): array
     {
         return [
+            'status' => OfferStatus::class,
+            'visibility' => OfferVisibility::class,
             'commission_rate' => 'integer',
             'cookie_days' => 'integer',
             'is_featured' => 'boolean',
-            'is_public' => 'boolean',
             'requires_approval' => 'boolean',
             'restrictions' => 'array',
             'metadata' => 'array',
             'starts_at' => 'immutable_datetime',
             'ends_at' => 'immutable_datetime',
+            'published_at' => 'immutable_datetime',
+            'archived_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
@@ -169,7 +166,7 @@ class AffiliateOffer extends Model implements Auditable
 
     public function isActive(): bool
     {
-        if ($this->status !== self::STATUS_ACTIVE) {
+        if ($this->status !== OfferStatus::Published) {
             return false;
         }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Database\Factories;
 
+use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\Affiliates\Models\Affiliate;
@@ -31,7 +32,7 @@ class AffiliateOfferApplicationFactory extends Factory
                 'commission_rate' => 1000,
                 'currency' => 'USD',
             ])->id,
-            'status' => AffiliateOfferApplication::STATUS_PENDING,
+            'status' => ApplicationStatus::Pending,
             'reason' => $this->faker->optional()->sentence(),
             'rejection_reason' => null,
             'reviewed_by' => null,
@@ -46,7 +47,7 @@ class AffiliateOfferApplicationFactory extends Factory
     public function pending(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateOfferApplication::STATUS_PENDING,
+            'status' => ApplicationStatus::Pending,
             'reviewed_by' => null,
             'reviewed_at' => null,
         ]);
@@ -58,9 +59,10 @@ class AffiliateOfferApplicationFactory extends Factory
     public function approved(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateOfferApplication::STATUS_APPROVED,
+            'status' => ApplicationStatus::Approved,
             'reviewed_by' => 'admin',
             'reviewed_at' => now(),
+            'approved_at' => now(),
         ]);
     }
 
@@ -70,10 +72,11 @@ class AffiliateOfferApplicationFactory extends Factory
     public function rejected(string $reason = 'Does not meet requirements'): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateOfferApplication::STATUS_REJECTED,
+            'status' => ApplicationStatus::Rejected,
             'rejection_reason' => $reason,
             'reviewed_by' => 'admin',
             'reviewed_at' => now(),
+            'rejected_at' => now(),
         ]);
     }
 
@@ -83,10 +86,11 @@ class AffiliateOfferApplicationFactory extends Factory
     public function revoked(string $reason = 'Terms of service violation'): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateOfferApplication::STATUS_REVOKED,
+            'status' => ApplicationStatus::Revoked,
             'rejection_reason' => $reason,
             'reviewed_by' => 'admin',
             'reviewed_at' => now(),
+            'revoked_at' => now(),
         ]);
     }
 

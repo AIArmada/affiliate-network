@@ -7,11 +7,14 @@ namespace AIArmada\AffiliateNetwork\Models;
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferLinkFactory;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByAffiliateOwner;
 use AIArmada\Affiliates\Models\Affiliate;
+use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
+use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use OwenIt\Auditing\Contracts\Auditable;
 
 /**
  * @property string $id
@@ -36,10 +39,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property-read Affiliate $affiliate
  * @property-read AffiliateSite|null $site
  */
-class AffiliateOfferLink extends Model
+class AffiliateOfferLink extends Model implements Auditable
 {
+    use HasCommerceAudit;
     use HasFactory;
     use HasUuids;
+    use LogsCommerceActivity;
     use ScopesByAffiliateOwner;
 
     protected $fillable = [
@@ -118,6 +123,19 @@ class AffiliateOfferLink extends Model
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function getLoggableAttributes(): array
+    {
+        return $this->getAuditInclude();
+    }
+
+    protected function getActivityLogName(): string
+    {
+        return 'affiliate-network';
     }
 
     public static function generateCode(): string

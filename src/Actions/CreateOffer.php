@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Actions;
 
+use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Events\OfferCreated;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferCategory;
@@ -53,9 +54,7 @@ final class CreateOffer
         }
 
         if (empty($data['status'])) {
-            $data['status'] = config('affiliate-network.offers.require_approval', true)
-                ? AffiliateOffer::STATUS_PENDING
-                : AffiliateOffer::STATUS_ACTIVE;
+            $data['status'] = OfferStatus::Draft;
         }
 
         $offer = AffiliateOffer::create($data);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Database\Factories;
 
+use AIArmada\AffiliateNetwork\Enums\OfferStatus;
+use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferCategory;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
@@ -32,13 +34,13 @@ class AffiliateOfferFactory extends Factory
             'slug' => Str::slug($name),
             'description' => $this->faker->paragraph(),
             'terms' => $this->faker->paragraph(),
-            'status' => AffiliateOffer::STATUS_ACTIVE,
+            'status' => OfferStatus::Published,
             'commission_type' => 'percentage',
             'commission_rate' => $this->faker->numberBetween(500, 2500),
             'currency' => 'USD',
             'cookie_days' => 30,
             'is_featured' => false,
-            'is_public' => true,
+            'visibility' => OfferVisibility::Public,
             'requires_approval' => true,
             'landing_url' => $this->faker->url(),
             'restrictions' => null,
@@ -54,48 +56,27 @@ class AffiliateOfferFactory extends Factory
     public function draft(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateOffer::STATUS_DRAFT,
+            'status' => OfferStatus::Draft,
         ]);
     }
 
     /**
-     * Offer in pending status.
+     * Offer in published status.
      */
-    public function pending(): static
+    public function published(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateOffer::STATUS_PENDING,
+            'status' => OfferStatus::Published,
         ]);
     }
 
     /**
-     * Offer in active status.
+     * Offer in archived status.
      */
-    public function active(): static
+    public function archived(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateOffer::STATUS_ACTIVE,
-        ]);
-    }
-
-    /**
-     * Offer in paused status.
-     */
-    public function paused(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'status' => AffiliateOffer::STATUS_PAUSED,
-        ]);
-    }
-
-    /**
-     * Offer in expired status.
-     */
-    public function expired(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'status' => AffiliateOffer::STATUS_EXPIRED,
-            'ends_at' => now()->subDays(1),
+            'status' => OfferStatus::Archived,
         ]);
     }
 
@@ -115,7 +96,7 @@ class AffiliateOfferFactory extends Factory
     public function private(): static
     {
         return $this->state(fn (array $attributes) => [
-            'is_public' => false,
+            'visibility' => OfferVisibility::Private,
         ]);
     }
 

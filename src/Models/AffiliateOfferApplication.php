@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferApplicationFactory;
+use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByAffiliateOwner;
 use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
@@ -20,11 +21,14 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string $id
  * @property string $offer_id
  * @property string $affiliate_id
- * @property string $status
+ * @property ApplicationStatus $status
  * @property string|null $reason
  * @property string|null $rejection_reason
  * @property string|null $reviewed_by
  * @property CarbonImmutable|null $reviewed_at
+ * @property CarbonImmutable|null $approved_at
+ * @property CarbonImmutable|null $rejected_at
+ * @property CarbonImmutable|null $revoked_at
  * @property array<string, mixed>|null $metadata
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
@@ -39,14 +43,6 @@ class AffiliateOfferApplication extends Model implements Auditable
     use LogsCommerceActivity;
     use ScopesByAffiliateOwner;
 
-    public const STATUS_PENDING = 'pending';
-
-    public const STATUS_APPROVED = 'approved';
-
-    public const STATUS_REJECTED = 'rejected';
-
-    public const STATUS_REVOKED = 'revoked';
-
     protected $fillable = [
         'offer_id',
         'affiliate_id',
@@ -55,6 +51,9 @@ class AffiliateOfferApplication extends Model implements Auditable
         'rejection_reason',
         'reviewed_by',
         'reviewed_at',
+        'approved_at',
+        'rejected_at',
+        'revoked_at',
         'metadata',
     ];
 
@@ -90,7 +89,11 @@ class AffiliateOfferApplication extends Model implements Auditable
     protected function casts(): array
     {
         return [
+            'status' => ApplicationStatus::class,
             'reviewed_at' => 'immutable_datetime',
+            'approved_at' => 'immutable_datetime',
+            'rejected_at' => 'immutable_datetime',
+            'revoked_at' => 'immutable_datetime',
             'metadata' => 'array',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
@@ -99,11 +102,11 @@ class AffiliateOfferApplication extends Model implements Auditable
 
     public function isPending(): bool
     {
-        return $this->status === self::STATUS_PENDING;
+        return $this->status === ApplicationStatus::Pending;
     }
 
     public function isApproved(): bool
     {
-        return $this->status === self::STATUS_APPROVED;
+        return $this->status === ApplicationStatus::Approved;
     }
 }

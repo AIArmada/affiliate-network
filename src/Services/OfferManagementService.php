@@ -7,6 +7,9 @@ namespace AIArmada\AffiliateNetwork\Services;
 use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
 use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
 use AIArmada\AffiliateNetwork\Actions\CreateOffer;
+use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
+use AIArmada\AffiliateNetwork\Enums\OfferStatus;
+use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
@@ -69,10 +72,11 @@ final class OfferManagementService
             ->firstOrFail();
 
         $application->update([
-            'status' => AffiliateOfferApplication::STATUS_REJECTED,
+            'status' => ApplicationStatus::Rejected,
             'rejection_reason' => $reason,
             'reviewed_by' => $reviewedBy,
             'reviewed_at' => CarbonImmutable::now(),
+            'rejected_at' => CarbonImmutable::now(),
         ]);
 
         return $application->fresh();
@@ -89,10 +93,11 @@ final class OfferManagementService
             ->firstOrFail();
 
         $application->update([
-            'status' => AffiliateOfferApplication::STATUS_REVOKED,
+            'status' => ApplicationStatus::Revoked,
             'rejection_reason' => $reason,
             'reviewed_by' => $reviewedBy,
             'reviewed_at' => CarbonImmutable::now(),
+            'revoked_at' => CarbonImmutable::now(),
         ]);
 
         return $application->fresh();
@@ -106,7 +111,7 @@ final class OfferManagementService
         return AffiliateOfferApplication::query()
             ->where('offer_id', $offer->id)
             ->where('affiliate_id', $affiliate->id)
-            ->where('status', AffiliateOfferApplication::STATUS_APPROVED)
+            ->where('status', ApplicationStatus::Approved)
             ->exists();
     }
 
@@ -119,12 +124,12 @@ final class OfferManagementService
     {
         $approvedOfferIds = AffiliateOfferApplication::query()
             ->where('affiliate_id', $affiliate->id)
-            ->where('status', AffiliateOfferApplication::STATUS_APPROVED)
+            ->where('status', ApplicationStatus::Approved)
             ->pluck('offer_id');
 
         return AffiliateOffer::query()
             ->whereIn('id', $approvedOfferIds)
-            ->where('status', AffiliateOffer::STATUS_ACTIVE)
+            ->where('status', OfferStatus::Published)
             ->get();
     }
 
@@ -139,8 +144,8 @@ final class OfferManagementService
     {
         return AffiliateOffer::withoutGlobalScope('owner_via_site')
             ->whereKey($offerId)
-            ->where('status', AffiliateOffer::STATUS_ACTIVE)
-            ->where('is_public', true)
+            ->where('status', OfferStatus::Published)
+            ->where('visibility', OfferVisibility::Public)
             ->firstOrFail();
     }
 }
