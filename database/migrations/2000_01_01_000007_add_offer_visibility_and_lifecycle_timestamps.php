@@ -14,7 +14,7 @@ return new class extends Migration
     {
         $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
 
-        Schema::table($tablePrefix . 'offers', function (Blueprint $table) use ($tablePrefix): void {
+        Schema::table($tablePrefix . 'offers', function (Blueprint $table): void {
             $table->string('visibility', 32)->default('public')->after('status');
             $table->timestampTz('published_at')->nullable()->after('ends_at');
             $table->timestampTz('archived_at')->nullable()->after('published_at');

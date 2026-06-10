@@ -4,6 +4,61 @@ title: Usage
 
 # Usage
 
+## Canonical API: Actions
+
+The canonical orchestration surface is the `Actions` tree. Prefer these over direct service calls:
+
+### Create an Offer
+
+```php
+use AIArmada\AffiliateNetwork\Actions\CreateOffer;
+
+$offer = CreateOffer::run($site, [
+    'name' => 'Summer Sale Campaign',
+    'description' => '20% off summer collection',
+    'commission_type' => 'percentage',
+    'commission_rate' => 1000, // 10% in basis points
+    'cookie_days' => 30,
+    'landing_url' => 'https://mystore.com/summer-sale',
+    'is_public' => true,
+    'requires_approval' => true,
+]);
+```
+
+### Update an Offer
+
+```php
+use AIArmada\AffiliateNetwork\Actions\UpdateOffer;
+
+UpdateOffer::run($offer, [
+    'commission_rate' => 1500,
+    'is_public' => false,
+]);
+```
+
+### Apply to Offer & Approve
+
+```php
+use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
+use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
+
+$application = ApplyToOffer::run(
+    $offer,
+    $affiliate,
+    'I have a fashion blog with 100k monthly visitors'
+);
+
+ApproveApplication::run($application, auth()->id());
+```
+
+### Record a Conversion
+
+```php
+use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
+
+RecordNetworkConversion::run($link, 5999); // $59.99 in cents
+```
+
 ## Managing Merchant Sites
 
 ### Create a Site
@@ -43,35 +98,15 @@ if ($verified) {
 
 ### Verification Methods
 
-| Method | Description |
-|--------|-------------|
-| `dns` | TXT record on domain |
-| `meta_tag` | Meta tag in HTML head |
-| `file` | File at `/.well-known/affiliate-network-verify.txt` |
+| Method | Strategy Implementation | Description |
+|--------|------------------------|-------------|
+| `dns` | `DnsVerificationStrategy` | TXT record on domain |
+| `meta_tag` | `MetaTagVerificationStrategy` | Meta tag in HTML head |
+| `file` | `FileVerificationStrategy` | File at `/.well-known/affiliate-network-verify.txt` |
 
-## Managing Offers
+New verification methods can be added by implementing `SiteVerificationStrategyInterface` and registering through the container.
 
-### Create an Offer
-
-```php
-use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
-use AIArmada\AffiliateNetwork\Services\OfferManagementService;
-
-$offerService = app(OfferManagementService::class);
-
-$offer = $offerService->createOffer($site, [
-    'name' => 'Summer Sale Campaign',
-    'description' => '20% off summer collection',
-    'commission_type' => 'percentage',
-    'commission_rate' => 1000, // 10% in basis points
-    'cookie_days' => 30,
-    'landing_url' => 'https://mystore.com/summer-sale',
-    'is_public' => true,
-    'requires_approval' => true,
-]);
-```
-
-### Offer Statuses
+## Offer Statuses
 
 | Status | Constant | Description |
 |--------|----------|-------------|
@@ -99,46 +134,13 @@ $offer = AffiliateOffer::create([
 ]);
 ```
 
-## Affiliate Applications
-
-### Apply for an Offer
+### Check Application Status
 
 ```php
 use AIArmada\AffiliateNetwork\Services\OfferManagementService;
 
 $offerService = app(OfferManagementService::class);
 
-$application = $offerService->applyForOffer(
-    $offer,
-    $affiliate,
-    'I have a fashion blog with 100k monthly visitors'
-);
-```
-
-### Approve/Reject Applications
-
-```php
-// Approve
-$offerService->approveApplication($application, auth()->id());
-
-// Reject with reason
-$offerService->rejectApplication(
-    $application,
-    'Traffic sources not aligned with brand',
-    auth()->id()
-);
-
-// Revoke previously approved
-$offerService->revokeApplication(
-    $application,
-    'Terms of service violation',
-    auth()->id()
-);
-```
-
-### Check Application Status
-
-```php
 $isApproved = $offerService->isApprovedForOffer($offer, $affiliate);
 
 // Get all approved offers for an affiliate

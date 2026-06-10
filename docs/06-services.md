@@ -4,6 +4,22 @@ title: Services
 
 # Services Reference
 
+## Canonical API: Actions
+
+The canonical orchestration surface for affiliate-network is the `Actions` tree. Prefer these over direct service calls:
+
+| Action | Purpose |
+|--------|---------|
+| `CreateOffer::run($site, $data)` | Create a new offer |
+| `UpdateOffer::run($offer, $data)` | Update an existing offer |
+| `ApplyToOffer::run($offer, $affiliate, $message)` | Apply to an offer |
+| `ApproveApplication::run($application, $reviewerId)` | Approve/reject applications |
+| `RecordNetworkConversion::run($link, $amount)` | Record a conversion |
+
+Events are automatically dispatched by each Action (`OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`).
+
+---
+
 ## SiteVerificationService
 
 Handles domain verification for merchant sites.

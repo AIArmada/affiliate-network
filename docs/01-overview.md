@@ -31,7 +31,11 @@ The `aiarmada/affiliate-network` package extends core affiliates into a multi-me
 ## Main models services or surfaces
 
 - **Models** — `AffiliateSite`, `AffiliateOffer`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferApplication`, `AffiliateOfferLink`
+- **Actions** — `CreateOffer`, `UpdateOffer`, `ApplyToOffer`, `ApproveApplication`, `RecordNetworkConversion`
+- **Contracts** — `SiteVerificationStrategyInterface` (DNS, meta tag, file verification strategies)
 - **Services** — site verification, offer management, and offer link generation/tracking
+- **Events** — `OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`
+- **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `SiteVerificationFailedException`
 - **Routes and middleware** — redirect and cookie-tracking flows for marketplace links
 
 ## Owner scoping and security notes
@@ -132,38 +136,55 @@ affiliate-network/
 │   └── affiliate-network.php        # Package configuration
 ├── database/
 │   ├── factories/                   # 6 model factories
-│   │   ├── AffiliateSiteFactory.php
-│   │   ├── AffiliateOfferFactory.php
-│   │   ├── AffiliateOfferCategoryFactory.php
-│   │   ├── AffiliateOfferCreativeFactory.php
-│   │   ├── AffiliateOfferApplicationFactory.php
-│   │   └── AffiliateOfferLinkFactory.php
-│   └── migrations/                  # 6 migration files
+│   ├── migrations/                  # 6 migration files
 ├── routes/
 │   └── api.php                      # Link redirect route
 └── src/
-    ├── AffiliateNetworkServiceProvider.php
+    ├── Actions/
+    │   ├── ApplyToOffer.php              # Apply to an offer
+    │   ├── ApproveApplication.php        # Approve/reject applications
+    │   ├── CreateOffer.php               # Create a new offer
+    │   ├── RecordNetworkConversion.php   # Record a conversion
+    │   └── UpdateOffer.php               # Update an existing offer
+    ├── Console/Commands/
+    │   └── ArchiveExpiredOffersCommand.php # Batch archive expired offers
+    ├── Contracts/
+    │   └── SiteVerificationStrategyInterface.php
+    ├── Events/
+    │   ├── ApplicationApproved.php
+    │   ├── ApplicationSubmitted.php
+    │   ├── NetworkConversionRecorded.php
+    │   ├── OfferCreated.php
+    │   └── OfferUpdated.php
+    ├── Exceptions/
+    │   ├── ApplicationAlreadySubmittedException.php
+    │   ├── OfferNotFoundException.php
+    │   └── SiteVerificationFailedException.php
     ├── Http/
     │   ├── Controllers/
     │   │   └── LinkRedirectController.php
     │   └── Middleware/
-    │       └── TrackNetworkLinkCookie.php  # Checkout tracking middleware
+    │       └── TrackNetworkLinkCookie.php
     ├── Listeners/
-    │   └── RecordNetworkConversionForOrder.php # Order conversion listener
+    │   └── RecordNetworkConversionForOrder.php
     ├── Models/
-    │   ├── AffiliateSite.php              # Merchant sites (HasOwner)
-    │   ├── AffiliateOffer.php             # Offers/campaigns
-    │   ├── AffiliateOfferCategory.php     # Categories (HasOwner)
-    │   ├── AffiliateOfferCreative.php     # Banners/assets
-    │   ├── AffiliateOfferApplication.php  # Affiliate applications
-    │   ├── AffiliateOfferLink.php         # Tracking links
+    │   ├── AffiliateSite.php
+    │   ├── AffiliateOffer.php
+    │   ├── AffiliateOfferCategory.php
+    │   ├── AffiliateOfferCreative.php
+    │   ├── AffiliateOfferApplication.php
+    │   ├── AffiliateOfferLink.php
     │   └── Concerns/
-    │       ├── ScopesByAffiliateOwner.php # Scopes via affiliate relationship
-    │       └── ScopesBySiteOwner.php      # Scopes via site relationship
-    └── Services/
-        ├── SiteVerificationService.php    # DNS/meta/file verification
-        ├── OfferManagementService.php     # Offer & application CRUD
-        └── OfferLinkService.php           # Link generation & tracking
+    │       ├── ScopesByAffiliateOwner.php
+    │       └── ScopesBySiteOwner.php
+    ├── Services/
+    │   ├── SiteVerificationService.php
+    │   ├── OfferManagementService.php
+    │   └── OfferLinkService.php
+    └── Strategies/
+        ├── DnsVerificationStrategy.php
+        ├── FileVerificationStrategy.php
+        └── MetaTagVerificationStrategy.php
 ```
 
 ## Database Schema
@@ -213,4 +234,5 @@ Instead, it keeps its own offer-level tracking boundary:
 - [Multi-tenancy](07-multi-tenancy.md)
 - [API reference](08-api-reference.md)
 - [Testing and factories](09-testing-factories.md)
+- [Troubleshooting](99-troubleshooting.md)
 - [Filament Affiliate Network overview](../../filament-affiliate-network/docs/01-overview.md)
