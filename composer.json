@@ -9,6 +9,7 @@
     },
     "require": {
         "aiarmada/affiliates": "self.version",
+        "aiarmada/contacting": "self.version",
         "php": "^8.4"
     },
     "autoload": {

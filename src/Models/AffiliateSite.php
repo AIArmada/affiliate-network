@@ -7,6 +7,8 @@ namespace AIArmada\AffiliateNetwork\Models;
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateSiteFactory;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
+use AIArmada\Contacting\Concerns\HasContactMethods;
+use AIArmada\Contacting\Concerns\HasSocialProfiles;
 use AIArmada\CommerceSupport\Traits\HasOwner;
 use AIArmada\CommerceSupport\Traits\HasOwnerScopeConfig;
 use Carbon\CarbonImmutable;
@@ -39,9 +41,11 @@ use OwenIt\Auditing\Contracts\Auditable;
 class AffiliateSite extends Model implements Auditable
 {
     use HasCommerceAudit;
+    use HasContactMethods;
     use HasFactory;
     use HasOwner;
     use HasOwnerScopeConfig;
+    use HasSocialProfiles;
     use HasUuids;
     use LogsCommerceActivity;
 

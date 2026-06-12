@@ -9,6 +9,8 @@ use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesBySiteOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
+use AIArmada\Contacting\Concerns\HasContactMethods;
+use AIArmada\Contacting\Concerns\HasSocialProfiles;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -53,7 +55,9 @@ use OwenIt\Auditing\Contracts\Auditable;
 class AffiliateOffer extends Model implements Auditable
 {
     use HasCommerceAudit;
+    use HasContactMethods;
     use HasFactory;
+    use HasSocialProfiles;
     use HasUuids;
     use LogsCommerceActivity;
     use ScopesBySiteOwner;
