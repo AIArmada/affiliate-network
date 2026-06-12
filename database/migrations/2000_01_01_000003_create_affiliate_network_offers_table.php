@@ -23,6 +23,7 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->text('terms')->nullable();
             $table->string('status')->default('pending');
+            $table->string('visibility', 32)->default('public');
 
             $table->string('commission_type')->default('percentage');
             $table->unsignedInteger('commission_rate')->default(1000);
@@ -30,7 +31,6 @@ return new class extends Migration
             $table->unsignedSmallInteger('cookie_days')->nullable();
 
             $table->boolean('is_featured')->default(false);
-            $table->boolean('is_public')->default(true);
             $table->boolean('requires_approval')->default(true);
 
             $table->string('landing_url')->nullable();
@@ -39,12 +39,13 @@ return new class extends Migration
 
             $table->timestampTz('starts_at')->nullable();
             $table->timestampTz('ends_at')->nullable();
+            $table->timestampTz('published_at')->nullable();
+            $table->timestampTz('archived_at')->nullable();
             $table->timestampsTz();
 
             $table->unique(['site_id', 'slug']);
             $table->index('status');
             $table->index('is_featured');
-            $table->index('is_public');
             $table->index('category_id');
         });
     }

@@ -23,6 +23,9 @@ return new class extends Migration
             $table->text('rejection_reason')->nullable();
             $table->string('reviewed_by')->nullable();
             $table->timestampTz('reviewed_at')->nullable();
+            $table->timestampTz('approved_at')->nullable();
+            $table->timestampTz('rejected_at')->nullable();
+            $table->timestampTz('revoked_at')->nullable();
             $table->{$jsonType}('metadata')->nullable();
 
             $table->timestampsTz();
