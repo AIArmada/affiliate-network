@@ -10,6 +10,13 @@ use Throwable;
 
 final class SiteContentFetcher
 {
+    private readonly DnsRecordResolver $dns;
+
+    public function __construct(?DnsRecordResolver $dns = null)
+    {
+        $this->dns = $dns ?? new DnsRecordResolver;
+    }
+
     public function fetch(string $domain, string $path): ?string
     {
         if (! $this->isFetchableDomain($domain)) {
@@ -92,21 +99,15 @@ final class SiteContentFetcher
     {
         $addresses = [];
 
-        $aRecords = @dns_get_record($hostname, DNS_A);
-        if (is_array($aRecords)) {
-            foreach ($aRecords as $record) {
-                if (isset($record['ip']) && is_string($record['ip'])) {
-                    $addresses[] = $record['ip'];
-                }
+        foreach ($this->dns->getRecords($hostname, DNS_A) as $record) {
+            if (isset($record['ip']) && is_string($record['ip'])) {
+                $addresses[] = $record['ip'];
             }
         }
 
-        $aaaaRecords = @dns_get_record($hostname, DNS_AAAA);
-        if (is_array($aaaaRecords)) {
-            foreach ($aaaaRecords as $record) {
-                if (isset($record['ipv6']) && is_string($record['ipv6'])) {
-                    $addresses[] = $record['ipv6'];
-                }
+        foreach ($this->dns->getRecords($hostname, DNS_AAAA) as $record) {
+            if (isset($record['ipv6']) && is_string($record['ipv6'])) {
+                $addresses[] = $record['ipv6'];
             }
         }
 

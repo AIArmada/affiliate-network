@@ -6,9 +6,17 @@ namespace AIArmada\AffiliateNetwork\Strategies;
 
 use AIArmada\AffiliateNetwork\Contracts\SiteVerificationStrategyInterface;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
+use AIArmada\AffiliateNetwork\Support\DnsRecordResolver;
 
 final class DnsVerificationStrategy implements SiteVerificationStrategyInterface
 {
+    private readonly DnsRecordResolver $dns;
+
+    public function __construct(?DnsRecordResolver $dns = null)
+    {
+        $this->dns = $dns ?? new DnsRecordResolver;
+    }
+
     public function methodKey(): string
     {
         return 'dns';
@@ -25,13 +33,7 @@ final class DnsVerificationStrategy implements SiteVerificationStrategyInterface
             return false;
         }
 
-        $records = @dns_get_record($site->domain, DNS_TXT);
-
-        if ($records === false) {
-            return false;
-        }
-
-        foreach ($records as $record) {
+        foreach ($this->dns->getRecords($site->domain, DNS_TXT) as $record) {
             if (isset($record['txt']) && $record['txt'] === $site->verification_token) {
                 return true;
             }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Console\Commands;
 
+use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\CommerceSupport\Support\OwnerBatchRunner;
 use Carbon\CarbonImmutable;
@@ -33,14 +34,14 @@ final class ArchiveExpiredOffersCommand extends Command
         $total = $runner->forEach(function () use ($threshold, $dryRun): array {
             $expired = AffiliateOffer::query()
                 ->where('ends_at', '<', $threshold)
-                ->where('status', 'active')
+                ->where('status', OfferStatus::Published)
                 ->get();
 
             $archived = 0;
 
             foreach ($expired as $offer) {
                 if (! $dryRun) {
-                    $offer->update(['status' => 'archived']);
+                    $offer->update(['status' => OfferStatus::Archived]);
                 }
 
                 $archived++;
