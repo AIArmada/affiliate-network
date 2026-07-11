@@ -9,8 +9,10 @@
     },
     "require": {
         "aiarmada/affiliates": "self.version",
+        "aiarmada/commerce-support": "self.version",
         "aiarmada/contacting": "self.version",
-        "php": "^8.4"
+        "php": "^8.4",
+        "spatie/laravel-model-states": "^2.14.1"
     },
     "autoload": {
         "psr-4": {

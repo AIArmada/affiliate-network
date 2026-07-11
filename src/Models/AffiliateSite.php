@@ -28,6 +28,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string $domain
  * @property string|null $description
  * @property string $status
+ * @property list<string>|null $allowed_redirect_hosts
  * @property string|null $verification_method
  * @property string|null $verification_token
  * @property CarbonImmutable|null $verified_at
@@ -71,6 +72,7 @@ class AffiliateSite extends Model implements Auditable
         'verified_at',
         'settings',
         'metadata',
+        'allowed_redirect_hosts',
     ];
 
     public function getTable(): string
@@ -115,6 +117,7 @@ class AffiliateSite extends Model implements Auditable
             'verified_at' => 'immutable_datetime',
             'settings' => 'array',
             'metadata' => 'array',
+            'allowed_redirect_hosts' => 'array',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];

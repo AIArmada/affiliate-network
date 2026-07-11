@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Support;
 
-final class DnsRecordResolver
+class DnsRecordResolver
 {
     /**
      * @return list<array<string, mixed>>

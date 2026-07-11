@@ -31,11 +31,26 @@ final class SiteContentFetcher
         foreach (['https', 'http'] as $scheme) {
             $url = sprintf('%s://%s%s', $scheme, $domain, $path);
 
+            $pinEntries = $this->resolveAndPinHost($domain, $scheme);
+
+            if ($pinEntries === null) {
+                continue;
+            }
+
             try {
-                $response = Http::connectTimeout($connectTimeout)
+                $request = Http::connectTimeout($connectTimeout)
                     ->timeout($timeout)
-                    ->retry($retries, $retrySleepMs, throw: false)
-                    ->get($url);
+                    ->retry($retries, $retrySleepMs, throw: false);
+
+                if ($pinEntries !== []) {
+                    $request = $request->withOptions([
+                        'curl' => [
+                            CURLOPT_RESOLVE => $pinEntries,
+                        ],
+                    ]);
+                }
+
+                $response = $request->get($url);
 
                 if ($response->successful()) {
                     return $response->body();
@@ -46,6 +61,29 @@ final class SiteContentFetcher
         }
 
         return null;
+    }
+
+    private function resolveAndPinHost(string $hostname, string $scheme): ?array
+    {
+        if (config('affiliate-network.http.skip_dns_check', false)) {
+            return [];
+        }
+
+        $ips = $this->resolveAllAddresses($hostname);
+
+        if (empty($ips)) {
+            return null;
+        }
+
+        foreach ($ips as $ip) {
+            if (! $this->isPublicIp($ip)) {
+                return null;
+            }
+        }
+
+        $port = $scheme === 'https' ? 443 : 80;
+
+        return array_map(fn (string $ip): string => "{$hostname}:{$port}:{$ip}", $ips);
     }
 
     private function isFetchableDomain(string $domain): bool
@@ -72,27 +110,7 @@ final class SiteContentFetcher
             return filter_var($normalizedDomain, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
         }
 
-        if (preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i', $normalizedDomain) !== 1) {
-            return false;
-        }
-
-        if (config('affiliate-network.http.skip_dns_check', false)) {
-            return true;
-        }
-
-        $resolvedIps = $this->resolveAllAddresses($normalizedDomain);
-
-        if (empty($resolvedIps)) {
-            return false;
-        }
-
-        foreach ($resolvedIps as $ip) {
-            if (! $this->isPublicIp($ip)) {
-                return false;
-            }
-        }
-
-        return true;
+        return preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i', $normalizedDomain) === 1;
     }
 
     private function resolveAllAddresses(string $hostname): array
