@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Database\Factories;
 
+use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
-use AIArmada\AffiliateNetwork\States\ApplicationStatusState\ApprovedState;
-use AIArmada\AffiliateNetwork\States\ApplicationStatusState\PendingState;
-use AIArmada\AffiliateNetwork\States\ApplicationStatusState\RejectedState;
-use AIArmada\AffiliateNetwork\States\ApplicationStatusState\RevokedState;
 use AIArmada\Affiliates\Models\Affiliate;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -35,7 +32,7 @@ class AffiliateOfferApplicationFactory extends Factory
                 'commission_rate' => 1000,
                 'currency' => 'USD',
             ])->id,
-            'status' => PendingState::$name,
+            'status' => ApplicationStatus::Pending,
             'reason' => $this->faker->optional()->sentence(),
             'rejection_reason' => null,
             'reviewed_by' => null,
@@ -50,7 +47,7 @@ class AffiliateOfferApplicationFactory extends Factory
     public function pending(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => PendingState::$name,
+            'status' => ApplicationStatus::Pending,
             'reviewed_by' => null,
             'reviewed_at' => null,
         ]);
@@ -62,7 +59,7 @@ class AffiliateOfferApplicationFactory extends Factory
     public function approved(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => ApprovedState::$name,
+            'status' => ApplicationStatus::Approved,
             'reviewed_by' => 'admin',
             'reviewed_at' => now(),
             'approved_at' => now(),
@@ -75,7 +72,7 @@ class AffiliateOfferApplicationFactory extends Factory
     public function rejected(string $reason = 'Does not meet requirements'): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => RejectedState::$name,
+            'status' => ApplicationStatus::Rejected,
             'rejection_reason' => $reason,
             'reviewed_by' => 'admin',
             'reviewed_at' => now(),
@@ -89,7 +86,7 @@ class AffiliateOfferApplicationFactory extends Factory
     public function revoked(string $reason = 'Terms of service violation'): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => RevokedState::$name,
+            'status' => ApplicationStatus::Revoked,
             'rejection_reason' => $reason,
             'reviewed_by' => 'admin',
             'reviewed_at' => now(),

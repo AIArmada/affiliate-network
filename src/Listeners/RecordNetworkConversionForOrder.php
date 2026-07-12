@@ -6,15 +6,10 @@ namespace AIArmada\AffiliateNetwork\Listeners;
 
 use AIArmada\AffiliateNetwork\Http\Middleware\TrackNetworkLinkCookie;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
-use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
-use AIArmada\CommerceSupport\Support\OwnerContext;
-use AIArmada\CommerceSupport\Support\OwnerTuple\OwnerTupleParser;
 use AIArmada\Orders\Events\CommissionAttributionRequired;
 use AIArmada\Orders\Models\Order;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\Log;
-use InvalidArgumentException;
 use Throwable;
 
 /**
@@ -37,27 +32,8 @@ final class RecordNetworkConversionForOrder
 
         $order = $event->order;
 
-        $orderOwnerType = property_exists($event, 'owner_type') ? $event->owner_type : $order->owner_type;
-        $orderOwnerId = property_exists($event, 'owner_id') ? $event->owner_id : $order->owner_id;
-
-        try {
-            $ownerTuple = OwnerTupleParser::fromTypeAndId($orderOwnerType, $orderOwnerId);
-        } catch (InvalidArgumentException) {
-            Log::warning('malformed_owner_tuple', [
-                'component' => 'affiliate-network',
-                'owner_type' => $orderOwnerType,
-                'owner_id' => $orderOwnerId,
-            ]);
-
-            return;
-        }
-
-        // Get attribution data from cookie, falling back to persisted metadata
+        // Get attribution data from cookie
         $attribution = $this->getAttributionFromCookie();
-
-        if ($attribution === null) {
-            $attribution = $this->getAttributionFromOrderMetadata($order);
-        }
 
         if ($attribution === null) {
             return;
@@ -92,88 +68,12 @@ final class RecordNetworkConversionForOrder
             }
         }
 
-        // Validate owner: link's site owner must match order owner
-        $site = AffiliateSite::withoutGlobalScopes()->whereKey($link->site_id)->first();
-        $linkSiteOwnerType = $site?->owner_type ?? null;
-        $linkSiteOwnerId = $site?->owner_id ?? null;
-
-        $orderHasOwner = $ownerTuple->isOwner();
-        $linkHasOwner = $linkSiteOwnerType !== null && $linkSiteOwnerId !== null;
-
-        if (! $orderHasOwner && $linkHasOwner) {
-            Log::warning('owner_mismatch', [
-                'component' => 'affiliate-network',
-                'reason' => 'Order is global but link belongs to an owner.',
-            ]);
-
-            return;
-        }
-
-        if ($orderHasOwner && ! $linkHasOwner) {
-            Log::warning('owner_mismatch', [
-                'component' => 'affiliate-network',
-                'reason' => 'Order belongs to an owner but link site is global or missing.',
-            ]);
-
-            return;
-        }
-
-        if ($orderHasOwner && $linkHasOwner) {
-            if ($ownerTuple->owner_type !== $linkSiteOwnerType || $ownerTuple->owner_id !== $linkSiteOwnerId) {
-                Log::warning('owner_mismatch', [
-                    'component' => 'affiliate-network',
-                    'reason' => 'Order owner does not match link site owner.',
-                ]);
-
-                return;
-            }
-
-            $ownerModel = $ownerTuple->toOwnerModel();
-
-            if ($ownerModel !== null) {
-                OwnerContext::withOwner($ownerModel, function () use ($link, $order, $attribution): void {
-                    $this->recordAndStore($link, $order, $attribution);
-                });
-
-                return;
-            }
-        }
-
-        // Both global or owner match confirmed for null-owner case
-        OwnerContext::withOwner(null, function () use ($link, $order, $attribution): void {
-            $this->recordAndStore($link, $order, $attribution);
-        });
-    }
-
-    private function recordAndStore(AffiliateOfferLink $link, Order $order, array $attribution): void
-    {
+        // Record the conversion
         $revenueMinor = $order->grand_total ?? 0;
-        $currency = $order->currency ?? 'USD';
+        $this->linkService->recordConversion($link, $revenueMinor);
 
-        $this->linkService->recordConversion($link, $revenueMinor, (string) $order->getKey(), $currency);
-
+        // Store attribution data in order metadata for tracking
         $this->storeAttributionInOrder($order, $link, $attribution);
-    }
-
-    /**
-     * Get attribution data from order metadata (persisted at checkout time).
-     *
-     * @return array{code: string, affiliate_id: string, offer_id: string, clicked_at: string}|null
-     */
-    private function getAttributionFromOrderMetadata(Order $order): ?array
-    {
-        $code = $order->metadata['affiliate_link_code'] ?? null;
-
-        if (! is_string($code)) {
-            return null;
-        }
-
-        return [
-            'code' => $code,
-            'affiliate_id' => '',
-            'offer_id' => '',
-            'clicked_at' => '',
-        ];
     }
 
     /**
@@ -206,7 +106,6 @@ final class RecordNetworkConversionForOrder
             $metadata = [];
         }
 
-        $metadata['affiliate_link_code'] = $link->code;
         $metadata['network_attribution'] = [
             'link_code' => $link->code,
             'link_id' => $link->id,

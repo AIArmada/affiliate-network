@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork;
 
 use AIArmada\AffiliateNetwork\Console\Commands\ArchiveExpiredOffersCommand;
-use AIArmada\AffiliateNetwork\Contracts\AuthorizesApplicationAdmin;
 use AIArmada\AffiliateNetwork\Http\Middleware\TrackNetworkLinkCookie;
 use AIArmada\AffiliateNetwork\Listeners\RecordNetworkConversionForOrder;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
@@ -14,7 +13,6 @@ use AIArmada\AffiliateNetwork\Services\SiteVerificationService;
 use AIArmada\AffiliateNetwork\Strategies\DnsVerificationStrategy;
 use AIArmada\AffiliateNetwork\Strategies\FileVerificationStrategy;
 use AIArmada\AffiliateNetwork\Strategies\MetaTagVerificationStrategy;
-use AIArmada\AffiliateNetwork\Support\DefaultApplicationAdminAuthorizer;
 use AIArmada\AffiliateNetwork\Support\SiteContentFetcher;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Support\Facades\Event;
@@ -42,7 +40,6 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
         $this->app->singleton(SiteVerificationService::class);
         $this->app->singleton(OfferManagementService::class);
         $this->app->singleton(OfferLinkService::class);
-        $this->app->singleton(AuthorizesApplicationAdmin::class, DefaultApplicationAdminAuthorizer::class);
 
         $this->registerVerificationStrategies();
     }

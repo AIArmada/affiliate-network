@@ -7,20 +7,15 @@ namespace AIArmada\AffiliateNetwork\Services;
 use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
 use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
 use AIArmada\AffiliateNetwork\Actions\CreateOffer;
-use AIArmada\AffiliateNetwork\Contracts\AuthorizesApplicationAdmin;
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
-use AIArmada\AffiliateNetwork\Exceptions\UnauthorizedApplicationAdminException;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
-use AIArmada\AffiliateNetwork\States\ApplicationStatusState\RejectedState;
-use AIArmada\AffiliateNetwork\States\ApplicationStatusState\RevokedState;
 use AIArmada\Affiliates\Models\Affiliate;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 /**
@@ -69,30 +64,20 @@ final class OfferManagementService
     /**
      * Reject an application.
      */
-    public function rejectApplication(
-        AffiliateOfferApplication $application,
-        string $reason,
-        ?string $reviewedBy = null,
-        ?Model $authorizedBy = null,
-    ): AffiliateOfferApplication {
-        if ($authorizedBy !== null) {
-            $authorizer = app(AuthorizesApplicationAdmin::class);
-
-            if (! $authorizer->canAdministerApplications($authorizedBy, $application)) {
-                throw new UnauthorizedApplicationAdminException();
-            }
-        }
-
+    public function rejectApplication(AffiliateOfferApplication $application, string $reason, ?string $reviewedBy = null): AffiliateOfferApplication
+    {
+        // Admin operation: bypass owner_via_affiliate scope for cross-tenant network management.
         $application = AffiliateOfferApplication::withoutGlobalScope('owner_via_affiliate')
             ->whereKey($application->getKey())
             ->firstOrFail();
 
-        $application->status->transitionTo(RejectedState::class);
-        $application->rejection_reason = $reason;
-        $application->reviewed_by = $reviewedBy;
-        $application->reviewed_at = CarbonImmutable::now();
-        $application->rejected_at = CarbonImmutable::now();
-        $application->save();
+        $application->update([
+            'status' => ApplicationStatus::Rejected,
+            'rejection_reason' => $reason,
+            'reviewed_by' => $reviewedBy,
+            'reviewed_at' => CarbonImmutable::now(),
+            'rejected_at' => CarbonImmutable::now(),
+        ]);
 
         return $application->fresh();
     }
@@ -100,30 +85,20 @@ final class OfferManagementService
     /**
      * Revoke an approved application.
      */
-    public function revokeApplication(
-        AffiliateOfferApplication $application,
-        string $reason,
-        ?string $reviewedBy = null,
-        ?Model $authorizedBy = null,
-    ): AffiliateOfferApplication {
-        if ($authorizedBy !== null) {
-            $authorizer = app(AuthorizesApplicationAdmin::class);
-
-            if (! $authorizer->canAdministerApplications($authorizedBy, $application)) {
-                throw new UnauthorizedApplicationAdminException();
-            }
-        }
-
+    public function revokeApplication(AffiliateOfferApplication $application, string $reason, ?string $reviewedBy = null): AffiliateOfferApplication
+    {
+        // Admin operation: bypass owner_via_affiliate scope for cross-tenant network management.
         $application = AffiliateOfferApplication::withoutGlobalScope('owner_via_affiliate')
             ->whereKey($application->getKey())
             ->firstOrFail();
 
-        $application->status->transitionTo(RevokedState::class);
-        $application->rejection_reason = $reason;
-        $application->reviewed_by = $reviewedBy;
-        $application->reviewed_at = CarbonImmutable::now();
-        $application->revoked_at = CarbonImmutable::now();
-        $application->save();
+        $application->update([
+            'status' => ApplicationStatus::Revoked,
+            'rejection_reason' => $reason,
+            'reviewed_by' => $reviewedBy,
+            'reviewed_at' => CarbonImmutable::now(),
+            'revoked_at' => CarbonImmutable::now(),
+        ]);
 
         return $application->fresh();
     }

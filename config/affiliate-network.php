@@ -20,7 +20,6 @@ return [
     */
     'database' => [
         'table_prefix' => $tablePrefix,
-        'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', env('COMMERCE_JSON_COLUMN_TYPE', 'jsonb')),
         'tables' => $tables,
     ],
 
@@ -36,6 +35,15 @@ return [
     'owner' => [
         'enabled' => env('AFFILIATE_NETWORK_OWNER_ENABLED', false),
         'include_global' => env('AFFILIATE_NETWORK_OWNER_INCLUDE_GLOBAL', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Offers
+    |--------------------------------------------------------------------------
+    */
+    'offers' => [
+        'require_approval' => env('AFFILIATE_NETWORK_OFFERS_REQUIRE_APPROVAL', true),
     ],
 
     /*
@@ -106,7 +114,6 @@ return [
         'timeout_seconds' => 5,
         'retries' => 1,
         'retry_sleep_ms' => 150,
-        'skip_dns_check' => false,
     ],
 
 ];

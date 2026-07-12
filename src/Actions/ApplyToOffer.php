@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Actions;
 
+use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Events\ApplicationSubmitted;
 use AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
-use AIArmada\AffiliateNetwork\States\ApplicationStatusState\ApprovedState;
-use AIArmada\AffiliateNetwork\States\ApplicationStatusState\PendingState;
 use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Support\OwnerWriteGuard;
 use Carbon\CarbonImmutable;
@@ -39,20 +38,21 @@ final class ApplyToOffer
             ->first();
 
         if ($existing !== null) {
-            if ($existing->status->isRejected()) {
+            if ($existing->status === ApplicationStatus::Rejected) {
                 $cooldownDays = config('affiliate-network.applications.cooldown_days', 7);
-                $canReapply = CarbonImmutable::parse($existing->rejected_at ?? $existing->updated_at)->addDays($cooldownDays)->isPast();
+                $canReapply = CarbonImmutable::parse($existing->updated_at)->addDays($cooldownDays)->isPast();
 
                 if (! $canReapply) {
                     throw ApplicationAlreadySubmittedException::forOffer((string) $offer->getKey());
                 }
 
-                $existing->status->transitionTo(PendingState::class);
-                $existing->reason = $reason;
-                $existing->rejection_reason = null;
-                $existing->reviewed_by = null;
-                $existing->reviewed_at = null;
-                $existing->save();
+                $existing->update([
+                    'status' => ApplicationStatus::Pending,
+                    'reason' => $reason,
+                    'rejection_reason' => null,
+                    'reviewed_by' => null,
+                    'reviewed_at' => null,
+                ]);
 
                 $application = $existing->fresh();
 
@@ -64,18 +64,20 @@ final class ApplyToOffer
             return $existing;
         }
 
-        $application = new AffiliateOfferApplication();
-        $application->offer_id = $offer->id;
-        $application->affiliate_id = $affiliate->id;
-        $application->reason = $reason;
-        $application->save();
+        $status = ApplicationStatus::Pending;
 
         if (! $offer->requires_approval || config('affiliate-network.applications.auto_approve', false)) {
-            $application->status->transitionTo(ApprovedState::class);
-            $application->reviewed_at = CarbonImmutable::now();
-            $application->approved_at = CarbonImmutable::now();
-            $application->save();
+            $status = ApplicationStatus::Approved;
         }
+
+        $application = AffiliateOfferApplication::create([
+            'offer_id' => $offer->id,
+            'affiliate_id' => $affiliate->id,
+            'status' => $status,
+            'reason' => $reason,
+            'reviewed_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
+            'approved_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
+        ]);
 
         event(new ApplicationSubmitted($application));
 

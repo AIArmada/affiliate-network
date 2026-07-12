@@ -135,9 +135,9 @@ final class OfferLinkService
     /**
      * Record a conversion on a link.
      */
-    public function recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0, ?string $orderId = null, string $currency = 'USD'): void
+    public function recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0): void
     {
-        $this->recordNetworkConversionAction->execute($link, $revenueMinor, $orderId, $currency);
+        $this->recordNetworkConversionAction->execute($link, $revenueMinor);
     }
 
     /**

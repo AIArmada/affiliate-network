@@ -7,7 +7,6 @@ namespace AIArmada\AffiliateNetwork\Models;
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferApplicationFactory;
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByAffiliateOwner;
-use AIArmada\AffiliateNetwork\States\ApplicationStatusState\ApplicationStatusState;
 use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
@@ -17,13 +16,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use OwenIt\Auditing\Contracts\Auditable;
-use Spatie\ModelStates\HasStates;
 
 /**
  * @property string $id
  * @property string $offer_id
  * @property string $affiliate_id
- * @property ApplicationStatus|\AIArmada\AffiliateNetwork\States\ApplicationStatusState\ApplicationStatusState $status
+ * @property ApplicationStatus $status
  * @property string|null $reason
  * @property string|null $rejection_reason
  * @property string|null $reviewed_by
@@ -41,7 +39,6 @@ class AffiliateOfferApplication extends Model implements Auditable
 {
     use HasCommerceAudit;
     use HasFactory;
-    use HasStates;
     use HasUuids;
     use LogsCommerceActivity;
     use ScopesByAffiliateOwner;
@@ -92,7 +89,7 @@ class AffiliateOfferApplication extends Model implements Auditable
     protected function casts(): array
     {
         return [
-            'status' => ApplicationStatusState::class,
+            'status' => ApplicationStatus::class,
             'reviewed_at' => 'immutable_datetime',
             'approved_at' => 'immutable_datetime',
             'rejected_at' => 'immutable_datetime',
@@ -105,11 +102,11 @@ class AffiliateOfferApplication extends Model implements Auditable
 
     public function isPending(): bool
     {
-        return $this->status->isPending();
+        return $this->status === ApplicationStatus::Pending;
     }
 
     public function isApproved(): bool
     {
-        return $this->status->isApproved();
+        return $this->status === ApplicationStatus::Approved;
     }
 }

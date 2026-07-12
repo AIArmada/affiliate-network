@@ -14,7 +14,6 @@ The package configuration is located at `config/affiliate-network.php`.
 return [
     'database' => [
         'table_prefix' => 'affiliate_network_',
-        'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', env('COMMERCE_JSON_COLUMN_TYPE', 'json')),
         'tables' => [
             'sites' => 'affiliate_network_sites',
             'offers' => 'affiliate_network_offers',
@@ -69,7 +68,6 @@ return [
         'timeout_seconds' => 5,
         'retries' => 1,
         'retry_sleep_ms' => 150,
-        'skip_dns_check' => false,
     ],
 ];
 ```
@@ -143,4 +141,5 @@ return [
 | `timeout_seconds` | Request timeout | `5` |
 | `retries` | Retry attempts | `1` |
 | `retry_sleep_ms` | Delay between retries | `150` |
-| `skip_dns_check` | Skip outbound URL DNS validation | `false` |
+
+Site-content requests always validate DNS results, reject private/reserved destinations, and do not follow redirects. This validation cannot be disabled through configuration.
