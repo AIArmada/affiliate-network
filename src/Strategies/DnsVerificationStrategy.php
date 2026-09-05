@@ -34,7 +34,7 @@ final class DnsVerificationStrategy implements SiteVerificationStrategyInterface
         }
 
         foreach ($this->dns->getRecords($site->domain, DNS_TXT) as $record) {
-            if (isset($record['txt']) && $record['txt'] === $site->verification_token) {
+            if (isset($record['txt']) && is_string($record['txt']) && hash_equals($site->verification_token, $record['txt'])) {
                 return true;
             }
         }

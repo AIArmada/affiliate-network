@@ -13,7 +13,7 @@ final class ApproveApplication
 {
     public function execute(AffiliateOfferApplication $application, ?string $reviewedBy = null): AffiliateOfferApplication
     {
-        $application = AffiliateOfferApplication::withoutGlobalScope('owner_via_affiliate')
+        $application = AffiliateOfferApplication::query()
             ->whereKey($application->getKey())
             ->firstOrFail();
 

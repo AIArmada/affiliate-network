@@ -21,6 +21,7 @@ return [
     'database' => [
         'table_prefix' => $tablePrefix,
         'tables' => $tables,
+        'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', 'jsonb'),
     ],
 
     /*

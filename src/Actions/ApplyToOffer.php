@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Actions;
 
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
+use AIArmada\AffiliateNetwork\Enums\OfferStatus;
+use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
 use AIArmada\AffiliateNetwork\Events\ApplicationSubmitted;
 use AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\Affiliates\Models\Affiliate;
+use AIArmada\CommerceSupport\Support\OwnerContext;
 use AIArmada\CommerceSupport\Support\OwnerWriteGuard;
 use Carbon\CarbonImmutable;
 
@@ -17,9 +20,13 @@ final class ApplyToOffer
 {
     public function execute(AffiliateOffer $offer, Affiliate $affiliate, ?string $reason = null): AffiliateOfferApplication
     {
-        $offer = AffiliateOffer::withoutGlobalScope('owner_via_site')
-            ->whereKey($offer->getKey())
-            ->firstOrFail();
+        $offer = OwnerContext::withOwner(null, function () use ($offer): AffiliateOffer {
+            return AffiliateOffer::withoutGlobalScope('owner_via_site')
+                ->whereKey($offer->getKey())
+                ->where('status', OfferStatus::Published)
+                ->where('visibility', OfferVisibility::Public)
+                ->firstOrFail();
+        });
 
         if (config('affiliates.owner.enabled', false)) {
             $affiliate = OwnerWriteGuard::findOrFailForOwner(

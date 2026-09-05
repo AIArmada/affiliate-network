@@ -14,6 +14,10 @@ final class UpdateOffer
      */
     public function execute(AffiliateOffer $offer, array $data): AffiliateOffer
     {
+        $offer = AffiliateOffer::query()
+            ->whereKey($offer->getKey())
+            ->firstOrFail();
+
         $offer->update($data);
 
         $fresh = $offer->fresh();

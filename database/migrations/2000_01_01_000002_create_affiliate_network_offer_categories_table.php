@@ -12,7 +12,7 @@ return new class extends Migration
     {
         $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
 
-        Schema::create($tablePrefix . 'offer_categories', function (Blueprint $table): void {
+        commerce_schema_create_if_missing($tablePrefix . 'offer_categories', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->nullableMorphs('owner');
 

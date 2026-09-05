@@ -13,7 +13,7 @@ return new class extends Migration
         $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
         $jsonType = commerce_json_column_type('affiliate-network', 'jsonb');
 
-        Schema::create($tablePrefix . 'sites', function (Blueprint $table) use ($jsonType): void {
+        commerce_schema_create_if_missing($tablePrefix . 'sites', function (Blueprint $table) use ($jsonType): void {
             $table->uuid('id')->primary();
             $table->nullableMorphs('owner');
 

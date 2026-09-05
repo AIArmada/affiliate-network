@@ -66,8 +66,7 @@ final class OfferManagementService
      */
     public function rejectApplication(AffiliateOfferApplication $application, string $reason, ?string $reviewedBy = null): AffiliateOfferApplication
     {
-        // Admin operation: bypass owner_via_affiliate scope for cross-tenant network management.
-        $application = AffiliateOfferApplication::withoutGlobalScope('owner_via_affiliate')
+        $application = AffiliateOfferApplication::query()
             ->whereKey($application->getKey())
             ->firstOrFail();
 
@@ -87,8 +86,7 @@ final class OfferManagementService
      */
     public function revokeApplication(AffiliateOfferApplication $application, string $reason, ?string $reviewedBy = null): AffiliateOfferApplication
     {
-        // Admin operation: bypass owner_via_affiliate scope for cross-tenant network management.
-        $application = AffiliateOfferApplication::withoutGlobalScope('owner_via_affiliate')
+        $application = AffiliateOfferApplication::query()
             ->whereKey($application->getKey())
             ->firstOrFail();
 

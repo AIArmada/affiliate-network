@@ -36,7 +36,7 @@ final class FileVerificationStrategy implements SiteVerificationStrategyInterfac
             return false;
         }
 
-        return mb_trim($content) === $site->verification_token;
+        return hash_equals($site->verification_token, mb_trim($content));
     }
 
     public function getInstructions(AffiliateSite $site): array

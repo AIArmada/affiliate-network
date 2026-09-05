@@ -150,8 +150,10 @@ class AffiliateOfferLink extends Model implements Auditable
 
     public function recordConversion(int $revenueMinor): void
     {
-        $this->increment('conversions');
-        $this->increment('revenue', $revenueMinor);
+        $this->incrementEach([
+            'conversions' => 1,
+            'revenue' => $revenueMinor,
+        ]);
     }
 
     public function isExpired(): bool
