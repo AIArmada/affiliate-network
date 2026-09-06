@@ -117,8 +117,7 @@ Create a new offer for a site.
 ```php
 $offer = $offerService->createOffer($site, [
     'name' => 'Summer Sale',
-    'commission_type' => 'percentage',
-    'commission_rate' => 1000,
+    'rate_base_bp' => 1000,
     // ... other fields
 ]);
 ```

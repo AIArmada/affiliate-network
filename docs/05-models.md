@@ -63,8 +63,11 @@ Represents an affiliate offer/campaign.
 | `description` | `string\|null` | Offer description |
 | `terms` | `string\|null` | Terms and conditions |
 | `status` | `string` | draft, pending, active, paused, expired, rejected |
-| `commission_type` | `string` | percentage, fixed |
-| `commission_rate` | `int` | Commission in basis points or minor units |
+| `rate_base_bp` | `int` | Base percentage in basis points (1000 = 10%), null when fixed-only |
+| `rate_fixed_minor` | `int` | Fixed payout in minor units, null when percentage-based |
+| `rate_source` | `string` | `synced` (importer owns rates) or `manual` (operator override; sync holds rates back) |
+| `volume_tiers` | `array` | Volume bonus tiers (`min_volume_minor`, `rate_bp`) |
+| `active_promotions` | `array` | Active promotions (`id`, `name`, `ends_at`) |
 | `currency` | `string\|null` | Currency code (e.g., USD) |
 | `cookie_days` | `int\|null` | Cookie duration |
 | `is_featured` | `bool` | Featured in marketplace |

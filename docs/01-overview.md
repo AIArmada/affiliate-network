@@ -193,7 +193,7 @@ affiliate-network/
 |-------|-------------|-------------|
 | `affiliate_network_sites` | Merchant domains | `owner_type`, `owner_id`, `domain`, `status`, `verification_method` |
 | `affiliate_network_offer_categories` | Hierarchical categories | `owner_type`, `owner_id`, `parent_id`, `name`, `slug` |
-| `affiliate_network_offers` | Affiliate offers | `site_id`, `category_id`, `commission_type`, `commission_rate`, `status` |
+| `affiliate_network_offers` | Affiliate offers | `site_id`, `category_id`, `rate_base_bp`, `rate_fixed_minor`, `status` |
 | `affiliate_network_offer_creatives` | Promotional assets | `offer_id`, `type`, `url`, `width`, `height` |
 | `affiliate_network_offer_applications` | Affiliate-to-offer applications | `offer_id`, `affiliate_id`, `status`, `reviewed_at` |
 | `affiliate_network_offer_links` | Tracking links | `offer_id`, `affiliate_id`, `code`, `clicks`, `conversions`, `revenue` |

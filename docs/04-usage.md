@@ -4,6 +4,32 @@ title: Usage
 
 # Usage
 
+## Catalog sync (merchant program mirror)
+
+Mirror a merchant program as offers instead of hand-typing rates:
+
+```php
+use AIArmada\AffiliateNetwork\Services\OfferImportService;
+
+$result = app(OfferImportService::class)->sync($site, $programId);
+// ['created' => 2, 'updated' => 0, 'skipped' => 5]
+```
+
+- Owned site (shared DB): leave `catalog_url` empty — reads `affiliates` directly.
+- Unowned site: set `catalog_url` (e.g. `https://merchant.com/api/affiliates`)
+  + `catalog_token_encrypted = encrypt($token)`, then sync with
+  `php artisan affiliate-network:sync-offers {site} --program={id}`,
+  or omit `--program` to sync every available program on the site.
+- Upserts by `(site_id, external_program_id, subject_key)`; unchanged
+  checksums skip; manual offers (`external_program_id` null) are never touched.
+- Imported rates are the fully-resolved **base** (product/category/program
+  rules folded); volume/promotions ride along in `volume_tiers` /
+  `active_promotions` columns.
+- **Rate lock:** editing any rate field on an offer flips `rate_source` to
+  `manual`, and sync holds those rates back (reported as `locked`) instead
+  of silently reverting them. Non-rate fields still mirror. Flip
+  `rate_source` back to `synced` to re-apply catalog rates on next sync.
+
 ## Canonical API: Actions
 
 The canonical orchestration surface is the `Actions` tree. Prefer these over direct service calls:
@@ -16,8 +42,7 @@ use AIArmada\AffiliateNetwork\Actions\CreateOffer;
 $offer = CreateOffer::run($site, [
     'name' => 'Summer Sale Campaign',
     'description' => '20% off summer collection',
-    'commission_type' => 'percentage',
-    'commission_rate' => 1000, // 10% in basis points
+    'rate_base_bp' => 1000, // 10% in basis points
     'cookie_days' => 30,
     'landing_url' => 'https://mystore.com/summer-sale',
     'is_public' => true,
@@ -31,7 +56,7 @@ $offer = CreateOffer::run($site, [
 use AIArmada\AffiliateNetwork\Actions\UpdateOffer;
 
 UpdateOffer::run($offer, [
-    'commission_rate' => 1500,
+    'rate_base_bp' => 1500,
     'is_public' => false,
 ]);
 ```
@@ -117,21 +142,28 @@ New verification methods can be added by implementing `SiteVerificationStrategyI
 | `expired` | `STATUS_EXPIRED` | Past end date |
 | `rejected` | `STATUS_REJECTED` | Declined by admin |
 
-### Commission Types
+### Commission Rates
 
 ```php
 // Percentage commission (basis points: 1000 = 10%)
 $offer = AffiliateOffer::create([
-    'commission_type' => 'percentage',
-    'commission_rate' => 1500, // 15%
+    'rate_base_bp' => 1500, // 15%
 ]);
 
-// Fixed commission (minor units: 1000 = $10.00)
+// Fixed commission (minor units: 500 = $5.00)
 $offer = AffiliateOffer::create([
-    'commission_type' => 'fixed',
-    'commission_rate' => 500, // $5.00
+    'rate_fixed_minor' => 500, // $5.00
     'currency' => 'USD',
 ]);
+
+// With volume tiers and promotions (structured, synced from catalog)
+$offer = AffiliateOffer::create([
+    'rate_base_bp' => 1000,
+    'volume_tiers' => [['min_volume_minor' => 100000, 'rate_bp' => 1500]],
+    'active_promotions' => [['id' => 'promo-1', 'name' => 'Spring', 'ends_at' => null]],
+]);
+
+$offer->formattedRate(); // "15.00%" or "$5.00"
 ```
 
 ### Check Application Status

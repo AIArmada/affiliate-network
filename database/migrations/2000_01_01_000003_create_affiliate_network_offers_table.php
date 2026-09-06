@@ -25,10 +25,12 @@ return new class extends Migration
             $table->string('status')->default('pending');
             $table->string('visibility', 32)->default('public');
 
-            $table->string('commission_type')->default('percentage');
-            $table->unsignedInteger('commission_rate')->default(1000);
+            $table->unsignedInteger('rate_base_bp')->nullable();
+            $table->unsignedInteger('rate_fixed_minor')->nullable();
             $table->string('currency', 3)->nullable();
             $table->unsignedSmallInteger('cookie_days')->nullable();
+            $table->{$jsonType}('volume_tiers')->nullable();
+            $table->{$jsonType}('active_promotions')->nullable();
 
             $table->boolean('is_featured')->default(false);
             $table->boolean('requires_approval')->default(true);

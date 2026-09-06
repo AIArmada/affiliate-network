@@ -43,8 +43,8 @@ keywords:
 
 ## Key surfaces
 - Models: `AffiliateOffer`, `AffiliateOfferApplication`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferLink`, `AffiliateSite`
-- Actions/Services: `Actions/ApplyToOffer`, `Actions/ApproveApplication`, `Actions/CreateOffer`, `Actions/RecordNetworkConversion`, `Actions/UpdateOffer`, `Services/OfferLinkService`, `Services/OfferManagementService`, `Services/SiteVerificationService`
-- Config `affiliate-network.php`: `sites`, `offers`, `offer_categories`, `offer_creatives`, `offer_applications`, `offer_links`, `database`, `table_prefix`, `tables`, `json_column_type`
+- Actions/Services: `Actions/ApplyToOffer`, `Actions/ApproveApplication`, `Actions/CreateOffer`, `Actions/RecordNetworkConversion`, `Actions/UpdateOffer`, `Services/OfferLinkService`, `Services/OfferManagementService`, `Services/OfferImportService`, `Services/Catalog/*`, `Services/SiteVerificationService`
+- Config `affiliate-network.php`: `sites`, `offers`, `sync`, `database`, `table_prefix`, `tables`, `json_column_type`
 
 ## Docs map
 - Start: `01-overview` → `03-configuration` → `04-usage` → `99-troubleshooting`

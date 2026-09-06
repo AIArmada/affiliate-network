@@ -35,10 +35,12 @@ class AffiliateOfferFactory extends Factory
             'description' => $this->faker->paragraph(),
             'terms' => $this->faker->paragraph(),
             'status' => OfferStatus::Published,
-            'commission_type' => 'percentage',
-            'commission_rate' => $this->faker->numberBetween(500, 2500),
+            'rate_base_bp' => $this->faker->numberBetween(500, 2500),
+            'rate_fixed_minor' => null,
             'currency' => 'USD',
             'cookie_days' => 30,
+            'volume_tiers' => null,
+            'active_promotions' => null,
             'is_featured' => false,
             'visibility' => OfferVisibility::Public,
             'requires_approval' => true,
@@ -136,8 +138,8 @@ class AffiliateOfferFactory extends Factory
     public function flatRate(int $amountMinor = 500): static
     {
         return $this->state(fn (array $attributes) => [
-            'commission_type' => 'flat',
-            'commission_rate' => $amountMinor,
+            'rate_base_bp' => null,
+            'rate_fixed_minor' => $amountMinor,
         ]);
     }
 
@@ -147,8 +149,8 @@ class AffiliateOfferFactory extends Factory
     public function percentage(int $rateBps = 1000): static
     {
         return $this->state(fn (array $attributes) => [
-            'commission_type' => 'percentage',
-            'commission_rate' => $rateBps,
+            'rate_base_bp' => $rateBps,
+            'rate_fixed_minor' => null,
         ]);
     }
 

@@ -223,6 +223,32 @@ $stats = $service->getStats(AffiliateOfferLink $link): array;
 // Returns: clicks, conversions, revenue, conversion_rate, revenue_per_click
 ```
 
+### OfferImportService
+
+```php
+use AIArmada\AffiliateNetwork\Services\OfferImportService;
+
+$service = app(OfferImportService::class);
+
+// Sync one program (local shared-DB when the site has no catalog_url,
+// remote HTTP pull otherwise)
+$result = $service->sync($site, $programId);
+// Returns: created, updated, skipped, locked
+
+// Sync every available program; one bad program never aborts the rest
+$result = $service->syncAll($site);
+// Returns: programs, created, updated, skipped, locked, failed
+```
+
+Upserts by `(site_id, external_program_id, subject_key)` with checksum
+skips. Imported offers land as `draft` with `rate_source = synced`.
+Operator rate edits flip the lock to `manual`; later syncs hold rates back
+(`locked`) until the operator flips it back. Artisan:
+
+```bash
+php artisan affiliate-network:sync-offers {site} [--program={id}]
+```
+
 ---
 
 ## Routes

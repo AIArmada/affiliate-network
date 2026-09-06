@@ -71,6 +71,10 @@ class AffiliateSite extends Model implements Auditable
         'verified_at',
         'settings',
         'metadata',
+        'catalog_url',
+        'catalog_token_encrypted',
+        'sync_status',
+        'last_synced_at',
     ];
 
     public function getTable(): string
@@ -113,6 +117,7 @@ class AffiliateSite extends Model implements Auditable
     {
         return [
             'verified_at' => 'immutable_datetime',
+            'last_synced_at' => 'immutable_datetime',
             'settings' => 'array',
             'metadata' => 'array',
             'created_at' => 'immutable_datetime',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork;
 
 use AIArmada\AffiliateNetwork\Console\Commands\ArchiveExpiredOffersCommand;
+use AIArmada\AffiliateNetwork\Console\Commands\SyncSiteOffersCommand;
 use AIArmada\AffiliateNetwork\Http\Middleware\TrackNetworkLinkCookie;
 use AIArmada\AffiliateNetwork\Listeners\RecordNetworkConversionForOrder;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
@@ -31,6 +32,7 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
             ->hasRoutes(['api'])
             ->hasCommands([
                 ArchiveExpiredOffersCommand::class,
+                SyncSiteOffersCommand::class,
             ]);
     }
 
@@ -40,6 +42,9 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
         $this->app->singleton(SiteVerificationService::class);
         $this->app->singleton(OfferManagementService::class);
         $this->app->singleton(OfferLinkService::class);
+        $this->app->singleton(Services\Catalog\LocalProgramReader::class);
+        $this->app->singleton(Services\Catalog\RemoteCatalogClient::class);
+        $this->app->singleton(Services\OfferImportService::class);
 
         $this->registerVerificationStrategies();
     }

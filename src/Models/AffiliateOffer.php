@@ -10,6 +10,7 @@ use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesBySiteOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
+use AIArmada\CommerceSupport\Support\MoneyFormatter;
 use AIArmada\Contacting\Concerns\HasContactMethods;
 use AIArmada\Contacting\Concerns\HasSocialProfiles;
 use Carbon\CarbonImmutable;
@@ -30,10 +31,13 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string|null $description
  * @property string|null $terms
  * @property OfferStatus $status
- * @property string $commission_type
- * @property int $commission_rate
+ * @property int|null $rate_base_bp
+ * @property int|null $rate_fixed_minor
+ * @property string $rate_source
  * @property string|null $currency
  * @property int|null $cookie_days
+ * @property array<int, array{min_volume_minor: int, rate_bp: int}>|null $volume_tiers
+ * @property array<int, array{id: string, name: string, ends_at: string|null}>|null $active_promotions
  * @property bool $is_featured
  * @property OfferVisibility $visibility
  * @property bool $requires_approval
@@ -62,6 +66,36 @@ class AffiliateOffer extends Model implements Auditable
     use LogsCommerceActivity;
     use ScopesBySiteOwner;
 
+    /**
+     * Set while OfferImportService writes so the rate lock hook can tell
+     * importer writes apart from operator writes. Request-scoped discipline:
+     * the importer always resets it in a finally block (Octane-safe).
+     */
+    private static bool $syncingImport = false;
+
+    public static function setSyncingImport(bool $syncing): void
+    {
+        self::$syncingImport = $syncing;
+    }
+
+    /**
+     * Rate-block columns owned by the merchant catalog when rate_source is
+     * synced. Any operator write to these flips the lock to manual.
+     *
+     * @return array<int, string>
+     */
+    public static function rateBlockColumns(): array
+    {
+        return [
+            'rate_base_bp',
+            'rate_fixed_minor',
+            'currency',
+            'cookie_days',
+            'volume_tiers',
+            'active_promotions',
+        ];
+    }
+
     protected $fillable = [
         'site_id',
         'category_id',
@@ -70,10 +104,13 @@ class AffiliateOffer extends Model implements Auditable
         'description',
         'terms',
         'status',
-        'commission_type',
-        'commission_rate',
+        'rate_source',
+        'rate_base_bp',
+        'rate_fixed_minor',
         'currency',
         'cookie_days',
+        'volume_tiers',
+        'active_promotions',
         'is_featured',
         'visibility',
         'requires_approval',
@@ -84,6 +121,12 @@ class AffiliateOffer extends Model implements Auditable
         'ends_at',
         'published_at',
         'archived_at',
+        'external_program_id',
+        'subject_type',
+        'subject_key',
+        'source_url',
+        'source_checksum',
+        'last_synced_at',
     ];
 
     public function getTable(): string
@@ -141,6 +184,26 @@ class AffiliateOffer extends Model implements Auditable
             $offer->applications()->delete();
             $offer->links()->delete();
         });
+
+        static::updating(function (self $offer): void {
+            if (self::$syncingImport) {
+                return;
+            }
+
+            if ($offer->isDirty('rate_source')) {
+                if ($offer->rate_source === 'synced') {
+                    // Explicit unlock: drop the checksum so the next sync
+                    // re-applies catalog rates instead of skipping.
+                    $offer->source_checksum = null;
+                }
+
+                return;
+            }
+
+            if ($offer->isDirty(self::rateBlockColumns())) {
+                $offer->rate_source = 'manual';
+            }
+        });
     }
 
     protected static function newFactory(): AffiliateOfferFactory
@@ -153,8 +216,11 @@ class AffiliateOffer extends Model implements Auditable
         return [
             'status' => OfferStatus::class,
             'visibility' => OfferVisibility::class,
-            'commission_rate' => 'integer',
+            'rate_base_bp' => 'integer',
+            'rate_fixed_minor' => 'integer',
             'cookie_days' => 'integer',
+            'volume_tiers' => 'array',
+            'active_promotions' => 'array',
             'is_featured' => 'boolean',
             'requires_approval' => 'boolean',
             'restrictions' => 'array',
@@ -163,6 +229,7 @@ class AffiliateOffer extends Model implements Auditable
             'ends_at' => 'immutable_datetime',
             'published_at' => 'immutable_datetime',
             'archived_at' => 'immutable_datetime',
+            'last_synced_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
@@ -185,5 +252,26 @@ class AffiliateOffer extends Model implements Auditable
         }
 
         return true;
+    }
+
+    public function isFixed(): bool
+    {
+        return $this->rate_fixed_minor !== null;
+    }
+
+    public function formattedRate(): string
+    {
+        if ($this->isFixed()) {
+            return MoneyFormatter::formatMinor(
+                (int) $this->rate_fixed_minor,
+                $this->currency ?? 'USD'
+            );
+        }
+
+        if ($this->rate_base_bp === null) {
+            return '—';
+        }
+
+        return number_format(((int) $this->rate_base_bp) / 100, 2) . '%';
     }
 }
