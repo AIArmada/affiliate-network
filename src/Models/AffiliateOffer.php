@@ -44,6 +44,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string|null $landing_url
  * @property array<string, mixed>|null $restrictions
  * @property array<string, mixed>|null $metadata
+ * @property string|null $source_checksum
  * @property CarbonImmutable|null $starts_at
  * @property CarbonImmutable|null $ends_at
  * @property CarbonImmutable|null $published_at

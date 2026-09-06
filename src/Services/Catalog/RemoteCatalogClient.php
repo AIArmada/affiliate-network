@@ -94,8 +94,11 @@ final class RemoteCatalogClient implements CatalogReaderInterface
         /** @var array<string, mixed> $data */
         $data = $response->json();
 
-        return collect($data['data'] ?? [])
-            ->map(fn ($row): ?string => isset($row['program_id']) ? (string) $row['program_id'] : null)
+        $rows = $data['data'] ?? [];
+        $rows = is_array($rows) ? array_values($rows) : [];
+
+        return collect($rows)
+            ->map(fn (mixed $row): ?string => is_array($row) && isset($row['program_id']) ? (string) $row['program_id'] : null)
             ->filter()
             ->values()
             ->all();
