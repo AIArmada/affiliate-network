@@ -98,6 +98,12 @@ $instructions = $verificationService->getInstructions($site, 'file');
 
 Manages offers and affiliate applications.
 
+This is the discovery-side API. A local imported offer links to an existing
+core `affiliates` program through `external_program_id`; use
+`enrollInLinkedProgram()` for idempotent enrollment. Do not create a network
+application for that offer. Remote catalog offers use the network application
+flow. Commission and payout writes remain exclusively in `affiliates`.
+
 ### Dependency Injection
 
 ```php
@@ -188,6 +194,13 @@ Get all active offers an affiliate is approved for.
 ```php
 $offers = $offerService->getApprovedOffers($affiliate);
 // Returns: Collection<AffiliateOffer>
+```
+
+#### enrollInLinkedProgram
+
+```php
+$membership = $offerService->enrollInLinkedProgram($offer, $affiliate);
+// Returns an existing/new core membership, or null for remote offers.
 ```
 
 ---
@@ -288,3 +301,7 @@ $stats = $linkService->getStats($link);
 //     'revenue_per_click' => 214.36,
 // ]
 ```
+
+Public `resolveLink()` uses an explicit global lookup window. Click and
+conversion writes re-enter the link affiliate's owner context before mutating
+network attribution counters.

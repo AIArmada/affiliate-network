@@ -12,6 +12,8 @@ use AIArmada\Affiliates\Services\ProgramCatalogService;
 /**
  * Local reader for shared-DB installs. Calls affiliates' catalog service
  * directly — no HTTP. Only resolves when aiarmada/affiliates is installed.
+ * The reader is strictly read-only: ProgramCatalogService::snapshot() reads
+ * catalog data and never records attribution, commission, or payout activity.
  */
 final class LocalProgramReader implements CatalogReaderInterface
 {

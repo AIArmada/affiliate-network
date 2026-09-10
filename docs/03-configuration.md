@@ -68,6 +68,7 @@ return [
         'timeout_seconds' => 5,
         'retries' => 1,
         'retry_sleep_ms' => 150,
+        'max_response_bytes' => 1048576,
     ],
 ];
 ```
@@ -141,5 +142,6 @@ return [
 | `timeout_seconds` | Request timeout | `5` |
 | `retries` | Retry attempts | `1` |
 | `retry_sleep_ms` | Delay between retries | `150` |
+| `max_response_bytes` | Maximum catalog/site response body | `1048576` (1 MiB) |
 
-Site-content requests always validate DNS results, reject private/reserved destinations, and do not follow redirects. This validation cannot be disabled through configuration.
+Site-content and catalog requests always validate DNS results, reject private/reserved destinations, use HTTP/HTTPS only, reject credentials/fragments and non-standard ports, do not follow redirects, apply timeouts/retries, and cap response bodies. This validation cannot be disabled through configuration.

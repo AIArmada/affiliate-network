@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferLinkFactory;
-use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByAffiliateOwner;
+use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
@@ -45,7 +45,17 @@ class AffiliateOfferLink extends Model implements Auditable
     use HasFactory;
     use HasUuids;
     use LogsCommerceActivity;
-    use ScopesByAffiliateOwner;
+    use ScopesByBelongsToOwner;
+
+    protected static function ownerViaRelation(): string
+    {
+        return 'affiliate';
+    }
+
+    protected static function ownerTableConfigKey(): string
+    {
+        return 'affiliates.owner';
+    }
 
     protected $fillable = [
         'offer_id',
@@ -140,6 +150,7 @@ class AffiliateOfferLink extends Model implements Auditable
 
     public static function generateCode(): string
     {
+        // 64 bits of cryptographic randomness keeps public redirect codes unguessable.
         return bin2hex(random_bytes(8));
     }
 

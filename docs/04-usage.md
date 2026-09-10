@@ -15,7 +15,9 @@ $result = app(OfferImportService::class)->sync($site, $programId);
 // ['created' => 2, 'updated' => 0, 'skipped' => 5]
 ```
 
-- Owned site (shared DB): leave `catalog_url` empty — reads `affiliates` directly.
+- Owned site (shared DB): leave `catalog_url` empty — reads `affiliates` directly
+  through its read-only catalog snapshot; no commission or payout rows are
+  written.
 - Unowned site: set `catalog_url` (e.g. `https://merchant.com/api/affiliates`)
   + `catalog_token_encrypted = encrypt($token)`, then sync with
   `php artisan affiliate-network:sync-offers {site} --program={id}`,
@@ -29,6 +31,13 @@ $result = app(OfferImportService::class)->sync($site, $programId);
   `manual`, and sync holds those rates back (reported as `locked`) instead
   of silently reverting them. Non-rate fields still mirror. Flip
   `rate_source` back to `synced` to re-apply catalog rates on next sync.
+
+The importer has one `resolveField(source, local, remote)` precedence helper:
+local syncs prefer the local value and remote syncs prefer the remote value,
+with null fallback. Imported local offers retain the core program ID in
+`external_program_id`; marketplace enrollment links to that existing program
+through `affiliates` and never creates a duplicate program or network
+application. Remote offers use the network application flow.
 
 ## Canonical API: Actions
 

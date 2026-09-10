@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferCreativeFactory;
+use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use Carbon\CarbonImmutable;
@@ -39,6 +40,17 @@ class AffiliateOfferCreative extends Model implements Auditable
     use HasFactory;
     use HasUuids;
     use LogsCommerceActivity;
+    use ScopesByBelongsToOwner;
+
+    protected static function ownerViaRelation(): string
+    {
+        return 'offer.site';
+    }
+
+    protected static function ownerTableConfigKey(): string
+    {
+        return 'affiliate-network.owner';
+    }
 
     public const TYPE_BANNER = 'banner';
 

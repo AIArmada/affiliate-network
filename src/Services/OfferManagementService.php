@@ -13,7 +13,12 @@ use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
+use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\Affiliates\Models\Affiliate;
+use AIArmada\Affiliates\Models\AffiliateProgram;
+use AIArmada\Affiliates\Models\AffiliateProgramMembership;
+use AIArmada\Affiliates\Services\ProgramService;
+use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -33,6 +38,7 @@ final class OfferManagementService
         private readonly CreateOffer $createOfferAction,
         private readonly ApplyToOffer $applyToOfferAction,
         private readonly ApproveApplication $approveApplicationAction,
+        private readonly ProgramService $programService,
     ) {}
 
     /**
@@ -51,6 +57,76 @@ final class OfferManagementService
     public function applyForOffer(AffiliateOffer $offer, Affiliate $affiliate, ?string $reason = null): AffiliateOfferApplication
     {
         return $this->applyToOfferAction->execute($offer, $affiliate, $reason);
+    }
+
+    /**
+     * Resolve the local core program linked by an imported offer.
+     *
+     * A missing local program means the offer is a remote discovery record and
+     * must use the network application flow instead.
+     */
+    public function linkedProgram(AffiliateOffer $offer): ?AffiliateProgram
+    {
+        if (! $this->isLocalProgramOffer($offer)) {
+            return null;
+        }
+
+        return AffiliateProgram::query()->whereKey($offer->external_program_id)->first();
+    }
+
+    public function isLocalProgramOffer(AffiliateOffer $offer): bool
+    {
+        if (empty($offer->external_program_id)) {
+            return false;
+        }
+
+        /** @var array<string, mixed>|null $metadata */
+        $metadata = $offer->metadata;
+
+        return ($metadata['catalog_source'] ?? 'local') === 'local';
+    }
+
+    /**
+     * Enroll an affiliate in an imported offer's existing core program.
+     *
+     * @return AffiliateProgramMembership|null Null for remote-only offers.
+     */
+    public function enrollInLinkedProgram(AffiliateOffer $offer, Affiliate $affiliate): ?AffiliateProgramMembership
+    {
+        $program = $this->linkedProgram($offer);
+
+        return $program === null ? null : $this->programService->joinProgram($affiliate, $program);
+    }
+
+    public function hasAppliedForOffer(AffiliateOffer $offer, Affiliate $affiliate): bool
+    {
+        $program = $this->linkedProgram($offer);
+
+        if ($program !== null) {
+            return $this->programService->getMembership($affiliate, $program) !== null;
+        }
+
+        return AffiliateOfferApplication::query()
+            ->where('offer_id', $offer->id)
+            ->where('affiliate_id', $affiliate->id)
+            ->exists();
+    }
+
+    public function applicationStatusForOffer(AffiliateOffer $offer, Affiliate $affiliate): ?string
+    {
+        $program = $this->linkedProgram($offer);
+
+        if ($program !== null) {
+            return $this->programService->getMembership($affiliate, $program)?->status->value;
+        }
+
+        /** @var string|null $status */
+        $status = AffiliateOfferApplication::query()
+            ->where('offer_id', $offer->id)
+            ->where('affiliate_id', $affiliate->id)
+            ->value('status');
+
+        return $status;
     }
 
     /**
@@ -106,6 +182,12 @@ final class OfferManagementService
      */
     public function isApprovedForOffer(AffiliateOffer $offer, Affiliate $affiliate): bool
     {
+        $program = $this->linkedProgram($offer);
+
+        if ($program !== null) {
+            return $this->programService->isMember($affiliate, $program);
+        }
+
         return AffiliateOfferApplication::query()
             ->where('offer_id', $offer->id)
             ->where('affiliate_id', $affiliate->id)
@@ -140,10 +222,12 @@ final class OfferManagementService
      */
     public function resolvePublicOfferOrFail(string $offerId): AffiliateOffer
     {
-        return AffiliateOffer::withoutGlobalScope('owner_via_site')
+        // Public marketplace lookup intentionally runs outside merchant scope;
+        // mutating callers re-enter the affiliate or merchant owner context.
+        return OwnerContext::withOwner(null, fn (): AffiliateOffer => AffiliateOffer::withoutGlobalScope(ScopesByBelongsToOwner::class)
             ->whereKey($offerId)
             ->where('status', OfferStatus::Published)
             ->where('visibility', OfferVisibility::Public)
-            ->firstOrFail();
+            ->firstOrFail());
     }
 }

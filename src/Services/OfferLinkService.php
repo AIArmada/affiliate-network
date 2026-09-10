@@ -7,6 +7,7 @@ namespace AIArmada\AffiliateNetwork\Services;
 use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
+use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
@@ -113,11 +114,13 @@ final class OfferLinkService
      */
     public function resolveLink(string $code): ?AffiliateOfferLink
     {
-        return OwnerContext::withOwner(null, fn (): ?AffiliateOfferLink => AffiliateOfferLink::withoutGlobalScope('owner_via_affiliate')
+        // Public redirects intentionally resolve by code in an explicit global
+        // window; attribution writes re-enter the link owner's context below.
+        return OwnerContext::withOwner(null, fn (): ?AffiliateOfferLink => AffiliateOfferLink::withoutGlobalScope(ScopesByBelongsToOwner::class)
             ->where('code', $code)
             ->where('is_active', true)
             ->with([
-                'offer' => fn ($query) => $query->withoutGlobalScope('owner_via_site'),
+                'offer' => fn ($query) => $query->withoutGlobalScope(ScopesByBelongsToOwner::class),
                 'affiliate' => fn ($query) => $query->withoutOwnerScope(),
                 'site' => fn ($query) => $query->withoutOwnerScope(),
             ])
@@ -129,7 +132,9 @@ final class OfferLinkService
      */
     public function recordClick(AffiliateOfferLink $link): void
     {
-        $link->incrementClicks();
+        $this->withLinkOwnerContext($link, function () use ($link): void {
+            $link->incrementClicks();
+        });
     }
 
     /**
@@ -137,7 +142,9 @@ final class OfferLinkService
      */
     public function recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0): void
     {
-        $this->recordNetworkConversionAction->execute($link, $revenueMinor);
+        $this->withLinkOwnerContext($link, function () use ($link, $revenueMinor): void {
+            $this->recordNetworkConversionAction->execute($link, $revenueMinor);
+        });
     }
 
     /**
@@ -162,5 +169,20 @@ final class OfferLinkService
             'conversion_rate' => $conversionRate,
             'revenue_per_click' => $revenuePerClick,
         ];
+    }
+
+    /**
+     * @template TResult
+     *
+     * @param  callable(): TResult  $callback
+     * @return TResult
+     */
+    private function withLinkOwnerContext(AffiliateOfferLink $link, callable $callback): mixed
+    {
+        $affiliate = $link->relationLoaded('affiliate')
+            ? $link->affiliate
+            : $link->affiliate()->withoutOwnerScope()->first();
+
+        return OwnerContext::withOwner($affiliate?->owner, $callback);
     }
 }

@@ -6,8 +6,11 @@ namespace AIArmada\AffiliateNetwork\Services\Catalog;
 
 use AIArmada\AffiliateNetwork\Exceptions\OfferNotFoundException;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
+use AIArmada\AffiliateNetwork\Support\BoundedHttpResponseBody;
 use AIArmada\CommerceSupport\Http\PinnedHttpClient;
 use AIArmada\CommerceSupport\Support\PublicHttpUrlGuard;
+use Illuminate\Http\Client\Response;
+use JsonException;
 use Throwable;
 
 /**
@@ -34,6 +37,7 @@ final class RemoteCatalogClient implements CatalogReaderInterface
             $response = $this->http->send(
                 method: 'GET',
                 target: $target,
+                options: ['stream' => true],
                 headers: array_filter([
                     'Accept' => 'application/json',
                     'Authorization' => $this->token($site) ? 'Bearer ' . $this->token($site) : null,
@@ -51,8 +55,7 @@ final class RemoteCatalogClient implements CatalogReaderInterface
             throw new OfferNotFoundException('Catalog fetch failed with status ' . $response->status());
         }
 
-        /** @var array<string, mixed> $data */
-        $data = $response->json();
+        $data = $this->decodePayload($response, 'Catalog');
 
         if (! isset($data['program_id'], $data['subjects']) || ! is_array($data['subjects'])) {
             throw new OfferNotFoundException('Invalid catalog payload.');
@@ -74,6 +77,7 @@ final class RemoteCatalogClient implements CatalogReaderInterface
             $response = $this->http->send(
                 method: 'GET',
                 target: $target,
+                options: ['stream' => true],
                 headers: array_filter([
                     'Accept' => 'application/json',
                     'Authorization' => $this->token($site) ? 'Bearer ' . $this->token($site) : null,
@@ -91,8 +95,7 @@ final class RemoteCatalogClient implements CatalogReaderInterface
             throw new OfferNotFoundException('Program list fetch failed with status ' . $response->status());
         }
 
-        /** @var array<string, mixed> $data */
-        $data = $response->json();
+        $data = $this->decodePayload($response, 'Program list');
 
         $rows = $data['data'] ?? [];
         $rows = is_array($rows) ? array_values($rows) : [];
@@ -115,5 +118,33 @@ final class RemoteCatalogClient implements CatalogReaderInterface
         } catch (Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodePayload(Response $response, string $label): array
+    {
+        $body = BoundedHttpResponseBody::read(
+            $response,
+            (int) config('affiliate-network.http.max_response_bytes', 1024 * 1024),
+        );
+
+        if ($body === null) {
+            throw new OfferNotFoundException(sprintf('%s response exceeded the configured size limit.', $label));
+        }
+
+        try {
+            /** @var mixed $data */
+            $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            throw new OfferNotFoundException(sprintf('Invalid %s payload.', mb_strtolower($label)));
+        }
+
+        if (! is_array($data)) {
+            throw new OfferNotFoundException(sprintf('Invalid %s payload.', mb_strtolower($label)));
+        }
+
+        return $data;
     }
 }

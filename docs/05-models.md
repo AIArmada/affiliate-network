@@ -97,7 +97,7 @@ $offer->isActive();  // Checks status and date range
 
 ### Traits
 
-- `ScopesBySiteOwner` - Owner scoping via site relationship
+- `ScopesByBelongsToOwner` - Owner scoping via the `site` relationship
 - `HasUuids` - UUID primary keys
 
 ---
@@ -167,6 +167,11 @@ Banner, text link, or other promotional asset.
 $creative->offer;  // BelongsTo - AffiliateOffer
 ```
 
+### Owner scope
+
+`AffiliateOfferCreative` uses `ScopesByBelongsToOwner` through the
+`offer.site` path. No creative owner columns or migration are required.
+
 ---
 
 ## AffiliateOfferApplication
@@ -203,7 +208,7 @@ $application->isApproved();  // bool
 
 ### Traits
 
-- `ScopesByAffiliateOwner` - Owner scoping via affiliate relationship
+- `ScopesByBelongsToOwner` - Owner scoping via the `affiliate` relationship
 - `HasUuids` - UUID primary keys
 
 ---
@@ -252,5 +257,5 @@ AffiliateOfferLink::generateCode(); // Generate unique code
 
 ### Traits
 
-- `ScopesByAffiliateOwner` - Owner scoping via affiliate relationship
+- `ScopesByBelongsToOwner` - Owner scoping via the `affiliate` relationship
 - `HasUuids` - UUID primary keys

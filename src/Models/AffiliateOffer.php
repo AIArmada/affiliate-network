@@ -7,7 +7,7 @@ namespace AIArmada\AffiliateNetwork\Models;
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferFactory;
 use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
-use AIArmada\AffiliateNetwork\Models\Concerns\ScopesBySiteOwner;
+use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use AIArmada\CommerceSupport\Support\MoneyFormatter;
@@ -42,6 +42,10 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property OfferVisibility $visibility
  * @property bool $requires_approval
  * @property string|null $landing_url
+ * @property string|null $external_program_id
+ * @property string|null $subject_type
+ * @property string|null $subject_key
+ * @property string|null $source_url
  * @property array<string, mixed>|null $restrictions
  * @property array<string, mixed>|null $metadata
  * @property string|null $source_checksum
@@ -65,7 +69,7 @@ class AffiliateOffer extends Model implements Auditable
     use HasSocialProfiles;
     use HasUuids;
     use LogsCommerceActivity;
-    use ScopesBySiteOwner;
+    use ScopesByBelongsToOwner;
 
     /**
      * Set while OfferImportService writes so the rate lock hook can tell
@@ -95,6 +99,16 @@ class AffiliateOffer extends Model implements Auditable
             'volume_tiers',
             'active_promotions',
         ];
+    }
+
+    protected static function ownerViaRelation(): string
+    {
+        return 'site';
+    }
+
+    protected static function ownerTableConfigKey(): string
+    {
+        return 'affiliate-network.owner';
     }
 
     protected $fillable = [

@@ -30,9 +30,10 @@ When enabled, these models are automatically scoped:
 |-------|----------------|
 | `AffiliateSite` | Direct owner (`HasOwner`) |
 | `AffiliateOfferCategory` | Direct owner (`HasOwner`) |
-| `AffiliateOffer` | Via site (`ScopesBySiteOwner`) |
-| `AffiliateOfferApplication` | Via affiliate (`ScopesByAffiliateOwner`) |
-| `AffiliateOfferLink` | Via affiliate (`ScopesByAffiliateOwner`) |
+| `AffiliateOffer` | Via site (`ScopesByBelongsToOwner`, `site`) |
+| `AffiliateOfferCreative` | Via offer/site (`ScopesByBelongsToOwner`, `offer.site`) |
+| `AffiliateOfferApplication` | Via affiliate (`ScopesByBelongsToOwner`, `affiliate`) |
+| `AffiliateOfferLink` | Via affiliate (`ScopesByBelongsToOwner`, `affiliate`) |
 
 ## Direct Owner Scoping
 
@@ -56,7 +57,7 @@ $sites = AffiliateSite::globalOnly()->get();
 
 ## Relationship-Based Scoping
 
-### ScopesBySiteOwner
+### ScopesByBelongsToOwner via site
 
 For models belonging to a site (e.g., `AffiliateOffer`):
 
@@ -79,7 +80,7 @@ $offer = AffiliateOffer::create([
 ]);
 ```
 
-### ScopesByAffiliateOwner
+### ScopesByBelongsToOwner via affiliate
 
 For models belonging to an affiliate:
 
@@ -91,6 +92,11 @@ $applications = AffiliateOfferApplication::all();
 // - affiliate.owner_type = current_owner_type
 // - affiliate.owner_id = current_owner_id
 ```
+
+The shared trait keeps only this relationship traversal. `OwnerScope` from
+`commerce-support` supplies the owner predicate, explicit-global requirement,
+include-global behavior, and owner-safe write semantics. The creative path is
+the same mechanism across two belongs-to hops: `creative.offer.site`.
 
 ## Global Records
 

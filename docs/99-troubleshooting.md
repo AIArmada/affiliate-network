@@ -185,8 +185,8 @@ app(OwnerResolverInterface::class)->resolve();
 
 3. Ensure models use correct traits:
    - `AffiliateSite`, `AffiliateOfferCategory`: `HasOwner`
-   - `AffiliateOffer`: `ScopesBySiteOwner`
-   - `AffiliateOfferApplication`, `AffiliateOfferLink`: `ScopesByAffiliateOwner`
+   - `AffiliateOffer`, `AffiliateOfferCreative`: `ScopesByBelongsToOwner`
+   - `AffiliateOfferApplication`, `AffiliateOfferLink`: `ScopesByBelongsToOwner`
 
 ### RuntimeException on Create
 

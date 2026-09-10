@@ -324,10 +324,10 @@ AffiliateOfferApplication::updated(function ($application) {
 Thrown by scoping traits for cross-tenant violations:
 
 ```php
-// From ScopesBySiteOwner
+// From ScopesByBelongsToOwner via site
 "Cannot create record for a site owned by a different owner."
 
-// From ScopesByAffiliateOwner
+// From ScopesByBelongsToOwner via affiliate
 "Cannot create record for an affiliate owned by a different owner."
 ```
 

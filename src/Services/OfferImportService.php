@@ -15,6 +15,7 @@ use AIArmada\AffiliateNetwork\Services\Catalog\LocalProgramReader;
 use AIArmada\AffiliateNetwork\Services\Catalog\RemoteCatalogClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 /**
  * Mirrors a merchant program catalog as network offers.
@@ -38,12 +39,13 @@ final class OfferImportService
     public function sync(AffiliateSite $site, string $programId): array
     {
         $snapshot = $this->readerFor($site)->snapshot($site, $programId);
+        $source = empty($site->catalog_url) ? 'local' : 'remote';
 
         $created = $updated = $skipped = $locked = 0;
         $maxSubjects = max(1, (int) config('affiliate-network.sync.max_subjects', 500));
 
         foreach (array_slice($snapshot['subjects'] ?? [], 0, $maxSubjects) as $subject) {
-            $result = $this->syncSubject($site, $snapshot, $subject);
+            $result = $this->syncSubject($site, $snapshot, $subject, $source);
             match ($result) {
                 'created' => $created++,
                 'updated' => $updated++,
@@ -109,10 +111,13 @@ final class OfferImportService
      * @param  array<string, mixed>  $snapshot
      * @param  array<string, mixed>  $subject
      */
-    private function syncSubject(AffiliateSite $site, array $snapshot, array $subject): string
+    private function syncSubject(AffiliateSite $site, array $snapshot, array $subject, string $source): string
     {
         $subjectKey = (string) ($subject['subject_key'] ?? '');
         $effective = is_array($subject['effective'] ?? null) ? $subject['effective'] : [];
+        $title = self::resolveField($source, $subject['title'] ?? null, $snapshot['title'] ?? null);
+        $url = self::resolveField($source, $subject['url'] ?? null, $snapshot['url'] ?? null);
+        $currency = self::resolveField($source, $subject['currency'] ?? null, $snapshot['currency'] ?? null);
 
         if ($subjectKey === '') {
             return 'skipped';
@@ -124,9 +129,9 @@ final class OfferImportService
 
         $checksum = sha1((string) json_encode([
             'effective' => $effective,
-            'title' => $subject['title'] ?? null,
-            'url' => $subject['url'] ?? null,
-            'currency' => $subject['currency'] ?? $snapshot['currency'] ?? null,
+            'title' => $title,
+            'url' => $url,
+            'currency' => $currency,
             'cookie_days' => $snapshot['cookie_days'] ?? null,
             'volume_tiers' => $volumeTiers,
             'active_promotions' => $promotions,
@@ -151,14 +156,14 @@ final class OfferImportService
             'rate_fixed_minor' => ($effective['commission_type'] ?? null) === 'fixed'
                 ? (int) ($effective['fixed_minor'] ?? 0)
                 : null,
-            'currency' => $subject['currency'] ?? $snapshot['currency'] ?? null,
+            'currency' => $currency,
             'cookie_days' => $snapshot['cookie_days'] ?? null,
             'volume_tiers' => $volumeTiers,
             'active_promotions' => $promotions,
         ];
 
         $data = [
-            'name' => mb_substr((string) ($subject['title'] ?? $subjectKey), 0, 255),
+            'name' => mb_substr((string) ($title ?? $subjectKey), 0, 255),
             // Program suffix: same subject_key may appear in two programs on one site,
             // and slugs are unique per site.
             'slug' => Str::slug((string) ($subject['subject_type'] ?? 'item') . '-' . $subjectKey . '-' . $programSuffix),
@@ -166,8 +171,8 @@ final class OfferImportService
             'status' => OfferStatus::Draft,
             'visibility' => OfferVisibility::Public,
             'rate_source' => 'synced',
-            'landing_url' => $subject['url'] ?? null,
-            'source_url' => $subject['url'] ?? null,
+            'landing_url' => $url,
+            'source_url' => $url,
             'external_program_id' => (string) ($snapshot['program_id'] ?? ''),
             'subject_type' => $subject['subject_type'] ?? null,
             'subject_key' => $subjectKey,
@@ -175,6 +180,7 @@ final class OfferImportService
             'last_synced_at' => CarbonImmutable::now(),
             'metadata' => [
                 'subject' => $subject,
+                'catalog_source' => $source,
                 'catalog_version' => $snapshot['version'] ?? 'v1',
             ],
         ] + $incomingRates;
@@ -213,6 +219,15 @@ final class OfferImportService
         $this->write(null, $data, $site);
 
         return 'created';
+    }
+
+    private static function resolveField(string $source, mixed $local, mixed $remote): mixed
+    {
+        return match ($source) {
+            'local' => $local ?? $remote,
+            'remote' => $remote ?? $local,
+            default => throw new InvalidArgumentException(sprintf('Unsupported catalog source [%s].', $source)),
+        };
     }
 
     /**

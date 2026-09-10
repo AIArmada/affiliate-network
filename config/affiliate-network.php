@@ -130,6 +130,7 @@ return [
         'timeout_seconds' => 5,
         'retries' => 1,
         'retry_sleep_ms' => 150,
+        'max_response_bytes' => 1024 * 1024,
     ],
 
 ];

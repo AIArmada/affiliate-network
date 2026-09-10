@@ -18,6 +18,7 @@ The `aiarmada/affiliate-network` package extends core affiliates into a multi-me
 ## What this package does not own
 
 - Core affiliate attribution, commissions, payouts, or fraud models; those stay in `aiarmada/affiliates`
+- Merchant-local program enrollment and commission execution; the network is a discovery/marketplace layer and delegates local enrollment to `aiarmada/affiliates`
 - Filament marketplace/admin surfaces; those belong to `aiarmada/filament-affiliate-network`
 - General checkout, cart, or order persistence beyond its integration hooks
 
@@ -40,9 +41,20 @@ The `aiarmada/affiliate-network` package extends core affiliates into a multi-me
 
 ## Owner scoping and security notes
 
-- Site and category records are owner-aware, while other records use relationship-based owner inheritance
+- Site and category records are owner-aware, while offers and creatives inherit through `site` and `offer.site`; applications and links inherit through `affiliate`
+- `ScopesByBelongsToOwner` delegates owner predicates, explicit-global handling, and write semantics to commerce-support's `OwnerScope`; it is the only relationship-based scope trait in this package
 - Tracking metrics remain inside the affiliate-network boundary and should not be assumed to match core affiliates conversion schemas without an explicit application bridge
 - Offer, site, and application identifiers should still be resolved inside the current owner or relationship scope on write paths
+
+## Discovery, enrollment, and conversion boundaries
+
+`affiliate-network` owns discovery: merchant sites, marketplace offers, public signed redirects, clicks, and network-level applications for remote catalogs. `affiliates` owns merchant-local execution: `AffiliateProgram`, memberships, attribution, commissions, payouts, and fraud decisions. The network never writes commission or payout records.
+
+Local catalog synchronization calls the read-only `ProgramCatalogService::snapshot()` path. A local imported offer keeps the core program ID in `external_program_id`; marketplace enrollment calls the existing idempotent `ProgramService::joinProgram()` and never creates a duplicate core program or membership. Remote catalog offers use the network application flow and are marked with `metadata.catalog_source = remote`.
+
+Conversion precedence is intentionally split: the network side records discovery attribution (link clicks/conversions and `network_attribution` order metadata), while core `affiliates` records commission and payout state. Keep the guards separate when both paths observe one order: the network integration must reject an already-attributed order/link before recording a second network conversion, and core conversion calls must carry a stable `external_reference`, which `RecordAffiliateConversion` turns into its idempotency key. Core commission data is authoritative for commission and payout execution; network click/conversion counters remain discovery reporting. The `orders` listener is an integration boundary and is not replaced or modified by this package.
+
+Public redirects require a signed URL and a `60` requests-per-minute throttle. Link codes use `random_bytes(8)` encoded as 16 hexadecimal characters. Outbound catalog and verification HTTP uses the shared public-URL guard (HTTP/HTTPS only, public DNS/IPs, no credentials/fragments), pinned transport with redirects disabled, configured timeouts/retries, and a one-megabyte response cap.
 
 The `aiarmada/affiliate-network` package provides a complete multi-merchant affiliate network and marketplace system for Laravel. It extends the core `aiarmada/affiliates` package to enable merchants to publish offers and affiliates to discover and promote them.
 
@@ -175,8 +187,7 @@ affiliate-network/
     │   ├── AffiliateOfferApplication.php
     │   ├── AffiliateOfferLink.php
     │   └── Concerns/
-    │       ├── ScopesByAffiliateOwner.php
-    │       └── ScopesBySiteOwner.php
+    │       └── ScopesByBelongsToOwner.php
     ├── Services/
     │   ├── SiteVerificationService.php
     │   ├── OfferManagementService.php
