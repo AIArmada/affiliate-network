@@ -39,6 +39,16 @@ return new class extends Migration
             $table->{$jsonType}('restrictions')->nullable();
             $table->{$jsonType}('metadata')->nullable();
 
+            $table->string('external_program_id')->nullable()->index();
+            $table->string('subject_type', 64)->nullable();
+            $table->string('subject_key')->nullable();
+            $table->string('source_url')->nullable();
+            $table->string('source_checksum', 64)->nullable();
+            $table->timestampTz('last_synced_at')->nullable();
+            // synced: importer owns the rate block. manual: an operator
+            // overrode rates; sync holds rates back (counts as locked).
+            $table->string('rate_source', 16)->default('synced')->index();
+
             $table->timestampTz('starts_at')->nullable();
             $table->timestampTz('ends_at')->nullable();
             $table->timestampTz('published_at')->nullable();

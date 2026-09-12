@@ -25,6 +25,11 @@ return new class extends Migration
             $table->string('verification_token')->nullable();
             $table->timestampTz('verified_at')->nullable();
 
+            $table->string('catalog_url')->nullable();
+            $table->text('catalog_token_encrypted')->nullable();
+            $table->string('sync_status', 32)->default('never');
+            $table->timestampTz('last_synced_at')->nullable();
+
             $table->{$jsonType}('settings')->nullable();
             $table->{$jsonType}('metadata')->nullable();
 
