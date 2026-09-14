@@ -32,6 +32,13 @@ final class RecordNetworkConversionForOrder
 
         $order = $event->order;
 
+        // Idempotency: a redelivered event must not double-count the conversion.
+        $orderMetadata = $order->metadata;
+
+        if (is_array($orderMetadata) && isset($orderMetadata['network_attribution'])) {
+            return;
+        }
+
         // Get attribution data from cookie
         $attribution = $this->getAttributionFromCookie();
 

@@ -120,13 +120,13 @@ final class OfferManagementService
             return $this->programService->getMembership($affiliate, $program)?->status->value;
         }
 
-        /** @var string|null $status */
+        /** @var ApplicationStatus|string|null $status */
         $status = AffiliateOfferApplication::query()
             ->where('offer_id', $offer->id)
             ->where('affiliate_id', $affiliate->id)
             ->value('status');
 
-        return $status;
+        return $status instanceof ApplicationStatus ? $status->value : $status;
     }
 
     /**
@@ -154,7 +154,7 @@ final class OfferManagementService
             'rejected_at' => CarbonImmutable::now(),
         ]);
 
-        return $application->fresh();
+        return $application->fresh() ?? $application;
     }
 
     /**
@@ -174,7 +174,7 @@ final class OfferManagementService
             'revoked_at' => CarbonImmutable::now(),
         ]);
 
-        return $application->fresh();
+        return $application->fresh() ?? $application;
     }
 
     /**
@@ -200,16 +200,20 @@ final class OfferManagementService
      *
      * @return Collection<int, AffiliateOffer>
      */
-    public function getApprovedOffers(Affiliate $affiliate): Collection
+    public function getApprovedOffers(Affiliate $affiliate, int $limit = 500): Collection
     {
+        $limit = max(1, $limit);
+
         $approvedOfferIds = AffiliateOfferApplication::query()
             ->where('affiliate_id', $affiliate->id)
             ->where('status', ApplicationStatus::Approved)
+            ->limit($limit)
             ->pluck('offer_id');
 
         return AffiliateOffer::query()
             ->whereIn('id', $approvedOfferIds)
             ->where('status', OfferStatus::Published)
+            ->limit($limit)
             ->get();
     }
 

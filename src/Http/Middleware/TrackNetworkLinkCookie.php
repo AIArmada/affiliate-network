@@ -8,8 +8,8 @@ use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\Request;
-use JsonException;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 /**
  * Tracks network affiliate link codes in cookies for conversion attribution.
@@ -81,16 +81,20 @@ final class TrackNetworkLinkCookie
     /**
      * Build the cookie value with attribution data.
      *
-     * @return string JSON-encoded attribution data
+     * The payload is encrypted (not just JSON) so `clicked_at` and the link
+     * code cannot be forged client-side, regardless of whether EncryptCookies
+     * is active in the configured middleware group.
+     *
+     * @return string Encrypted JSON-encoded attribution data
      */
     private function buildCookieValue(string $linkCode, string $affiliateId, string $offerId): string
     {
-        return json_encode([
+        return encrypt(json_encode([
             'code' => $linkCode,
             'affiliate_id' => $affiliateId,
             'offer_id' => $offerId,
             'clicked_at' => CarbonImmutable::now()->toIso8601String(),
-        ], JSON_THROW_ON_ERROR);
+        ], JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -128,6 +132,9 @@ final class TrackNetworkLinkCookie
     /**
      * Parse the cookie value to extract attribution data.
      *
+     * Only payloads encrypted by buildCookieValue are accepted; plaintext or
+     * tampered values fail decryption and are treated as no attribution.
+     *
      * @return array{code: string, affiliate_id: string, offer_id: string, clicked_at: string}|null
      */
     public static function parseCookie(?string $cookieValue): ?array
@@ -137,14 +144,20 @@ final class TrackNetworkLinkCookie
         }
 
         try {
-            $data = json_decode($cookieValue, true, 512, JSON_THROW_ON_ERROR);
+            $decrypted = decrypt($cookieValue);
+
+            if (! is_string($decrypted)) {
+                return null;
+            }
+
+            $data = json_decode($decrypted, true, 512, JSON_THROW_ON_ERROR);
 
             if (! is_array($data) || ! isset($data['code'], $data['affiliate_id'], $data['offer_id'])) {
                 return null;
             }
 
             return $data;
-        } catch (JsonException) {
+        } catch (Throwable) {
             return null;
         }
     }

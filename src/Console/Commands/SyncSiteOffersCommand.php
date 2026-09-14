@@ -44,13 +44,19 @@ final class SyncSiteOffersCommand extends Command
         try {
             if ($programId !== '') {
                 $result = $importer->sync($site, $programId);
-                $this->info("Offers synced: {$result['created']} created, {$result['updated']} updated, {$result['skipped']} skipped, {$result['locked']} locked.");
+                $this->info("Offers synced: {$result['created']} created, {$result['updated']} updated, {$result['skipped']} skipped, {$result['locked']} locked, {$result['failed']} failed.");
+
+                if ($result['failed'] > 0) {
+                    $this->error("{$result['failed']} subject(s) failed; site marked partial.");
+
+                    return self::FAILURE;
+                }
             } else {
                 $result = $importer->syncAll($site);
                 $this->info("Programs synced: {$result['programs']}; offers: {$result['created']} created, {$result['updated']} updated, {$result['skipped']} skipped, {$result['locked']} locked, {$result['failed']} failed.");
 
                 if ($result['failed'] > 0) {
-                    $this->error("{$result['failed']} program(s) failed; site marked partial.");
+                    $this->error("{$result['failed']} program/subject failure(s); site marked partial.");
 
                     return self::FAILURE;
                 }

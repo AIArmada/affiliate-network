@@ -124,14 +124,19 @@ class AffiliateOfferLinkFactory extends Factory
 
     /**
      * Link with stats.
+     *
+     * Counters are deliberately not fillable, so they are stamped after
+     * creation instead of going through mass assignment.
      */
     public function withStats(int $clicks = 100, int $conversions = 10, int $revenue = 50000): static
     {
-        return $this->state(fn (array $attributes) => [
-            'clicks' => $clicks,
-            'conversions' => $conversions,
-            'revenue' => $revenue,
-        ]);
+        return $this->afterCreating(function (AffiliateOfferLink $link) use ($clicks, $conversions, $revenue): void {
+            $link->forceFill([
+                'clicks' => $clicks,
+                'conversions' => $conversions,
+                'revenue' => $revenue,
+            ])->save();
+        });
     }
 
     /**

@@ -26,7 +26,10 @@ final class LinkRedirectController
             abort(410, 'Offer is no longer active');
         }
 
-        $linkService->recordClick($link);
+        // Crawlers still get redirected, but bot hits don't inflate clicks.
+        if (! self::isBot($request->userAgent())) {
+            $linkService->recordClick($link);
+        }
 
         $redirectUrl = $linkService->buildDirectLink($link);
 
@@ -37,5 +40,14 @@ final class LinkRedirectController
         }
 
         return redirect()->away($redirectUrl);
+    }
+
+    private static function isBot(?string $userAgent): bool
+    {
+        if (! is_string($userAgent) || $userAgent === '') {
+            return false;
+        }
+
+        return preg_match('/bot|crawl|spider|slurp|mediabot|mediapartners|baidu|yandex|sogou|exabot|facebot|facebookexternalhit|ia_archiver|semrush|ahrefs|mj12bot|dotbot|petalbot/i', $userAgent) === 1;
     }
 }

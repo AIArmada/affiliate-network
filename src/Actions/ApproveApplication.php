@@ -24,7 +24,7 @@ final class ApproveApplication
             'approved_at' => CarbonImmutable::now(),
         ]);
 
-        $fresh = $application->fresh();
+        $fresh = $application->fresh() ?? $application;
 
         event(new ApplicationApproved($fresh));
 

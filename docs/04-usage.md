@@ -12,7 +12,7 @@ Mirror a merchant program as offers instead of hand-typing rates:
 use AIArmada\AffiliateNetwork\Services\OfferImportService;
 
 $result = app(OfferImportService::class)->sync($site, $programId);
-// ['created' => 2, 'updated' => 0, 'skipped' => 5]
+// ['created' => 2, 'updated' => 0, 'skipped' => 5, 'locked' => 0, 'failed' => 0]
 ```
 
 - Owned site (shared DB): leave `catalog_url` empty — reads `affiliates` directly
@@ -31,6 +31,9 @@ $result = app(OfferImportService::class)->sync($site, $programId);
   `manual`, and sync holds those rates back (reported as `locked`) instead
   of silently reverting them. Non-rate fields still mirror. Flip
   `rate_source` back to `synced` to re-apply catalog rates on next sync.
+- One bad subject never aborts the run: failures are counted as `failed`
+  and the site is stamped `partial`. Runs are capped by
+  `sync.max_subjects` (per program) and `sync.max_programs` (per `syncAll`).
 
 The importer has one `resolveField(source, local, remote)` precedence helper:
 local syncs prefer the local value and remote syncs prefer the remote value,
@@ -333,7 +336,7 @@ When a network-attributed order converts, the listener stores network attributio
 
 ### How it Works
 
-1. **Tracking**: When a user visits your site with a network link parameter (default: `anl`), the `TrackNetworkLinkCookie` middleware captures the link identifier and stores it in a secure cookie.
+1. **Tracking**: When a user visits your site with a network link parameter (default: `anl`), the `TrackNetworkLinkCookie` middleware captures the link identifier and stores it in an encrypted cookie.
 2. **Attribution**: The cookie persists based on the configured lifetime (default: 30 days).
 3. **Conversion**: When an order is completed via the `checkout` package, it triggers a `CommissionAttributionRequired` event.
 4. **Recording**: The `RecordNetworkConversionForOrder` listener catches this event, reads the attribution cookie, and records a conversion for the respective affiliate offer through the `OfferLinkService`.

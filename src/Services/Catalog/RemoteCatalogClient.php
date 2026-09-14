@@ -31,7 +31,8 @@ final class RemoteCatalogClient implements CatalogReaderInterface
         }
 
         $base = mb_rtrim($site->catalog_url, '/');
-        $target = $this->urlGuard->validate("{$base}/programs/{$programId}/catalog");
+        $target = $this->urlGuard->validate("{$base}/programs/" . rawurlencode($programId) . '/catalog');
+        $token = $this->token($site);
 
         try {
             $response = $this->http->send(
@@ -40,7 +41,7 @@ final class RemoteCatalogClient implements CatalogReaderInterface
                 options: ['stream' => true],
                 headers: array_filter([
                     'Accept' => 'application/json',
-                    'Authorization' => $this->token($site) ? 'Bearer ' . $this->token($site) : null,
+                    'Authorization' => $token ? 'Bearer ' . $token : null,
                 ]),
                 connectTimeout: max(1, (int) config('affiliate-network.http.connect_timeout_seconds', 3)),
                 timeout: max(1, (int) config('affiliate-network.http.timeout_seconds', 5)),
@@ -72,6 +73,7 @@ final class RemoteCatalogClient implements CatalogReaderInterface
 
         $base = mb_rtrim($site->catalog_url, '/');
         $target = $this->urlGuard->validate("{$base}/programs");
+        $token = $this->token($site);
 
         try {
             $response = $this->http->send(
@@ -80,7 +82,7 @@ final class RemoteCatalogClient implements CatalogReaderInterface
                 options: ['stream' => true],
                 headers: array_filter([
                     'Accept' => 'application/json',
-                    'Authorization' => $this->token($site) ? 'Bearer ' . $this->token($site) : null,
+                    'Authorization' => $token ? 'Bearer ' . $token : null,
                 ]),
                 connectTimeout: max(1, (int) config('affiliate-network.http.connect_timeout_seconds', 3)),
                 timeout: max(1, (int) config('affiliate-network.http.timeout_seconds', 5)),
@@ -113,10 +115,12 @@ final class RemoteCatalogClient implements CatalogReaderInterface
             return null;
         }
 
+        // Fail closed: a configured-but-undecryptable token must never
+        // silently downgrade the request to anonymous.
         try {
             return decrypt($site->catalog_token_encrypted);
         } catch (Throwable) {
-            return null;
+            throw new OfferNotFoundException('Catalog token cannot be decrypted.');
         }
     }
 

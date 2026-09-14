@@ -8,14 +8,16 @@ use AIArmada\AffiliateNetwork\Actions\CreateOffer;
 use AIArmada\AffiliateNetwork\Actions\UpdateOffer;
 use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
-use AIArmada\AffiliateNetwork\Exceptions\OfferNotFoundException;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Services\Catalog\LocalProgramReader;
 use AIArmada\AffiliateNetwork\Services\Catalog\RemoteCatalogClient;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * Mirrors a merchant program catalog as network offers.
@@ -34,18 +36,34 @@ final class OfferImportService
     ) {}
 
     /**
-     * @return array{created: int, updated: int, skipped: int, locked: int}
+     * @return array{created: int, updated: int, skipped: int, locked: int, failed: int}
      */
     public function sync(AffiliateSite $site, string $programId): array
     {
         $snapshot = $this->readerFor($site)->snapshot($site, $programId);
         $source = empty($site->catalog_url) ? 'local' : 'remote';
 
-        $created = $updated = $skipped = $locked = 0;
+        $created = $updated = $skipped = $locked = $failed = 0;
         $maxSubjects = max(1, (int) config('affiliate-network.sync.max_subjects', 500));
 
+        $existingBySubject = $this->existingBySubject($site, (string) ($snapshot['program_id'] ?? ''));
+
         foreach (array_slice($snapshot['subjects'] ?? [], 0, $maxSubjects) as $subject) {
-            $result = $this->syncSubject($site, $snapshot, $subject, $source);
+            try {
+                $result = $this->syncSubject($site, $snapshot, $subject, $source, $existingBySubject);
+            } catch (Throwable $exception) {
+                Log::warning('affiliate-network.sync.subject_failed', [
+                    'site_id' => $site->getKey(),
+                    'program_id' => $snapshot['program_id'] ?? null,
+                    'subject_key' => $subject['subject_key'] ?? null,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                $failed++;
+
+                continue;
+            }
+
             match ($result) {
                 'created' => $created++,
                 'updated' => $updated++,
@@ -55,11 +73,11 @@ final class OfferImportService
         }
 
         $site->update([
-            'sync_status' => 'ok',
+            'sync_status' => $failed > 0 ? 'partial' : 'ok',
             'last_synced_at' => CarbonImmutable::now(),
         ]);
 
-        return ['created' => $created, 'updated' => $updated, 'skipped' => $skipped, 'locked' => $locked];
+        return ['created' => $created, 'updated' => $updated, 'skipped' => $skipped, 'locked' => $locked, 'failed' => $failed];
     }
 
     /**
@@ -76,10 +94,19 @@ final class OfferImportService
 
         $total = ['programs' => 0, 'created' => 0, 'updated' => 0, 'skipped' => 0, 'locked' => 0, 'failed' => 0];
 
-        foreach ($reader->programIds($site) as $programId) {
+        $maxPrograms = max(1, (int) config('affiliate-network.sync.max_programs', 100));
+        $programIds = array_slice($reader->programIds($site), 0, $maxPrograms);
+
+        foreach ($programIds as $programId) {
             try {
                 $result = $this->sync($site, $programId);
-            } catch (OfferNotFoundException) {
+            } catch (Throwable $exception) {
+                Log::warning('affiliate-network.sync.program_failed', [
+                    'site_id' => $site->getKey(),
+                    'program_id' => $programId,
+                    'message' => $exception->getMessage(),
+                ]);
+
                 $total['failed']++;
 
                 continue;
@@ -90,6 +117,7 @@ final class OfferImportService
             $total['updated'] += $result['updated'];
             $total['skipped'] += $result['skipped'];
             $total['locked'] += $result['locked'];
+            $total['failed'] += $result['failed'];
         }
 
         if ($total['failed'] > 0) {
@@ -108,15 +136,39 @@ final class OfferImportService
     }
 
     /**
+     * Preload this program's offers once so syncing N subjects costs one
+     * lookup query instead of N. Writes still go through the actions so the
+     * rate lock, model hooks, and events keep firing (no blind upsert).
+     *
+     * @return array<string, AffiliateOffer>
+     */
+    private function existingBySubject(AffiliateSite $site, string $programId): array
+    {
+        if ($programId === '') {
+            return [];
+        }
+
+        return AffiliateOffer::query()
+            ->where('site_id', $site->getKey())
+            ->where('external_program_id', $programId)
+            ->get()
+            ->keyBy(fn (AffiliateOffer $offer): string => (string) $offer->subject_key)
+            ->all();
+    }
+
+    /**
      * @param  array<string, mixed>  $snapshot
      * @param  array<string, mixed>  $subject
+     * @param  array<string, AffiliateOffer>  $existingBySubject
      */
-    private function syncSubject(AffiliateSite $site, array $snapshot, array $subject, string $source): string
+    private function syncSubject(AffiliateSite $site, array $snapshot, array $subject, string $source, array $existingBySubject): string
     {
         $subjectKey = (string) ($subject['subject_key'] ?? '');
         $effective = is_array($subject['effective'] ?? null) ? $subject['effective'] : [];
         $title = self::resolveField($source, $subject['title'] ?? null, $snapshot['title'] ?? null);
-        $url = self::resolveField($source, $subject['url'] ?? null, $snapshot['url'] ?? null);
+        // Catalogs may carry relative URLs; the domain only stores absolute
+        // http(s) URLs, so anything else maps to null at this boundary.
+        $url = self::absoluteHttpUrl(self::resolveField($source, $subject['url'] ?? null, $snapshot['url'] ?? null));
         $currency = self::resolveField($source, $subject['currency'] ?? null, $snapshot['currency'] ?? null);
 
         if ($subjectKey === '') {
@@ -137,11 +189,7 @@ final class OfferImportService
             'active_promotions' => $promotions,
         ]));
 
-        $existing = AffiliateOffer::query()
-            ->where('site_id', $site->getKey())
-            ->where('external_program_id', (string) ($snapshot['program_id'] ?? ''))
-            ->where('subject_key', $subjectKey)
-            ->first();
+        $existing = $existingBySubject[$subjectKey] ?? null;
 
         if ($existing && $existing->source_checksum === $checksum) {
             return 'skipped';
@@ -230,6 +278,21 @@ final class OfferImportService
         };
     }
 
+    private static function absoluteHttpUrl(mixed $url): ?string
+    {
+        if (! is_string($url) || $url === '') {
+            return null;
+        }
+
+        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return null;
+        }
+
+        $scheme = mb_strtolower(parse_url($url, PHP_URL_SCHEME) ?? '');
+
+        return in_array($scheme, ['http', 'https'], true) ? $url : null;
+    }
+
     /**
      * @param  array<string, mixed>  $incomingRates
      */
@@ -262,13 +325,15 @@ final class OfferImportService
         AffiliateOffer::setSyncingImport(true);
 
         try {
-            if ($existing) {
-                $this->updateOffer->execute($existing, $data);
+            DB::transaction(function () use ($existing, $data, $site): void {
+                if ($existing) {
+                    $this->updateOffer->execute($existing, $data);
 
-                return;
-            }
+                    return;
+                }
 
-            $this->createOffer->execute($site, $data);
+                $this->createOffer->execute($site, $data);
+            });
         } finally {
             AffiliateOffer::setSyncingImport(false);
         }

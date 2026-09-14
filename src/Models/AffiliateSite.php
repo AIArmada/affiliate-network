@@ -104,7 +104,13 @@ class AffiliateSite extends Model implements Auditable
     protected static function booted(): void
     {
         static::deleting(function (self $site): void {
-            $site->offers()->delete();
+            // Delete per-offer so AffiliateOffer::deleting fires and removes
+            // creatives, applications, and links instead of orphaning them.
+            $site->offers()->chunkById(200, function ($offers): void {
+                foreach ($offers as $offer) {
+                    $offer->delete();
+                }
+            });
         });
     }
 

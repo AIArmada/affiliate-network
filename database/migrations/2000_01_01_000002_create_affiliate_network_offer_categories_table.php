@@ -18,7 +18,7 @@ return new class extends Migration
 
             $table->foreignUuid('parent_id')->nullable();
             $table->string('name');
-            $table->string('slug')->unique();
+            $table->string('slug');
             $table->text('description')->nullable();
             $table->string('icon')->nullable();
             $table->unsignedInteger('sort_order')->default(0);
@@ -27,6 +27,7 @@ return new class extends Migration
             $table->timestampsTz();
 
             $table->index(['owner_type', 'owner_id', 'is_active']);
+            $table->unique(['owner_type', 'owner_id', 'slug']);
             $table->index('parent_id');
             $table->index('sort_order');
         });

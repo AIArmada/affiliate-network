@@ -12,13 +12,15 @@ use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\URL;
+use RuntimeException;
 
 /**
  * Offer Link Service — link lifecycle.
  *
  * BOUNDARY: This service owns URL signing, redirect handling, click attribution,
  * and conversion recording for individual tracking links. It does NOT manage
- * offer creation, applications, or approvals (see OfferManagementService).
+ * offer creation, applications, or approvals (see OfferManagementService),
+ * but it does refuse to mint links for inactive or unapproved offers.
  *
  * @see OfferManagementService for offer lifecycle operations.
  */
@@ -26,6 +28,7 @@ final class OfferLinkService
 {
     public function __construct(
         private readonly RecordNetworkConversion $recordNetworkConversionAction,
+        private readonly OfferManagementService $offerManagementService,
     ) {}
 
     /**
@@ -38,7 +41,19 @@ final class OfferLinkService
         Affiliate $affiliate,
         array $options = []
     ): AffiliateOfferLink {
+        if (! $offer->isActive()) {
+            throw new RuntimeException('Links can only be created for active offers.');
+        }
+
+        if ($offer->requires_approval && ! $this->offerManagementService->isApprovedForOffer($offer, $affiliate)) {
+            throw new RuntimeException('Affiliate is not approved for this offer.');
+        }
+
         $targetUrl = $options['target_url'] ?? $offer->landing_url ?? "https://{$offer->site->domain}/";
+
+        if (! self::isHttpUrl($targetUrl)) {
+            throw new RuntimeException('Link target URL must be a valid http(s) URL.');
+        }
 
         return AffiliateOfferLink::create([
             'offer_id' => $offer->id,
@@ -169,6 +184,19 @@ final class OfferLinkService
             'conversion_rate' => $conversionRate,
             'revenue_per_click' => $revenuePerClick,
         ];
+    }
+
+    private static function isHttpUrl(mixed $url): bool
+    {
+        if (! is_string($url) || $url === '') {
+            return false;
+        }
+
+        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return false;
+        }
+
+        return in_array(mb_strtolower(parse_url($url, PHP_URL_SCHEME) ?? ''), ['http', 'https'], true);
     }
 
     /**

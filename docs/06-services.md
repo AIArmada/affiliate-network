@@ -223,7 +223,10 @@ public function __construct(
 
 #### createLink
 
-Create a deep link for an affiliate.
+Create a deep link for an affiliate. Throws unless the offer is active
+(published + within its `starts_at`/`ends_at` window) and, when the offer
+requires approval, the affiliate is approved for it. `target_url` must be
+an http(s) URL.
 
 ```php
 $link = $linkService->createLink($offer, $affiliate, [

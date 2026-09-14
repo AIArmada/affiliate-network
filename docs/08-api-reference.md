@@ -204,6 +204,10 @@ $link = $service->createLink(
 
 // Options: target_url, sub_id, sub_id_2, sub_id_3, custom_parameters, expires_at, metadata
 
+// Throws unless the offer is active (published + within its window) and,
+// when the offer requires approval, the affiliate is approved. target_url
+// must be an http(s) URL.
+
 // Note: metadata is the extension point if your application wants to carry
 // subject-specific context that may later be bridged into core affiliates flows.
 
@@ -233,7 +237,7 @@ $service = app(OfferImportService::class);
 // Sync one program (local shared-DB when the site has no catalog_url,
 // remote HTTP pull otherwise)
 $result = $service->sync($site, $programId);
-// Returns: created, updated, skipped, locked
+// Returns: created, updated, skipped, locked, failed
 
 // Sync every available program; one bad program never aborts the rest
 $result = $service->syncAll($site);

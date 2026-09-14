@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('slug');
             $table->text('description')->nullable();
             $table->text('terms')->nullable();
-            $table->string('status')->default('pending');
+            $table->string('status')->default('draft');
             $table->string('visibility', 32)->default('public');
 
             $table->unsignedInteger('rate_base_bp')->nullable();
@@ -59,6 +59,9 @@ return new class extends Migration
             $table->index('status');
             $table->index('is_featured');
             $table->index('category_id');
+            $table->index('ends_at');
+            $table->index(['site_id', 'external_program_id', 'subject_key']);
+            $table->index(['status', 'visibility']);
         });
     }
 

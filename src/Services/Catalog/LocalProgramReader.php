@@ -38,9 +38,12 @@ final class LocalProgramReader implements CatalogReaderInterface
             throw new OfferNotFoundException('Affiliates package not installed for local catalog read.');
         }
 
+        $maxPrograms = max(1, (int) config('affiliate-network.sync.max_programs', 100));
+
         return AffiliateProgram::query()
             ->active()
             ->public()
+            ->limit($maxPrograms)
             ->pluck('id')
             ->map(fn ($id): string => (string) $id)
             ->all();

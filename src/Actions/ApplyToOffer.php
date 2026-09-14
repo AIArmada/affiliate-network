@@ -16,6 +16,7 @@ use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use AIArmada\CommerceSupport\Support\OwnerWriteGuard;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 
 final class ApplyToOffer
 {
@@ -51,7 +52,8 @@ final class ApplyToOffer
             if ($existing !== null) {
                 if ($existing->status === ApplicationStatus::Rejected) {
                     $cooldownDays = config('affiliate-network.applications.cooldown_days', 7);
-                    $canReapply = CarbonImmutable::parse($existing->updated_at)->addDays($cooldownDays)->isPast();
+                    $cooldownBase = $existing->rejected_at ?? $existing->updated_at;
+                    $canReapply = CarbonImmutable::parse($cooldownBase)->addDays($cooldownDays)->isPast();
 
                     if (! $canReapply) {
                         throw ApplicationAlreadySubmittedException::forOffer((string) $offer->getKey());
@@ -65,7 +67,7 @@ final class ApplyToOffer
                         'reviewed_at' => null,
                     ]);
 
-                    $application = $existing->fresh();
+                    $application = $existing->fresh() ?? $existing;
 
                     event(new ApplicationSubmitted($application));
 
@@ -81,18 +83,42 @@ final class ApplyToOffer
                 $status = ApplicationStatus::Approved;
             }
 
-            $application = AffiliateOfferApplication::create([
-                'offer_id' => $offer->id,
-                'affiliate_id' => $affiliate->id,
-                'status' => $status,
-                'reason' => $reason,
-                'reviewed_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
-                'approved_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
-            ]);
+            try {
+                $application = AffiliateOfferApplication::create([
+                    'offer_id' => $offer->id,
+                    'affiliate_id' => $affiliate->id,
+                    'status' => $status,
+                    'reason' => $reason,
+                    'reviewed_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
+                    'approved_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
+                ]);
+            } catch (QueryException $exception) {
+                // Concurrent double-apply: the unique(offer_id, affiliate_id)
+                // row already exists, so return it instead of 500ing.
+                if (! self::isUniqueConstraintViolation($exception)) {
+                    throw $exception;
+                }
+
+                $raced = AffiliateOfferApplication::query()
+                    ->where('offer_id', $offer->id)
+                    ->where('affiliate_id', $affiliate->id)
+                    ->first();
+
+                if ($raced === null) {
+                    throw $exception;
+                }
+
+                return $raced;
+            }
 
             event(new ApplicationSubmitted($application));
 
             return $application;
         });
+    }
+
+    private static function isUniqueConstraintViolation(QueryException $exception): bool
+    {
+        return in_array((string) ($exception->errorInfo[0] ?? $exception->getCode()), ['23000', '23505'], true);
     }
 }

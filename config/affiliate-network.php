@@ -112,12 +112,14 @@ return [
     |
     | Local shared-DB reads when a site has no catalog_url; remote HTTP pull
     | when the site owner configured catalog_url + token. max_subjects caps
-    | imported subjects per sync run (agreed default: 500).
+    | imported subjects per program sync (agreed default: 500);
+    | max_programs caps programs per syncAll run (agreed default: 100).
     |
     */
     'sync' => [
         'enabled' => env('AFFILIATE_NETWORK_SYNC_ENABLED', true),
         'max_subjects' => env('AFFILIATE_NETWORK_SYNC_MAX_SUBJECTS', 500),
+        'max_programs' => env('AFFILIATE_NETWORK_SYNC_MAX_PROGRAMS', 100),
     ],
 
     /*

@@ -70,6 +70,12 @@ return [
         'retry_sleep_ms' => 150,
         'max_response_bytes' => 1048576,
     ],
+
+    'sync' => [
+        'enabled' => env('AFFILIATE_NETWORK_SYNC_ENABLED', true),
+        'max_subjects' => env('AFFILIATE_NETWORK_SYNC_MAX_SUBJECTS', 500),
+        'max_programs' => env('AFFILIATE_NETWORK_SYNC_MAX_PROGRAMS', 100),
+    ],
 ];
 ```
 
@@ -145,3 +151,11 @@ return [
 | `max_response_bytes` | Maximum catalog/site response body | `1048576` (1 MiB) |
 
 Site-content and catalog requests always validate DNS results, reject private/reserved destinations, use HTTP/HTTPS only, reject credentials/fragments and non-standard ports, do not follow redirects, apply timeouts/retries, and cap response bodies. This validation cannot be disabled through configuration.
+
+### Sync
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `enabled` | Enable catalog sync | `true` |
+| `max_subjects` | Imported subjects per program sync | `500` |
+| `max_programs` | Programs per `syncAll` run | `100` |

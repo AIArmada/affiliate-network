@@ -140,8 +140,6 @@ class AffiliateOffer extends Model implements Auditable
         'subject_type',
         'subject_key',
         'source_url',
-        'source_checksum',
-        'last_synced_at',
     ];
 
     public function getTable(): string
