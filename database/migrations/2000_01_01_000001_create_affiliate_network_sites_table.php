@@ -39,10 +39,4 @@ return new class extends Migration
             $table->index('status');
         });
     }
-
-    public function down(): void
-    {
-        $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
-        Schema::dropIfExists($tablePrefix . 'sites');
-    }
 };

@@ -37,10 +37,4 @@ return new class extends Migration
             $table->index('type');
         });
     }
-
-    public function down(): void
-    {
-        $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
-        Schema::dropIfExists($tablePrefix . 'offer_creatives');
-    }
 };
