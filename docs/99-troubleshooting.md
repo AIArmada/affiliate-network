@@ -87,6 +87,20 @@ config('affiliate-network.database.table_prefix');
 php artisan route:clear
 ```
 
+### Conversion Revenue Is Skipped
+
+**Symptoms:** Link `conversions` increments but `revenue` does not move, and the log shows `affiliate-network.conversion.currency_mismatch`.
+
+**Cause:** The conversion arrived in a different currency than the link (links inherit the offer currency). The conversion is counted but its revenue is skipped so totals never mix currencies.
+
+**Solutions:**
+
+1. Confirm the order currency and the offer currency match the same market — a mismatch often means the wrong offer was linked.
+2. Pass the conversion currency explicitly so the skip is deliberate and logged:
+```php
+$linkService->recordConversion($link, $revenueMinor, $order->currency);
+```
+
 ### Links Return 410 (Expired)
 
 **Symptoms:** Links return "Link has expired" error.

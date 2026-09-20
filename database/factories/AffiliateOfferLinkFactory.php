@@ -31,7 +31,7 @@ class AffiliateOfferLinkFactory extends Factory
                 'status' => 'active',
                 'commission_type' => 'percentage',
                 'commission_rate' => 1000,
-                'currency' => 'USD',
+                'currency' => 'MYR',
             ])->id,
             'site_id' => null,
             'code' => bin2hex(random_bytes(8)),
@@ -43,6 +43,7 @@ class AffiliateOfferLinkFactory extends Factory
             'clicks' => 0,
             'conversions' => 0,
             'revenue' => 0,
+            'currency' => 'MYR',
             'is_active' => true,
             'expires_at' => null,
             'metadata' => null,
@@ -87,6 +88,7 @@ class AffiliateOfferLinkFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'offer_id' => $offer->id,
             'site_id' => $offer->site_id,
+            'currency' => $offer->currency,
         ]);
     }
 

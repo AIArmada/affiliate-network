@@ -14,12 +14,14 @@ use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
+use AIArmada\Affiliates\Enums\MembershipStatus;
 use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\Affiliates\Models\AffiliateProgram;
 use AIArmada\Affiliates\Models\AffiliateProgramMembership;
 use AIArmada\Affiliates\Services\ProgramService;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
@@ -204,17 +206,63 @@ final class OfferManagementService
     {
         $limit = max(1, $limit);
 
+        /** @var array<int, string> $approvedOfferIds */
         $approvedOfferIds = AffiliateOfferApplication::query()
             ->where('affiliate_id', $affiliate->id)
             ->where('status', ApplicationStatus::Approved)
             ->limit($limit)
-            ->pluck('offer_id');
+            ->pluck('offer_id')
+            ->map(fn (mixed $id): string => (string) $id)
+            ->all();
 
-        return AffiliateOffer::query()
-            ->whereIn('id', $approvedOfferIds)
+        /** @var array<int, string> $approvedProgramIds */
+        $approvedProgramIds = AffiliateProgramMembership::query()
+            ->where('affiliate_id', $affiliate->id)
+            ->where('status', MembershipStatus::Approved)
+            ->limit($limit)
+            ->pluck('program_id')
+            ->map(fn (mixed $id): string => (string) $id)
+            ->all();
+
+        $offers = AffiliateOffer::query()
             ->where('status', OfferStatus::Published)
+            ->where(function (Builder $query) use ($approvedOfferIds, $approvedProgramIds): void {
+                $query->whereIn('id', $approvedOfferIds);
+
+                if ($approvedProgramIds !== []) {
+                    $query->orWhereIn('external_program_id', $approvedProgramIds);
+                }
+            })
             ->limit($limit)
             ->get();
+
+        /** @var array<int, string> $importedProgramIds */
+        $importedProgramIds = $offers
+            ->map(fn (AffiliateOffer $offer): ?string => $offer->external_program_id)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        /** @var array<int, string> $existingProgramIds */
+        $existingProgramIds = $importedProgramIds === []
+            ? []
+            : AffiliateProgram::query()
+                ->whereIn('id', $importedProgramIds)
+                ->pluck('id')
+                ->map(fn (mixed $id): string => (string) $id)
+                ->all();
+
+        // Local imports delegate approval to the linked core program;
+        // remote mirrors and offers whose program vanished keep the
+        // network application flow, mirroring isApprovedForOffer().
+        return $offers
+            ->filter(fn (AffiliateOffer $offer): bool => in_array((string) $offer->getKey(), $approvedOfferIds, true)
+                || ($this->isLocalProgramOffer($offer)
+                    && $offer->external_program_id !== null
+                    && in_array($offer->external_program_id, $existingProgramIds, true)))
+            ->take($limit)
+            ->values();
     }
 
     /**

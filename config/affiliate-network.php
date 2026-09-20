@@ -40,6 +40,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Defaults
+    |--------------------------------------------------------------------------
+    |
+    | Fallback ISO currency for reporting totals when network revenue spans
+    | multiple currencies and for records without an explicit currency.
+    |
+    */
+    'currency' => [
+        'default' => env('AFFILIATE_NETWORK_DEFAULT_CURRENCY', 'MYR'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Offers
     |--------------------------------------------------------------------------
     */

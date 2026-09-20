@@ -184,8 +184,9 @@ $service->revokeApplication(AffiliateOfferApplication $app, string $reason, ?str
 // Check approval status
 $isApproved = $service->isApprovedForOffer(AffiliateOffer $offer, Affiliate $affiliate): bool;
 
-// Get approved offers
-$offers = $service->getApprovedOffers(Affiliate $affiliate): Collection;
+// Get approved offers (approved network applications plus published local
+// imports with an approved core program membership)
+$offers = $service->getApprovedOffers(Affiliate $affiliate, int $limit = 500): Collection;
 ```
 
 ### OfferLinkService
@@ -206,7 +207,7 @@ $link = $service->createLink(
 
 // Throws unless the offer is active (published + within its window) and,
 // when the offer requires approval, the affiliate is approved. target_url
-// must be an http(s) URL.
+// must be an http(s) URL. The link inherits the offer currency.
 
 // Note: metadata is the extension point if your application wants to carry
 // subject-specific context that may later be bridged into core affiliates flows.
@@ -220,11 +221,12 @@ $link = $service->resolveLink(string $code): ?AffiliateOfferLink;
 
 // Track events
 $service->recordClick(AffiliateOfferLink $link): void;
-$service->recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0): void;
+$service->recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0, ?string $currency = null): void;
+// On a currency mismatch the conversion is counted but revenue is skipped (and logged).
 
 // Get statistics
 $stats = $service->getStats(AffiliateOfferLink $link): array;
-// Returns: clicks, conversions, revenue, conversion_rate, revenue_per_click
+// Returns: clicks, conversions, revenue, currency, formatted_revenue, conversion_rate, revenue_per_click
 ```
 
 ### OfferImportService

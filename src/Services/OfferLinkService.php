@@ -9,6 +9,7 @@ use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\Affiliates\Models\Affiliate;
+use AIArmada\CommerceSupport\Support\MoneyFormatter;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\URL;
@@ -64,6 +65,7 @@ final class OfferLinkService
             'sub_id' => $options['sub_id'] ?? null,
             'sub_id_2' => $options['sub_id_2'] ?? null,
             'sub_id_3' => $options['sub_id_3'] ?? null,
+            'currency' => $offer->currency,
             'is_active' => $options['is_active'] ?? true,
             'expires_at' => $options['expires_at'] ?? null,
             'metadata' => $options['metadata'] ?? null,
@@ -155,10 +157,10 @@ final class OfferLinkService
     /**
      * Record a conversion on a link.
      */
-    public function recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0): void
+    public function recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0, ?string $currency = null): void
     {
-        $this->withLinkOwnerContext($link, function () use ($link, $revenueMinor): void {
-            $this->recordNetworkConversionAction->execute($link, $revenueMinor);
+        $this->withLinkOwnerContext($link, function () use ($link, $revenueMinor, $currency): void {
+            $this->recordNetworkConversionAction->execute($link, $revenueMinor, $currency);
         });
     }
 
@@ -181,6 +183,8 @@ final class OfferLinkService
             'clicks' => $link->clicks,
             'conversions' => $link->conversions,
             'revenue' => $link->revenue,
+            'currency' => $link->currency,
+            'formatted_revenue' => MoneyFormatter::formatMinor($link->revenue, $link->currency ?? 'MYR'),
             'conversion_rate' => $conversionRate,
             'revenue_per_click' => $revenuePerClick,
         ];

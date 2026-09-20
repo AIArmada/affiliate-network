@@ -6,6 +6,7 @@ namespace AIArmada\AffiliateNetwork\Console\Commands;
 
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Services\OfferImportService;
+use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Throwable;
@@ -28,10 +29,7 @@ final class SyncSiteOffersCommand extends Command
 
         $identifier = (string) $this->argument('site');
 
-        $site = AffiliateSite::query()
-            ->whereKey($identifier)
-            ->orWhere('domain', $identifier)
-            ->first();
+        $site = $this->resolveSite($identifier);
 
         if (! $site) {
             $this->error("Site not found: {$identifier}");
@@ -43,7 +41,7 @@ final class SyncSiteOffersCommand extends Command
 
         try {
             if ($programId !== '') {
-                $result = $importer->sync($site, $programId);
+                $result = OwnerContext::withOwner($site->owner, fn (): array => $importer->sync($site, $programId));
                 $this->info("Offers synced: {$result['created']} created, {$result['updated']} updated, {$result['skipped']} skipped, {$result['locked']} locked, {$result['failed']} failed.");
 
                 if ($result['failed'] > 0) {
@@ -52,7 +50,7 @@ final class SyncSiteOffersCommand extends Command
                     return self::FAILURE;
                 }
             } else {
-                $result = $importer->syncAll($site);
+                $result = OwnerContext::withOwner($site->owner, fn (): array => $importer->syncAll($site));
                 $this->info("Programs synced: {$result['programs']}; offers: {$result['created']} created, {$result['updated']} updated, {$result['skipped']} skipped, {$result['locked']} locked, {$result['failed']} failed.");
 
                 if ($result['failed'] > 0) {
@@ -62,12 +60,25 @@ final class SyncSiteOffersCommand extends Command
                 }
             }
         } catch (Throwable $e) {
-            $site->update(['sync_status' => 'failed', 'last_synced_at' => CarbonImmutable::now()]);
+            OwnerContext::withOwner($site->owner, function () use ($site): void {
+                $site->update(['sync_status' => 'failed', 'last_synced_at' => CarbonImmutable::now()]);
+            });
             $this->error('Sync failed: ' . $e->getMessage());
 
             return self::FAILURE;
         }
 
         return self::SUCCESS;
+    }
+
+    private function resolveSite(string $identifier): ?AffiliateSite
+    {
+        // Operator-supplied identifier: resolve outside any ambient owner
+        // scope, then re-enter the site's own owner context for the sync.
+        return OwnerContext::withOwner(null, fn (): ?AffiliateSite => AffiliateSite::query()
+            ->withoutOwnerScope()
+            ->whereKey($identifier)
+            ->orWhere('domain', $identifier)
+            ->first());
     }
 }

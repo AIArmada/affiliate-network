@@ -207,7 +207,7 @@ affiliate-network/
 | `affiliate_network_offers` | Affiliate offers | `site_id`, `category_id`, `rate_base_bp`, `rate_fixed_minor`, `status` |
 | `affiliate_network_offer_creatives` | Promotional assets | `offer_id`, `type`, `url`, `width`, `height` |
 | `affiliate_network_offer_applications` | Affiliate-to-offer applications | `offer_id`, `affiliate_id`, `status`, `reviewed_at` |
-| `affiliate_network_offer_links` | Tracking links | `offer_id`, `affiliate_id`, `code`, `clicks`, `conversions`, `revenue` |
+| `affiliate_network_offer_links` | Tracking links | `offer_id`, `affiliate_id`, `code`, `clicks`, `conversions`, `revenue`, `currency` |
 
 ## Integration with Affiliates Package
 

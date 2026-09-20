@@ -18,5 +18,6 @@ final class NetworkConversionRecorded
     public function __construct(
         public AffiliateOfferLink $link,
         public int $revenueMinor,
+        public ?string $currency = null,
     ) {}
 }

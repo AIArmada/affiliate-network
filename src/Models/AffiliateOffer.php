@@ -277,7 +277,7 @@ class AffiliateOffer extends Model implements Auditable
         if ($this->isFixed()) {
             return MoneyFormatter::formatMinor(
                 (int) $this->rate_fixed_minor,
-                $this->currency ?? 'USD'
+                $this->currency ?? 'MYR'
             );
         }
 

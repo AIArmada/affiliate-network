@@ -92,6 +92,10 @@ final class CreateOffer
             $validated['status'] = OfferStatus::Draft;
         }
 
+        if (! empty($validated['currency'])) {
+            $validated['currency'] = mb_strtoupper((string) $validated['currency']);
+        }
+
         // Sync internals are deliberately not fillable; only this action and
         // UpdateOffer may persist them via explicit forceFill.
         $offer = new AffiliateOffer(Arr::except($validated, ['source_checksum', 'last_synced_at']));

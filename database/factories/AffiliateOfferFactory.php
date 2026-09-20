@@ -37,7 +37,7 @@ class AffiliateOfferFactory extends Factory
             'status' => OfferStatus::Published,
             'rate_base_bp' => $this->faker->numberBetween(500, 2500),
             'rate_fixed_minor' => null,
-            'currency' => 'USD',
+            'currency' => 'MYR',
             'cookie_days' => 30,
             'volume_tiers' => null,
             'active_promotions' => null,

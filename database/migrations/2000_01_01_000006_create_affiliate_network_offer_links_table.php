@@ -29,6 +29,7 @@ return new class extends Migration
             $table->unsignedBigInteger('clicks')->default(0);
             $table->unsignedBigInteger('conversions')->default(0);
             $table->unsignedBigInteger('revenue')->default(0);
+            $table->string('currency', 3)->nullable();
 
             $table->boolean('is_active')->default(true);
             $table->timestampTz('expires_at')->nullable();

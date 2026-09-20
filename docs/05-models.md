@@ -234,6 +234,7 @@ Tracking link for affiliate promotions.
 | `clicks` | `int` | Click count |
 | `conversions` | `int` | Conversion count |
 | `revenue` | `int` | Total revenue (minor units) |
+| `currency` | `string\|null` | Revenue currency (ISO code, inherited from the offer; null for legacy links) |
 | `is_active` | `bool` | Active status |
 | `expires_at` | `CarbonImmutable\|null` | Expiration date |
 | `metadata` | `array\|null` | Custom metadata |

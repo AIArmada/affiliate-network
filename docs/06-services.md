@@ -10,11 +10,11 @@ The canonical orchestration surface for affiliate-network is the `Actions` tree.
 
 | Action | Purpose |
 |--------|---------|
-| `CreateOffer::run($site, $data)` | Create a new offer |
-| `UpdateOffer::run($offer, $data)` | Update an existing offer |
-| `ApplyToOffer::run($offer, $affiliate, $message)` | Apply to an offer |
-| `ApproveApplication::run($application, $reviewerId)` | Approve/reject applications |
-| `RecordNetworkConversion::run($link, $amount)` | Record a conversion |
+| `app(CreateOffer::class)->execute($site, $data)` | Create a new offer |
+| `app(UpdateOffer::class)->execute($offer, $data)` | Update an existing offer |
+| `app(ApplyToOffer::class)->execute($offer, $affiliate, $message)` | Apply to an offer |
+| `app(ApproveApplication::class)->execute($application, $reviewerId)` | Approve/reject applications |
+| `app(RecordNetworkConversion::class)->execute($link, $amount, $currency)` | Record a conversion |
 
 Events are automatically dispatched by each Action (`OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`).
 
@@ -193,7 +193,9 @@ Get all active offers an affiliate is approved for.
 
 ```php
 $offers = $offerService->getApprovedOffers($affiliate);
-// Returns: Collection<AffiliateOffer>
+// Returns: Collection<AffiliateOffer> — published offers with an approved
+// network application, plus published local imports whose core program has
+// an approved membership (same rule as isApprovedForOffer()).
 ```
 
 #### enrollInLinkedProgram
@@ -226,7 +228,7 @@ public function __construct(
 Create a deep link for an affiliate. Throws unless the offer is active
 (published + within its `starts_at`/`ends_at` window) and, when the offer
 requires approval, the affiliate is approved for it. `target_url` must be
-an http(s) URL.
+an http(s) URL. The link inherits the offer currency for revenue attribution.
 
 ```php
 $link = $linkService->createLink($offer, $affiliate, [
@@ -285,8 +287,9 @@ $linkService->recordClick($link);
 Record a conversion with revenue.
 
 ```php
-$linkService->recordConversion($link, 5999); // $59.99 in cents
-// Increments $link->conversions and adds to $link->revenue
+$linkService->recordConversion($link, 5999, 'USD'); // $59.99 in cents
+// Increments $link->conversions and adds to $link->revenue. On a currency
+// mismatch the conversion is counted but revenue is skipped (and logged).
 ```
 
 #### getStats
@@ -300,6 +303,8 @@ $stats = $linkService->getStats($link);
 //     'clicks' => 1250,
 //     'conversions' => 45,
 //     'revenue' => 267955,
+//     'currency' => 'USD',
+//     'formatted_revenue' => '$2,679.55',
 //     'conversion_rate' => 3.6,
 //     'revenue_per_click' => 214.36,
 // ]

@@ -66,6 +66,10 @@ final class UpdateOffer
 
         $data = Arr::only($data, self::updatableFields());
 
+        if (! empty($data['currency'])) {
+            $data['currency'] = mb_strtoupper((string) $data['currency']);
+        }
+
         $this->guardRelocation($offer, $data);
 
         // Sync internals are deliberately not fillable; persist them via an

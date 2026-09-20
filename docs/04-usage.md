@@ -42,6 +42,11 @@ with null fallback. Imported local offers retain the core program ID in
 through `affiliates` and never creates a duplicate program or network
 application. Remote offers use the network application flow.
 
+Catalog reads are scoped to the synced site's owner: local syncs only see
+that owner's programs, never whatever ambient context the caller runs in.
+The `sync-offers` command enters the site owner context itself, so it works
+with owner mode enabled and no ambient owner (plain console).
+
 ## Canonical API: Actions
 
 The canonical orchestration surface is the `Actions` tree. Prefer these over direct service calls:
@@ -51,7 +56,7 @@ The canonical orchestration surface is the `Actions` tree. Prefer these over dir
 ```php
 use AIArmada\AffiliateNetwork\Actions\CreateOffer;
 
-$offer = CreateOffer::run($site, [
+$offer = app(CreateOffer::class)->execute($site, [
     'name' => 'Summer Sale Campaign',
     'description' => '20% off summer collection',
     'rate_base_bp' => 1000, // 10% in basis points
@@ -67,7 +72,7 @@ $offer = CreateOffer::run($site, [
 ```php
 use AIArmada\AffiliateNetwork\Actions\UpdateOffer;
 
-UpdateOffer::run($offer, [
+app(UpdateOffer::class)->execute($offer, [
     'rate_base_bp' => 1500,
     'is_public' => false,
 ]);
@@ -79,13 +84,13 @@ UpdateOffer::run($offer, [
 use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
 use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
 
-$application = ApplyToOffer::run(
+$application = app(ApplyToOffer::class)->execute(
     $offer,
     $affiliate,
     'I have a fashion blog with 100k monthly visitors'
 );
 
-ApproveApplication::run($application, auth()->id());
+app(ApproveApplication::class)->execute($application, auth()->id());
 ```
 
 ### Record a Conversion
@@ -93,8 +98,12 @@ ApproveApplication::run($application, auth()->id());
 ```php
 use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
 
-RecordNetworkConversion::run($link, 5999); // $59.99 in cents
+app(RecordNetworkConversion::class)->execute($link, 5999, 'USD'); // $59.99 in cents
 ```
+
+Pass the conversion currency whenever it is known. When it differs from the
+link currency, the conversion is counted but revenue is skipped (and logged)
+so totals never mix currencies silently.
 
 ## Managing Merchant Sites
 
@@ -187,7 +196,8 @@ $offerService = app(OfferManagementService::class);
 
 $isApproved = $offerService->isApprovedForOffer($offer, $affiliate);
 
-// Get all approved offers for an affiliate
+// Get all approved offers for an affiliate (approved network applications
+// plus published local imports with an approved core program membership)
 $approvedOffers = $offerService->getApprovedOffers($affiliate);
 ```
 
@@ -221,8 +231,8 @@ $directUrl = $linkService->buildDirectLink($link);
 // Record a click
 $linkService->recordClick($link);
 
-// Record a conversion with revenue
-$linkService->recordConversion($link, 5999); // $59.99 in cents
+// Record a conversion with revenue (pass the conversion currency)
+$linkService->recordConversion($link, 5999, 'USD'); // $59.99 in cents
 
 // Get link statistics
 $stats = $linkService->getStats($link);
@@ -230,6 +240,8 @@ $stats = $linkService->getStats($link);
 //     'clicks' => 1250,
 //     'conversions' => 45,
 //     'revenue' => 267955, // cents
+//     'currency' => 'USD',
+//     'formatted_revenue' => '$2,679.55',
 //     'conversion_rate' => 3.6,
 //     'revenue_per_click' => 214.36,
 // ]
@@ -240,6 +252,11 @@ $stats = $linkService->getStats($link);
 `OfferLinkService::recordConversion()` updates the package's own `AffiliateOfferLink` counters and revenue totals.
 
 It does not create or mutate core `aiarmada/affiliates` `AffiliateConversion` rows, so the newer core affiliates fields like `external_reference`, `value_minor`, and subject metadata are not required here.
+
+Links inherit the offer currency at creation. When a conversion arrives in a
+different currency, the conversion is counted but its revenue is skipped (and
+logged as `affiliate-network.conversion.currency_mismatch`) so link and
+network totals never mix currencies.
 
 ## Categories
 

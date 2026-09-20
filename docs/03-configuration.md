@@ -29,6 +29,10 @@ return [
         'include_global' => env('AFFILIATE_NETWORK_OWNER_INCLUDE_GLOBAL', false),
     ],
 
+    'currency' => [
+        'default' => env('AFFILIATE_NETWORK_DEFAULT_CURRENCY', 'MYR'),
+    ],
+
     'offers' => [
         'require_approval' => env('AFFILIATE_NETWORK_OFFERS_REQUIRE_APPROVAL', true),
     ],
@@ -95,6 +99,12 @@ return [
 |-----|-------------|---------|
 | `enabled` | Enable owner scoping | `false` |
 | `include_global` | Include global (null owner) records | `false` |
+
+### Currency
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `default` | Fallback ISO currency for reporting totals and currency-less records | `MYR` |
 
 ### Offers
 

@@ -30,6 +30,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property int $clicks
  * @property int $conversions
  * @property int $revenue
+ * @property string|null $currency
  * @property bool $is_active
  * @property CarbonImmutable|null $expires_at
  * @property array<string, mixed>|null $metadata
@@ -67,6 +68,7 @@ class AffiliateOfferLink extends Model implements Auditable
         'sub_id',
         'sub_id_2',
         'sub_id_3',
+        'currency',
         'is_active',
         'expires_at',
         'metadata',

@@ -30,7 +30,7 @@ class AffiliateOfferApplicationFactory extends Factory
                 'status' => 'active',
                 'commission_type' => 'percentage',
                 'commission_rate' => 1000,
-                'currency' => 'USD',
+                'currency' => 'MYR',
             ])->id,
             'status' => ApplicationStatus::Pending,
             'reason' => $this->faker->optional()->sentence(),
