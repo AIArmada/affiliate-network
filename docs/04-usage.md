@@ -98,12 +98,20 @@ app(ApproveApplication::class)->execute($application, auth()->id());
 ```php
 use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
 
-app(RecordNetworkConversion::class)->execute($link, 5999, 'USD'); // $59.99 in cents
+app(RecordNetworkConversion::class)->execute($link, 5999, 'USD', 'ORDER-123'); // $59.99 in cents
 ```
 
 Pass the conversion currency whenever it is known. When it differs from the
 link currency, the conversion is counted but revenue is skipped (and logged)
 so totals never mix currencies silently.
+
+Pass an external reference (usually the order number) to also post the
+conversion to the affiliates ledger: commission follows the offer terms
+(fixed amount or basis points of revenue), the ledger row links back via
+`network_link_id`, and replays of the same reference reuse the existing row
+instead of double-counting. Without a reference only the link counters move.
+Use `NetworkLedgerReconciliationService::reconcileLink()` /
+`reconcileOffer()` to prove counters and ledger agree.
 
 ## Managing Merchant Sites
 
@@ -180,7 +188,7 @@ $offer = AffiliateOffer::create([
 // With volume tiers and promotions (structured, synced from catalog)
 $offer = AffiliateOffer::create([
     'rate_base_bp' => 1000,
-    'volume_tiers' => [['min_volume_minor' => 100000, 'rate_bp' => 1500]],
+    'volume_tiers' => [['min_volume_minor' => 100000, 'rate_bp' => 1500, 'currency' => 'USD']],
     'active_promotions' => [['id' => 'promo-1', 'name' => 'Spring', 'ends_at' => null]],
 ]);
 

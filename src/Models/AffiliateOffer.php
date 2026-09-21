@@ -36,7 +36,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string $rate_source
  * @property string|null $currency
  * @property int|null $cookie_days
- * @property array<int, array{min_volume_minor: int, rate_bp: int}>|null $volume_tiers
+ * @property array<int, array{min_volume_minor: int, rate_bp: int, currency: string}>|null $volume_tiers
  * @property array<int, array{id: string, name: string, ends_at: string|null}>|null $active_promotions
  * @property bool $is_featured
  * @property OfferVisibility $visibility
@@ -246,6 +246,37 @@ class AffiliateOffer extends Model implements Auditable
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * Stamp every volume tier with its denomination, defaulting to the offer
+     * currency and then the network default.
+     *
+     * @param  array<int, mixed>|null  $tiers
+     * @return array<int, array<string, mixed>>|null
+     */
+    public static function normalizeVolumeTiers(?array $tiers, ?string $offerCurrency): ?array
+    {
+        if ($tiers === null) {
+            return null;
+        }
+
+        $fallback = mb_strtoupper(mb_trim((string) ($offerCurrency ?? '')));
+        $fallback = $fallback !== '' ? $fallback : mb_strtoupper((string) config('affiliate-network.currency.default', 'MYR'));
+
+        $normalized = [];
+
+        foreach (array_values($tiers) as $tier) {
+            if (! is_array($tier)) {
+                continue;
+            }
+
+            $code = mb_strtoupper(mb_trim((string) ($tier['currency'] ?? '')));
+            $tier['currency'] = $code !== '' ? $code : $fallback;
+            $normalized[] = $tier;
+        }
+
+        return $normalized;
     }
 
     public function isActive(): bool

@@ -36,6 +36,9 @@ final class CreateOffer
             'currency' => ['nullable', 'string', 'max:3'],
             'cookie_days' => ['nullable', 'integer', 'min:0'],
             'volume_tiers' => ['nullable', 'array'],
+            'volume_tiers.*.min_volume_minor' => ['required', 'integer', 'min:0'],
+            'volume_tiers.*.rate_bp' => ['required', 'integer', 'min:0'],
+            'volume_tiers.*.currency' => ['nullable', 'string', 'max:3'],
             'active_promotions' => ['nullable', 'array'],
             'is_featured' => ['nullable', 'boolean'],
             'requires_approval' => ['nullable', 'boolean'],
@@ -94,6 +97,13 @@ final class CreateOffer
 
         if (! empty($validated['currency'])) {
             $validated['currency'] = mb_strtoupper((string) $validated['currency']);
+        }
+
+        if (array_key_exists('volume_tiers', $validated)) {
+            $validated['volume_tiers'] = AffiliateOffer::normalizeVolumeTiers(
+                $validated['volume_tiers'],
+                $validated['currency'] ?? null,
+            );
         }
 
         // Sync internals are deliberately not fillable; only this action and

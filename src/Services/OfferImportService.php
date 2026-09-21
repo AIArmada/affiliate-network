@@ -206,7 +206,10 @@ final class OfferImportService
                 : null,
             'currency' => $currency,
             'cookie_days' => $snapshot['cookie_days'] ?? null,
-            'volume_tiers' => $volumeTiers,
+            'volume_tiers' => AffiliateOffer::normalizeVolumeTiers(
+                is_array($volumeTiers) ? $volumeTiers : null,
+                is_string($currency) ? $currency : null,
+            ),
             'active_promotions' => $promotions,
         ];
 

@@ -10,8 +10,18 @@ use Illuminate\Support\Facades\Log;
 
 final class RecordNetworkConversion
 {
-    public function execute(AffiliateOfferLink $link, int $revenueMinor = 0, ?string $currency = null): void
-    {
+    public function __construct(
+        private readonly PostNetworkConversionToLedger $postToLedger,
+    ) {}
+
+    public function execute(
+        AffiliateOfferLink $link,
+        int $revenueMinor = 0,
+        ?string $currency = null,
+        ?string $externalReference = null,
+    ): void {
+        $counterRevenue = $revenueMinor;
+
         if ($revenueMinor !== 0 && self::isCurrencyMismatch($link->currency, $currency)) {
             // A conversion happened, but its money is not in the link
             // currency: count it and skip revenue so totals never mix
@@ -24,12 +34,18 @@ final class RecordNetworkConversion
                 'revenue_minor' => $revenueMinor,
             ]);
 
-            $revenueMinor = 0;
+            $counterRevenue = 0;
         }
 
-        $link->recordConversion($revenueMinor);
+        $link->recordConversion($counterRevenue);
 
-        event(new NetworkConversionRecorded($link, $revenueMinor, $currency));
+        event(new NetworkConversionRecorded($link, $counterRevenue, $currency));
+
+        // The ledger keeps per-currency rows, so it records the real money
+        // even when the single-currency link counter cannot.
+        if ($externalReference !== null && $externalReference !== '') {
+            $this->postToLedger->execute($link, $revenueMinor, $currency, $externalReference);
+        }
     }
 
     private static function isCurrencyMismatch(?string $linkCurrency, ?string $conversionCurrency): bool

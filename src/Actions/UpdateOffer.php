@@ -70,6 +70,13 @@ final class UpdateOffer
             $data['currency'] = mb_strtoupper((string) $data['currency']);
         }
 
+        if (array_key_exists('volume_tiers', $data)) {
+            $data['volume_tiers'] = AffiliateOffer::normalizeVolumeTiers(
+                $data['volume_tiers'],
+                $data['currency'] ?? $offer->currency,
+            );
+        }
+
         $this->guardRelocation($offer, $data);
 
         // Sync internals are deliberately not fillable; persist them via an

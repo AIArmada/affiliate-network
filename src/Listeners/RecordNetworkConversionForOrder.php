@@ -77,7 +77,7 @@ final class RecordNetworkConversionForOrder
 
         // Record the conversion
         $revenueMinor = $order->grand_total ?? 0;
-        $this->linkService->recordConversion($link, $revenueMinor, $order->currency ?? null);
+        $this->linkService->recordConversion($link, $revenueMinor, $order->currency ?? null, $order->order_number ?? (string) $order->getKey());
 
         // Store attribution data in order metadata for tracking
         $this->storeAttributionInOrder($order, $link, $attribution);

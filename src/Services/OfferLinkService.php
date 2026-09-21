@@ -157,10 +157,10 @@ final class OfferLinkService
     /**
      * Record a conversion on a link.
      */
-    public function recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0, ?string $currency = null): void
+    public function recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0, ?string $currency = null, ?string $externalReference = null): void
     {
-        $this->withLinkOwnerContext($link, function () use ($link, $revenueMinor, $currency): void {
-            $this->recordNetworkConversionAction->execute($link, $revenueMinor, $currency);
+        $this->withLinkOwnerContext($link, function () use ($link, $revenueMinor, $currency, $externalReference): void {
+            $this->recordNetworkConversionAction->execute($link, $revenueMinor, $currency, $externalReference);
         });
     }
 
