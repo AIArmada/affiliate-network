@@ -137,6 +137,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Merchant Postbacks
+    |--------------------------------------------------------------------------
+    |
+    | Remote merchants report paid orders here so the network can record
+    | conversions without sharing a database. Merchants authenticate with
+    | the same catalog token the network uses to pull their catalog
+    | (stored encrypted on the site). Disabled by default.
+    |
+    */
+
+    'postbacks' => [
+        'enabled' => env('AFFILIATE_NETWORK_POSTBACKS_ENABLED', false),
+        'prefix' => env('AFFILIATE_NETWORK_POSTBACKS_PREFIX', 'api/affiliate-network'),
+        'middleware' => ['api', 'throttle:60,1'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | HTTP
     |--------------------------------------------------------------------------
     */

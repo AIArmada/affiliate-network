@@ -38,7 +38,6 @@ final class RemoteCatalogClient implements CatalogReaderInterface
             $response = $this->http->send(
                 method: 'GET',
                 target: $target,
-                options: ['stream' => true],
                 headers: array_filter([
                     'Accept' => 'application/json',
                     'Authorization' => $token ? 'Bearer ' . $token : null,
@@ -79,7 +78,6 @@ final class RemoteCatalogClient implements CatalogReaderInterface
             $response = $this->http->send(
                 method: 'GET',
                 target: $target,
-                options: ['stream' => true],
                 headers: array_filter([
                     'Accept' => 'application/json',
                     'Authorization' => $token ? 'Bearer ' . $token : null,

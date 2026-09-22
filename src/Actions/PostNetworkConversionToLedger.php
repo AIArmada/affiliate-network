@@ -12,6 +12,7 @@ use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\Affiliates\Models\AffiliateConversion;
 use AIArmada\Affiliates\Services\Commissions\CommissionCaps;
 use AIArmada\Affiliates\Services\FraudDetectionService;
+use AIArmada\Affiliates\States\ApprovedConversion;
 use AIArmada\Affiliates\States\RejectedConversion;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -71,6 +72,8 @@ final class PostNetworkConversionToLedger
             ? (int) $offer->rate_fixed_minor
             : (int) round(max(0, $revenueMinor) * (int) $offer->rate_base_bp / 10000);
 
+        $autoApprove = (bool) config('affiliates.commissions.auto_approve', false);
+
         $conversion = new AffiliateConversion([
             'idempotency_key' => hash('sha256', implode('|', [
                 'network',
@@ -88,7 +91,7 @@ final class PostNetworkConversionToLedger
             'value_minor' => max(0, $revenueMinor),
             'commission_minor' => CommissionCaps::clamp($commission),
             'commission_currency' => $resolvedCurrency,
-            'status' => config('affiliates.commissions.default_status', 'pending'),
+            'status' => $autoApprove ? ApprovedConversion::class : config('affiliates.commissions.default_status', 'pending'),
             'origin' => 'network',
             'metadata' => [
                 'offer_id' => $link->offer_id,
@@ -96,6 +99,7 @@ final class PostNetworkConversionToLedger
                 'site_id' => $link->site_id,
             ],
             'occurred_at' => CarbonImmutable::now(),
+            'approved_at' => $autoApprove ? CarbonImmutable::now() : null,
         ]);
         $conversion->forceFill([
             'owner_type' => $affiliate->owner_type,

@@ -245,5 +245,6 @@ Instead, it keeps its own offer-level tracking boundary:
 - [Multi-tenancy](07-multi-tenancy.md)
 - [API reference](08-api-reference.md)
 - [Testing and factories](09-testing-factories.md)
+- [Merchant postbacks](10-merchant-postbacks.md)
 - [Troubleshooting](99-troubleshooting.md)
 - [Filament Affiliate Network overview](../../filament-affiliate-network/docs/01-overview.md)
