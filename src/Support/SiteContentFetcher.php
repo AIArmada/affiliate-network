@@ -30,7 +30,6 @@ final class SiteContentFetcher
                 $response = $this->http->send(
                     method: 'GET',
                     target: $target,
-                    options: ['stream' => true],
                     headers: ['Accept' => 'text/html,application/xhtml+xml'],
                     connectTimeout: max(1, (int) config('affiliate-network.http.connect_timeout_seconds', 3)),
                     timeout: max(1, (int) config('affiliate-network.http.timeout_seconds', 5)),
