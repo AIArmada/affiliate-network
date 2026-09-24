@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Services;
 
+use AIArmada\AffiliateNetwork\Contracts\NetworkLedger;
+use AIArmada\AffiliateNetwork\Exceptions\AffiliatesNotInstalled;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
-use AIArmada\Affiliates\Models\AffiliateConversion;
-use Illuminate\Support\Collection;
 
 /**
  * Reconcile network link counters against ledger postings.
@@ -18,36 +18,41 @@ use Illuminate\Support\Collection;
  */
 final class NetworkLedgerReconciliationService
 {
+    public function __construct(
+        private readonly ?NetworkLedger $ledger = null,
+    ) {}
+
     /**
      * @return array{link_id: string, match: bool, network: array{conversions: int, revenue_minor: int, currency: string|null}, ledger: array{conversions: int, by_currency: array<string, array{conversions: int, value_minor: int, commission_minor: int}>}, differences: list<string>}
      */
     public function reconcileLink(AffiliateOfferLink $link): array
     {
-        /** @var Collection<int, AffiliateConversion> $rows */
-        $rows = AffiliateConversion::query()
-            ->where('network_link_id', $link->getKey())
-            ->get(['commission_currency', 'value_minor', 'commission_minor']);
+        if ($this->ledger === null) {
+            throw AffiliatesNotInstalled::forFeature('ledger reconciliation');
+        }
+
+        $rows = $this->ledger->rowsForLink((string) $link->getKey());
 
         $byCurrency = [];
 
         foreach ($rows as $row) {
-            $currency = mb_strtoupper((string) $row->commission_currency);
+            $currency = mb_strtoupper((string) ($row['commission_currency'] ?? ''));
 
             $byCurrency[$currency] ??= ['conversions' => 0, 'value_minor' => 0, 'commission_minor' => 0];
             $byCurrency[$currency]['conversions']++;
-            $byCurrency[$currency]['value_minor'] += (int) $row->value_minor;
-            $byCurrency[$currency]['commission_minor'] += (int) $row->commission_minor;
+            $byCurrency[$currency]['value_minor'] += (int) ($row['value_minor'] ?? 0);
+            $byCurrency[$currency]['commission_minor'] += (int) ($row['commission_minor'] ?? 0);
         }
 
         ksort($byCurrency);
 
         $differences = [];
 
-        if ($rows->count() !== (int) $link->conversions) {
+        if (count($rows) !== (int) $link->conversions) {
             $differences[] = sprintf(
                 'conversion count differs: network %d vs ledger %d',
                 (int) $link->conversions,
-                $rows->count(),
+                count($rows),
             );
         }
 
@@ -74,7 +79,7 @@ final class NetworkLedgerReconciliationService
                 'currency' => $link->currency !== null ? mb_strtoupper($link->currency) : null,
             ],
             'ledger' => [
-                'conversions' => $rows->count(),
+                'conversions' => count($rows),
                 'by_currency' => $byCurrency,
             ],
             'differences' => $differences,

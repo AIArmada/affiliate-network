@@ -24,6 +24,10 @@ return [
         ],
     ],
 
+    'models' => [
+        'affiliate' => null, // bound by aiarmada/affiliates, or your own affiliate model
+    ],
+
     'owner' => [
         'enabled' => env('AFFILIATE_NETWORK_OWNER_ENABLED', false),
         'include_global' => env('AFFILIATE_NETWORK_OWNER_INCLUDE_GLOBAL', false),
@@ -92,6 +96,12 @@ return [
 | `table_prefix` | Prefix for all tables | `affiliate_network_` |
 | `json_column_type` | JSON column type (json/jsonb) | `COMMERCE_JSON_COLUMN_TYPE` fallback |
 | `tables` | Table name mapping | Array |
+
+### Models
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `models.affiliate` | Eloquent model behind `affiliate()` relations; set automatically when `aiarmada/affiliates` is installed | `null` (relations throw `AffiliatesNotInstalled`) |
 
 ### Owner (Multi-Tenancy)
 

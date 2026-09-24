@@ -121,7 +121,7 @@ AFFILIATE_NETWORK_LINK_TTL=129600  # 90 days
 
 3. Create links without expiration:
 ```php
-$linkService->createLink($offer, $affiliate, [
+$linkService->createLink($offer, $affiliateId, [
     'expires_at' => null,
 ]);
 ```

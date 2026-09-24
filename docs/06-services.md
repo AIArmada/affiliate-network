@@ -183,7 +183,7 @@ $application = $offerService->revokeApplication(
 Check if an affiliate is approved for an offer.
 
 ```php
-$isApproved = $offerService->isApprovedForOffer($offer, $affiliate);
+$isApproved = $offerService->isApprovedForOffer($offer, $affiliateId);
 // Returns: bool
 ```
 
@@ -192,7 +192,7 @@ $isApproved = $offerService->isApprovedForOffer($offer, $affiliate);
 Get all active offers an affiliate is approved for.
 
 ```php
-$offers = $offerService->getApprovedOffers($affiliate);
+$offers = $offerService->getApprovedOffers($affiliateId);
 // Returns: Collection<AffiliateOffer> — published offers with an approved
 // network application, plus published local imports whose core program has
 // an approved membership (same rule as isApprovedForOffer()).
@@ -201,8 +201,10 @@ $offers = $offerService->getApprovedOffers($affiliate);
 #### enrollInLinkedProgram
 
 ```php
-$membership = $offerService->enrollInLinkedProgram($offer, $affiliate);
-// Returns an existing/new core membership, or null for remote offers.
+$membership = $offerService->enrollInLinkedProgram($offer, $affiliateId);
+// Returns a NetworkMembership DTO for an existing/new core membership,
+// or null for remote offers, vanished programs, or when no program
+// bridge is bound.
 ```
 
 ---
@@ -231,7 +233,7 @@ requires approval, the affiliate is approved for it. `target_url` must be
 an http(s) URL. The link inherits the offer currency for revenue attribution.
 
 ```php
-$link = $linkService->createLink($offer, $affiliate, [
+$link = $linkService->createLink($offer, $affiliateId, [
     'target_url' => 'https://store.com/product/123',
     'sub_id' => 'campaign-a',
     'sub_id_2' => 'placement-1',

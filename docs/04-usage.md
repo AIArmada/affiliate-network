@@ -202,11 +202,11 @@ use AIArmada\AffiliateNetwork\Services\OfferManagementService;
 
 $offerService = app(OfferManagementService::class);
 
-$isApproved = $offerService->isApprovedForOffer($offer, $affiliate);
+$isApproved = $offerService->isApprovedForOffer($offer, $affiliateId);
 
 // Get all approved offers for an affiliate (approved network applications
 // plus published local imports with an approved core program membership)
-$approvedOffers = $offerService->getApprovedOffers($affiliate);
+$approvedOffers = $offerService->getApprovedOffers($affiliateId);
 ```
 
 ## Tracking Links
@@ -218,7 +218,7 @@ use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 
 $linkService = app(OfferLinkService::class);
 
-$link = $linkService->createLink($offer, $affiliate, [
+$link = $linkService->createLink($offer, $affiliateId, [
     'target_url' => 'https://mystore.com/product/123',
     'sub_id' => 'blog-post-summer',
     'sub_id_2' => 'sidebar-banner',

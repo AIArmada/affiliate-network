@@ -172,7 +172,7 @@ $offer = $service->createOffer(AffiliateSite $site, array $data): AffiliateOffer
 // Apply for offer
 $application = $service->applyForOffer(
     AffiliateOffer $offer,
-    Affiliate $affiliate,
+    string $affiliateId,
     ?string $reason = null
 ): AffiliateOfferApplication;
 
@@ -182,11 +182,14 @@ $service->rejectApplication(AffiliateOfferApplication $app, string $reason, ?str
 $service->revokeApplication(AffiliateOfferApplication $app, string $reason, ?string $reviewedBy): AffiliateOfferApplication;
 
 // Check approval status
-$isApproved = $service->isApprovedForOffer(AffiliateOffer $offer, Affiliate $affiliate): bool;
+$isApproved = $service->isApprovedForOffer(AffiliateOffer $offer, string $affiliateId): bool;
 
 // Get approved offers (approved network applications plus published local
 // imports with an approved core program membership)
-$offers = $service->getApprovedOffers(Affiliate $affiliate, int $limit = 500): Collection;
+$offers = $service->getApprovedOffers(string $affiliateId, int $limit = 500): Collection;
+
+// Batch per-offer statuses in a fixed handful of queries
+$map = $service->applicationStatusMap(string $affiliateId, Collection $offers): array;
 ```
 
 ### OfferLinkService
@@ -199,7 +202,7 @@ $service = app(OfferLinkService::class);
 // Create link
 $link = $service->createLink(
     AffiliateOffer $offer,
-    Affiliate $affiliate,
+    string $affiliateId,
     array $options = []
 ): AffiliateOfferLink;
 

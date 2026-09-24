@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Http\Controllers;
 
+use AIArmada\AffiliateNetwork\Contracts\NetworkLedger;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
-use AIArmada\Affiliates\Models\AffiliateConversion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -24,6 +24,10 @@ use Throwable;
  */
 final class ReportNetworkConversionController extends Controller
 {
+    public function __construct(
+        private readonly ?NetworkLedger $ledger = null,
+    ) {}
+
     public function __invoke(Request $request, OfferLinkService $links): JsonResponse
     {
         $validated = $request->validate([
@@ -43,6 +47,10 @@ final class ReportNetworkConversionController extends Controller
             return response()->json(['message' => 'Invalid site credentials.'], 401);
         }
 
+        if (! $site->isVerified()) {
+            return response()->json(['message' => 'Site is not verified.'], 403);
+        }
+
         $link = $links->resolveLink($validated['link_code']);
 
         if (! $link instanceof AffiliateOfferLink || (string) $link->site_id !== (string) $site->getKey()) {
@@ -53,17 +61,14 @@ final class ReportNetworkConversionController extends Controller
             return response()->json(['message' => 'Offer is no longer active.'], 410);
         }
 
-        $existing = AffiliateConversion::query()
-            ->where('network_link_id', $link->getKey())
-            ->where('external_reference', $validated['external_reference'])
-            ->first();
+        $existing = $this->ledger?->findPosted((string) $link->getKey(), $validated['external_reference']);
 
-        if ($existing instanceof AffiliateConversion) {
+        if ($existing !== null) {
             return response()->json([
                 'ok' => true,
                 'duplicate' => true,
                 'network' => $links->getStats($link->refresh()),
-                'conversion' => $this->conversionPayload($existing),
+                'conversion' => $existing->toArray(),
             ]);
         }
 
@@ -71,16 +76,13 @@ final class ReportNetworkConversionController extends Controller
 
         $links->recordConversion($link, (int) $validated['revenue_minor'], $currency, $validated['external_reference']);
 
-        $conversion = AffiliateConversion::query()
-            ->where('network_link_id', $link->getKey())
-            ->where('external_reference', $validated['external_reference'])
-            ->first();
+        $conversion = $this->ledger?->findPosted((string) $link->getKey(), $validated['external_reference']);
 
         return response()->json([
             'ok' => true,
             'duplicate' => false,
             'network' => $links->getStats($link->refresh()),
-            'conversion' => $conversion instanceof AffiliateConversion ? $this->conversionPayload($conversion) : null,
+            'conversion' => $conversion?->toArray(),
         ]);
     }
 
@@ -97,19 +99,5 @@ final class ReportNetworkConversionController extends Controller
         }
 
         return is_string($expected) && $expected !== '' && hash_equals($expected, $bearerToken);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function conversionPayload(AffiliateConversion $conversion): array
-    {
-        return [
-            'id' => $conversion->id,
-            'affiliate_code' => $conversion->affiliate_code,
-            'commission_minor' => $conversion->commission_minor,
-            'commission_currency' => $conversion->commission_currency,
-            'status' => $conversion->status->getMorphClass(),
-        ];
     }
 }

@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Services;
 
 use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
+use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
+use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
-use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Support\MoneyFormatter;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
@@ -30,6 +31,7 @@ final class OfferLinkService
     public function __construct(
         private readonly RecordNetworkConversion $recordNetworkConversionAction,
         private readonly OfferManagementService $offerManagementService,
+        private readonly ?AffiliateIdentityResolver $identities = null,
     ) {}
 
     /**
@@ -39,14 +41,18 @@ final class OfferLinkService
      */
     public function createLink(
         AffiliateOffer $offer,
-        Affiliate $affiliate,
+        string $affiliateId,
         array $options = []
     ): AffiliateOfferLink {
         if (! $offer->isActive()) {
             throw new RuntimeException('Links can only be created for active offers.');
         }
 
-        if ($offer->requires_approval && ! $this->offerManagementService->isApprovedForOffer($offer, $affiliate)) {
+        if (! AffiliateSite::isVerifiedKey($offer->site_id)) {
+            throw new RuntimeException('Links can only be created for verified sites.');
+        }
+
+        if ($offer->requires_approval && ! $this->offerManagementService->isApprovedForOffer($offer, $affiliateId)) {
             throw new RuntimeException('Affiliate is not approved for this offer.');
         }
 
@@ -58,7 +64,7 @@ final class OfferLinkService
 
         return AffiliateOfferLink::create([
             'offer_id' => $offer->id,
-            'affiliate_id' => $affiliate->id,
+            'affiliate_id' => $affiliateId,
             'site_id' => $offer->site_id,
             'target_url' => $targetUrl,
             'custom_parameters' => $options['custom_parameters'] ?? null,
@@ -133,12 +139,13 @@ final class OfferLinkService
     {
         // Public redirects intentionally resolve by code in an explicit global
         // window; attribution writes re-enter the link owner's context below.
+        // Affiliate identity is never eager-loaded here so redirects work
+        // without the affiliates engine installed.
         return OwnerContext::withOwner(null, fn (): ?AffiliateOfferLink => AffiliateOfferLink::withoutGlobalScope(ScopesByBelongsToOwner::class)
             ->where('code', $code)
             ->where('is_active', true)
             ->with([
                 'offer' => fn ($query) => $query->withoutGlobalScope(ScopesByBelongsToOwner::class),
-                'affiliate' => fn ($query) => $query->withoutOwnerScope(),
                 'site' => fn ($query) => $query->withoutOwnerScope(),
             ])
             ->first());
@@ -211,10 +218,8 @@ final class OfferLinkService
      */
     private function withLinkOwnerContext(AffiliateOfferLink $link, callable $callback): mixed
     {
-        $affiliate = $link->relationLoaded('affiliate')
-            ? $link->affiliate
-            : $link->affiliate()->withoutOwnerScope()->first();
+        $owner = $this->identities?->find((string) $link->affiliate_id)?->owner();
 
-        return OwnerContext::withOwner($affiliate?->owner, $callback);
+        return OwnerContext::withOwner($owner, $callback);
     }
 }

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Actions;
 
+use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Events\OfferUpdated;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferCategory;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\CommerceSupport\Support\OwnerWriteGuard;
 use Illuminate\Support\Arr;
+use Illuminate\Validation\ValidationException;
 
 final class UpdateOffer
 {
@@ -78,6 +80,7 @@ final class UpdateOffer
         }
 
         $this->guardRelocation($offer, $data);
+        $this->guardPublishedSite($offer, $data);
 
         // Sync internals are deliberately not fillable; persist them via an
         // explicit forceFill so mass assignment can never touch them.
@@ -130,6 +133,31 @@ final class UpdateOffer
             } else {
                 AffiliateOfferCategory::query()->whereKey((string) $data['category_id'])->firstOrFail();
             }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function guardPublishedSite(AffiliateOffer $offer, array $data): void
+    {
+        if (! array_key_exists('status', $data)) {
+            return;
+        }
+
+        $status = $data['status'];
+        $value = $status instanceof OfferStatus ? $status->value : (string) $status;
+
+        if ($value !== OfferStatus::Published->value) {
+            return;
+        }
+
+        $siteId = array_key_exists('site_id', $data) ? (string) $data['site_id'] : (string) $offer->site_id;
+
+        if (! AffiliateSite::isVerifiedKey($siteId)) {
+            throw ValidationException::withMessages([
+                'status' => 'Only verified sites can publish offers.',
+            ]);
         }
     }
 }

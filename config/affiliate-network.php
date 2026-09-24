@@ -26,6 +26,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Affiliate Model
+    |--------------------------------------------------------------------------
+    |
+    | Eloquent model behind the affiliate() relations on applications and
+    | links. The network never assumes one: aiarmada/affiliates binds its
+    | Affiliate model here, or point it at your own implementation.
+    |
+    */
+    'models' => [
+        'affiliate' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Ownership (Multi-Tenancy)
     |--------------------------------------------------------------------------
     |

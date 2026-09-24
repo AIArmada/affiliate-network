@@ -15,6 +15,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 final class CreateOffer
 {
@@ -70,6 +71,8 @@ final class CreateOffer
 
         $validated['site_id'] = (string) $validatedSite->getKey();
 
+        $this->guardPublishedSite($validatedSite, $validated['status'] ?? null);
+
         $categoryId = $data['category_id'] ?? null;
 
         if (is_scalar($categoryId) && (string) $categoryId !== '') {
@@ -115,5 +118,16 @@ final class CreateOffer
         event(new OfferCreated($offer));
 
         return $offer;
+    }
+
+    private function guardPublishedSite(AffiliateSite $site, mixed $status): void
+    {
+        $value = $status instanceof OfferStatus ? $status->value : (string) ($status ?? '');
+
+        if ($value === OfferStatus::Published->value && ! $site->isVerified()) {
+            throw ValidationException::withMessages([
+                'status' => 'Only verified sites can publish offers.',
+            ]);
+        }
     }
 }

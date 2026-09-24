@@ -187,6 +187,7 @@ $creative = AffiliateOfferCreative::factory()
 
 ```php
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
+use Illuminate\Support\Str;
 
 // Pending application
 $application = AffiliateOfferApplication::factory()
@@ -215,7 +216,7 @@ $application = AffiliateOfferApplication::factory()
 
 // For specific affiliate
 $application = AffiliateOfferApplication::factory()
-    ->forAffiliate($affiliate)
+    ->forAffiliateId((string) Str::uuid())
     ->create();
 
 // With application reason
@@ -226,7 +227,7 @@ $application = AffiliateOfferApplication::factory()
 // Complete example
 $application = AffiliateOfferApplication::factory()
     ->forOffer($offer)
-    ->forAffiliate($affiliate)
+    ->forAffiliateId((string) Str::uuid())
     ->approved()
     ->create();
 ```
@@ -237,6 +238,7 @@ $application = AffiliateOfferApplication::factory()
 
 ```php
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
+use Illuminate\Support\Str;
 
 // Active link
 $link = AffiliateOfferLink::factory()->create();
@@ -255,7 +257,7 @@ $link = AffiliateOfferLink::factory()
 
 // For specific affiliate
 $link = AffiliateOfferLink::factory()
-    ->forAffiliate($affiliate)
+    ->forAffiliateId((string) Str::uuid())
     ->create();
 
 // For specific site
@@ -290,7 +292,7 @@ $link = AffiliateOfferLink::factory()
 // Complete example
 $link = AffiliateOfferLink::factory()
     ->forOffer($offer)
-    ->forAffiliate($affiliate)
+    ->forAffiliateId((string) Str::uuid())
     ->active()
     ->withSubIds('blog', 'sidebar', 'banner-728x90')
     ->withStats(500, 25, 125000)
@@ -335,42 +337,42 @@ it('marks site as verified on successful verification', function () {
 ```php
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Services\OfferManagementService;
-use AIArmada\Affiliates\Models\Affiliate;
+use Illuminate\Support\Str;
 
 it('creates application for offer', function () {
     $offer = AffiliateOffer::factory()->active()->create();
-    $affiliate = Affiliate::factory()->create();
+    $affiliateId = (string) Str::uuid();
     $service = app(OfferManagementService::class);
 
-    $application = $service->applyForOffer($offer, $affiliate, 'I want to promote this');
+    $application = $service->applyForOffer($offer, $affiliateId, 'I want to promote this');
 
     expect($application->offer_id)->toBe($offer->id);
-    expect($application->affiliate_id)->toBe($affiliate->id);
+    expect($application->affiliate_id)->toBe($affiliateId);
     expect($application->status)->toBe('pending');
     expect($application->reason)->toBe('I want to promote this');
 });
 
 it('auto-approves when offer does not require approval', function () {
     $offer = AffiliateOffer::factory()->autoApprove()->create();
-    $affiliate = Affiliate::factory()->create();
+    $affiliateId = (string) Str::uuid();
     $service = app(OfferManagementService::class);
 
-    $application = $service->applyForOffer($offer, $affiliate);
+    $application = $service->applyForOffer($offer, $affiliateId);
 
     expect($application->status)->toBe('approved');
 });
 
 it('prevents reapplication during cooldown period', function () {
     $offer = AffiliateOffer::factory()->create();
-    $affiliate = Affiliate::factory()->create();
+    $affiliateId = (string) Str::uuid();
     $service = app(OfferManagementService::class);
 
     // Create rejected application
-    $application = $service->applyForOffer($offer, $affiliate);
+    $application = $service->applyForOffer($offer, $affiliateId);
     $service->rejectApplication($application, 'Not suitable', 'admin');
 
     // Try to reapply immediately
-    expect(fn () => $service->applyForOffer($offer, $affiliate))
+    expect(fn () => $service->applyForOffer($offer, $affiliateId))
         ->toThrow(RuntimeException::class);
 });
 ```
@@ -381,19 +383,19 @@ it('prevents reapplication during cooldown period', function () {
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
-use AIArmada\Affiliates\Models\Affiliate;
+use Illuminate\Support\Str;
 
 it('creates tracking link', function () {
     $offer = AffiliateOffer::factory()->active()->create();
-    $affiliate = Affiliate::factory()->create();
+    $affiliateId = (string) Str::uuid();
     $service = app(OfferLinkService::class);
 
-    $link = $service->createLink($offer, $affiliate, [
+    $link = $service->createLink($offer, $affiliateId, [
         'sub_id' => 'test-campaign',
     ]);
 
     expect($link->offer_id)->toBe($offer->id);
-    expect($link->affiliate_id)->toBe($affiliate->id);
+    expect($link->affiliate_id)->toBe($affiliateId);
     expect($link->sub_id)->toBe('test-campaign');
     expect($link->code)->toHaveLength(16);
 });

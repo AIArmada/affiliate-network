@@ -140,4 +140,26 @@ class AffiliateSite extends Model implements Auditable
     {
         return $this->status === self::STATUS_PENDING;
     }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === self::STATUS_SUSPENDED;
+    }
+
+    /**
+     * Context-independent verification check for enforcement gates.
+     *
+     * Verification status is a network fact, not tenant data: approval,
+     * publishing, and link flows run under affiliate, merchant, or operator
+     * contexts, and none of them may change the answer.
+     */
+    public static function isVerifiedKey(int | string $key): bool
+    {
+        $site = static::query()
+            ->withoutGlobalScopes()
+            ->whereKey($key)
+            ->first();
+
+        return $site instanceof self && $site->isVerified();
+    }
 }

@@ -6,7 +6,10 @@ title: Overview
 
 ## Purpose
 
-The `aiarmada/affiliate-network` package extends core affiliates into a multi-merchant affiliate marketplace with sites, offers, applications, creatives, and tracking links.
+The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliate marketplace with sites, offers, applications, creatives, and tracking links. It never requires `aiarmada/affiliates`; when that package is installed it binds local adapters for affiliate identity, the conversion ledger, core programs, and catalog sync.
+
+> [!WARNING]
+> Breaking change: the network seam. Public APIs now take affiliate IDs (`string`) instead of `Affiliate` models (`applyForOffer()`, `createLink()`, `isApprovedForOffer()`, `getApprovedOffers()`, and friends), factories use `forAffiliateId()`, and `OfferManagementService::linkedProgram()` is removed. Migration: pass `(string) $affiliate->getKey()` at call sites, swap factory states, and read memberships through `membershipsForPrograms()` / `applicationStatusMap()`. No data migration: `affiliate_id` columns are unchanged.
 
 ## What this package owns
 
@@ -24,7 +27,7 @@ The `aiarmada/affiliate-network` package extends core affiliates into a multi-me
 
 ## Related packages
 
-- [`aiarmada/affiliates`](../../affiliates/docs/01-overview.md) — affiliate identities and commission layer required by this package
+- [`aiarmada/affiliates`](../../affiliates/docs/01-overview.md) — optional: binds the local identity, ledger, program, and catalog adapters behind the network seam
 - [`aiarmada/filament-affiliate-network`](../../filament-affiliate-network/docs/01-overview.md) — Filament marketplace and merchant admin surfaces
 - [`aiarmada/filament-affiliates`](../../filament-affiliates/docs/01-overview.md) — complementary affiliate admin and portal UI
 - [`aiarmada/checkout`](../../checkout/docs/01-overview.md) — optional conversion recording bridge for sites using the Commerce checkout stack
@@ -33,10 +36,10 @@ The `aiarmada/affiliate-network` package extends core affiliates into a multi-me
 
 - **Models** — `AffiliateSite`, `AffiliateOffer`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferApplication`, `AffiliateOfferLink`
 - **Actions** — `CreateOffer`, `UpdateOffer`, `ApplyToOffer`, `ApproveApplication`, `RecordNetworkConversion`
-- **Contracts** — `SiteVerificationStrategyInterface` (DNS, meta tag, file verification strategies)
+- **Contracts** — `SiteVerificationStrategyInterface` (DNS, meta tag, file verification strategies); the network seam `AffiliateIdentityResolver`, `NetworkLedger`, `LinkedProgramBridge` plus `CatalogReaderInterface`
 - **Services** — site verification, offer management, and offer link generation/tracking
 - **Events** — `OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`
-- **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `SiteVerificationFailedException`
+- **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `SiteVerificationFailedException`, `AffiliatesNotInstalled` (seam feature used without an adapter)
 - **Routes and middleware** — redirect and cookie-tracking flows for marketplace links
 
 ## Owner scoping and security notes
@@ -50,13 +53,13 @@ The `aiarmada/affiliate-network` package extends core affiliates into a multi-me
 
 `affiliate-network` owns discovery: merchant sites, marketplace offers, public signed redirects, clicks, and network-level applications for remote catalogs. `affiliates` owns merchant-local execution: `AffiliateProgram`, memberships, attribution, commissions, payouts, and fraud decisions. The network never writes commission or payout records.
 
-Local catalog synchronization calls the read-only `ProgramCatalogService::snapshot()` path. A local imported offer keeps the core program ID in `external_program_id`; marketplace enrollment calls the existing idempotent `ProgramService::joinProgram()` and never creates a duplicate core program or membership. Remote catalog offers use the network application flow and are marked with `metadata.catalog_source = remote`.
+Local catalog synchronization calls the read-only `ProgramCatalogService::snapshot()` path through the affiliates-provided local reader. A local imported offer keeps the core program ID in `external_program_id`; marketplace enrollment goes through the `LinkedProgramBridge` seam to the existing idempotent `ProgramService::joinProgram()` and never creates a duplicate core program or membership. Remote catalog offers use the network application flow and are marked with `metadata.catalog_source = remote`.
 
 Conversion precedence is intentionally split: the network side records discovery attribution (link clicks/conversions and `network_attribution` order metadata), while core `affiliates` records commission and payout state. Keep the guards separate when both paths observe one order: the network integration must reject an already-attributed order/link before recording a second network conversion, and core conversion calls must carry a stable `external_reference`, which `RecordAffiliateConversion` turns into its idempotency key. Core commission data is authoritative for commission and payout execution; network click/conversion counters remain discovery reporting. The `orders` listener is an integration boundary and is not replaced or modified by this package.
 
 Public redirects require a signed URL and a `60` requests-per-minute throttle. Link codes use `random_bytes(8)` encoded as 16 hexadecimal characters. Outbound catalog and verification HTTP uses the shared public-URL guard (HTTP/HTTPS only, public DNS/IPs, no credentials/fragments), pinned transport with redirects disabled, configured timeouts/retries, and a one-megabyte response cap.
 
-The `aiarmada/affiliate-network` package provides a complete multi-merchant affiliate network and marketplace system for Laravel. It extends the core `aiarmada/affiliates` package to enable merchants to publish offers and affiliates to discover and promote them.
+The `aiarmada/affiliate-network` package provides a complete multi-merchant affiliate network and marketplace system for Laravel. It runs standalone so merchants can publish offers and affiliates can discover and promote them; install `aiarmada/affiliates` alongside it to enable local identity, ledger, program, and catalog features.
 
 ## Key Features
 
@@ -130,7 +133,7 @@ use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 
 $linkService = app(OfferLinkService::class);
 
-$link = $linkService->createLink($offer, $affiliate, [
+$link = $linkService->createLink($offer, (string) $affiliate->getKey(), [
     'sub_id' => 'blog-post-1',
     'sub_id_2' => 'sidebar',
     'sub_id_3' => 'banner-728x90',
@@ -211,10 +214,9 @@ affiliate-network/
 
 ## Integration with Affiliates Package
 
-This package integrates tightly with the core `aiarmada/affiliates` package:
+This package does **not** require the core `aiarmada/affiliates` package. Integration happens through the network seam (`AffiliateIdentityResolver`, `NetworkLedger`, `LinkedProgramBridge`, `CatalogReaderInterface`), which the affiliates package implements when both are installed:
 
-- `AffiliateOfferApplication` links to `Affiliate` model for application tracking
-- `AffiliateOfferLink` references `Affiliate` for attribution
+- `AffiliateOfferApplication` and `AffiliateOfferLink` hold opaque `affiliate_id` UUIDs; the `affiliate()` relations resolve the model bound at `affiliate-network.models.affiliate`
 - Owner scoping respects affiliate ownership through relationship-based scoping
 - Commission structures complement affiliate-level configurations
 
@@ -226,14 +228,14 @@ Instead, it keeps its own offer-level tracking boundary:
 
 - `AffiliateOfferLink` stores clicks, conversions, and aggregated revenue for marketplace/offer links
 - checkout integration stores `network_attribution` in order metadata
-- any optional bridge into core `aiarmada/affiliates` conversions must be implemented explicitly by the consuming application
+- posting into core `aiarmada/affiliates` conversions goes through the `NetworkLedger` seam, bound automatically when that package is installed; without it, conversions keep counters only
 
 ## Requirements
 
 - PHP 8.4+
 - Laravel 13+
-- `aiarmada/affiliates` package
 - `aiarmada/commerce-support` package (for owner traits)
+- `aiarmada/affiliates` package (optional; enables local identity, ledger, program, and catalog adapters)
 
 ## Read next
 
@@ -246,5 +248,6 @@ Instead, it keeps its own offer-level tracking boundary:
 - [API reference](08-api-reference.md)
 - [Testing and factories](09-testing-factories.md)
 - [Merchant postbacks](10-merchant-postbacks.md)
+- [Merchant self-service](11-merchant-self-service.md)
 - [Troubleshooting](99-troubleshooting.md)
 - [Filament Affiliate Network overview](../../filament-affiliate-network/docs/01-overview.md)

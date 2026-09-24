@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferLinkFactory;
+use AIArmada\AffiliateNetwork\Exceptions\AffiliatesNotInstalled;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
-use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use Carbon\CarbonImmutable;
@@ -37,7 +37,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
  * @property-read AffiliateOffer $offer
- * @property-read Affiliate $affiliate
+ * @property-read Model $affiliate
  * @property-read AffiliateSite|null $site
  */
 class AffiliateOfferLink extends Model implements Auditable
@@ -55,7 +55,7 @@ class AffiliateOfferLink extends Model implements Auditable
 
     protected static function ownerTableConfigKey(): string
     {
-        return 'affiliates.owner';
+        return 'affiliate-network.owner';
     }
 
     protected $fillable = [
@@ -91,11 +91,25 @@ class AffiliateOfferLink extends Model implements Auditable
     }
 
     /**
-     * @return BelongsTo<Affiliate, $this>
+     * @return BelongsTo<Model, $this>
      */
     public function affiliate(): BelongsTo
     {
-        return $this->belongsTo(Affiliate::class, 'affiliate_id');
+        return $this->belongsTo(self::affiliateModel(), 'affiliate_id');
+    }
+
+    /**
+     * @return class-string<Model>
+     */
+    public static function affiliateModel(): string
+    {
+        $model = config('affiliate-network.models.affiliate');
+
+        if (! is_string($model) || ! class_exists($model)) {
+            throw AffiliatesNotInstalled::forFeature('affiliate relations');
+        }
+
+        return $model;
     }
 
     /**

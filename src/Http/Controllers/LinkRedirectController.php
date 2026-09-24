@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Http\Controllers;
 
+use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,15 @@ final class LinkRedirectController
         }
 
         if (! $link->offer->isActive()) {
+            abort(410, 'Offer is no longer active');
+        }
+
+        // Verification is a network fact: check keys unscoped instead of lazy
+        // relations so ambient scope can never change a redirect decision.
+        $linkSiteVerified = $link->site_id !== null && AffiliateSite::isVerifiedKey($link->site_id);
+        $offerSiteVerified = AffiliateSite::isVerifiedKey($link->offer->site_id);
+
+        if (! $linkSiteVerified && ! $offerSiteVerified) {
             abort(410, 'Offer is no longer active');
         }
 

@@ -11,9 +11,11 @@ use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use AIArmada\CommerceSupport\Support\MoneyFormatter;
+use AIArmada\CommerceSupport\Support\OwnerScope;
 use AIArmada\Contacting\Concerns\HasContactMethods;
 use AIArmada\Contacting\Concerns\HasSocialProfiles;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -158,6 +160,17 @@ class AffiliateOffer extends Model implements Auditable
         return $this->belongsTo(AffiliateSite::class, 'site_id');
     }
 
+    public function scopeWhereSiteVerified(Builder $query): Builder
+    {
+        // Verification is a network fact, not tenant data: bypass the site
+        // scope inside the existence check so public lookups work the same
+        // in every context.
+        return $query->whereHas('site', fn (Builder $sites): Builder => $sites
+            ->withoutGlobalScope(OwnerScope::class)
+            ->where('status', AffiliateSite::STATUS_VERIFIED)
+            ->whereNotNull('verified_at'));
+    }
+
     /**
      * @return BelongsTo<AffiliateOfferCategory, $this>
      */
@@ -277,6 +290,11 @@ class AffiliateOffer extends Model implements Auditable
         }
 
         return $normalized;
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->status === OfferStatus::Draft;
     }
 
     public function isActive(): bool

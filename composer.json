@@ -1,6 +1,6 @@
 {
   "name": "aiarmada/affiliate-network",
-  "description": "Multi-merchant affiliate network and marketplace extension for AIArmada affiliates.",
+  "description": "Multi-merchant affiliate network and marketplace. Runs standalone; pair with AIArmada affiliates for local identity, ledger, and programs.",
   "license": "MIT",
   "homepage": "https://github.com/aiarmada/commerce",
   "support": {
@@ -8,7 +8,6 @@
     "source": "https://github.com/aiarmada/commerce"
   },
   "require": {
-    "aiarmada/affiliates": "self.version",
     "aiarmada/commerce-support": "self.version",
     "aiarmada/contacting": "self.version",
     "php": "^8.4"
@@ -32,6 +31,7 @@
   "minimum-stability": "dev",
   "prefer-stable": true,
   "suggest": {
+    "aiarmada/affiliates": "Local adapters for affiliate identity, conversion ledger, core programs, and catalog sync.",
     "aiarmada/orders": "Optional integration"
   }
 }

@@ -7,9 +7,9 @@ namespace AIArmada\AffiliateNetwork\Database\Factories;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
-use AIArmada\Affiliates\Models\Affiliate;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 /**
  * @extends Factory<AffiliateOfferLink>
@@ -25,14 +25,7 @@ class AffiliateOfferLinkFactory extends Factory
     {
         return [
             'offer_id' => AffiliateOfferFactory::new(),
-            'affiliate_id' => fn () => Affiliate::create([
-                'code' => 'AFF' . $this->faker->unique()->numberBetween(1000, 9999),
-                'name' => $this->faker->name(),
-                'status' => 'active',
-                'commission_type' => 'percentage',
-                'commission_rate' => 1000,
-                'currency' => 'MYR',
-            ])->id,
+            'affiliate_id' => fn () => (string) Str::uuid(),
             'site_id' => null,
             'code' => bin2hex(random_bytes(8)),
             'target_url' => $this->faker->url(),
@@ -95,10 +88,10 @@ class AffiliateOfferLinkFactory extends Factory
     /**
      * Link for a specific affiliate.
      */
-    public function forAffiliate(Affiliate $affiliate): static
+    public function forAffiliateId(string $affiliateId): static
     {
         return $this->state(fn (array $attributes) => [
-            'affiliate_id' => $affiliate->id,
+            'affiliate_id' => $affiliateId,
         ]);
     }
 

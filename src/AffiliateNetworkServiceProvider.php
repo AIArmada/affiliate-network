@@ -42,7 +42,7 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
         $this->app->singleton(SiteVerificationService::class);
         $this->app->singleton(OfferManagementService::class);
         $this->app->singleton(OfferLinkService::class);
-        $this->app->singleton(Services\Catalog\LocalProgramReader::class);
+        $this->app->singleton(Services\Catalog\CatalogReaderResolver::class);
         $this->app->singleton(Services\Catalog\RemoteCatalogClient::class);
         $this->app->singleton(Services\OfferImportService::class);
 

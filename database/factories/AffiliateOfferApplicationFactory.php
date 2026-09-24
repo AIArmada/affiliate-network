@@ -7,8 +7,8 @@ namespace AIArmada\AffiliateNetwork\Database\Factories;
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
-use AIArmada\Affiliates\Models\Affiliate;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 /**
  * @extends Factory<AffiliateOfferApplication>
@@ -24,14 +24,7 @@ class AffiliateOfferApplicationFactory extends Factory
     {
         return [
             'offer_id' => AffiliateOfferFactory::new(),
-            'affiliate_id' => fn () => Affiliate::create([
-                'code' => 'AFF' . $this->faker->unique()->numberBetween(1000, 9999),
-                'name' => $this->faker->name(),
-                'status' => 'active',
-                'commission_type' => 'percentage',
-                'commission_rate' => 1000,
-                'currency' => 'MYR',
-            ])->id,
+            'affiliate_id' => fn () => (string) Str::uuid(),
             'status' => ApplicationStatus::Pending,
             'reason' => $this->faker->optional()->sentence(),
             'rejection_reason' => null,
@@ -107,10 +100,10 @@ class AffiliateOfferApplicationFactory extends Factory
     /**
      * Application by a specific affiliate.
      */
-    public function forAffiliate(Affiliate $affiliate): static
+    public function forAffiliateId(string $affiliateId): static
     {
         return $this->state(fn (array $attributes) => [
-            'affiliate_id' => $affiliate->id,
+            'affiliate_id' => $affiliateId,
         ]);
     }
 

@@ -10,8 +10,8 @@ use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
-use AIArmada\AffiliateNetwork\Services\Catalog\LocalProgramReader;
-use AIArmada\AffiliateNetwork\Services\Catalog\RemoteCatalogClient;
+use AIArmada\AffiliateNetwork\Services\Catalog\CatalogReaderInterface;
+use AIArmada\AffiliateNetwork\Services\Catalog\CatalogReaderResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -29,8 +29,7 @@ use Throwable;
 final class OfferImportService
 {
     public function __construct(
-        private readonly LocalProgramReader $local,
-        private readonly RemoteCatalogClient $remote,
+        private readonly CatalogReaderResolver $readers,
         private readonly CreateOffer $createOffer,
         private readonly UpdateOffer $updateOffer,
     ) {}
@@ -130,9 +129,9 @@ final class OfferImportService
         return $total;
     }
 
-    private function readerFor(AffiliateSite $site): LocalProgramReader | RemoteCatalogClient
+    private function readerFor(AffiliateSite $site): CatalogReaderInterface
     {
-        return empty($site->catalog_url) ? $this->local : $this->remote;
+        return $this->readers->readerFor($site);
     }
 
     /**

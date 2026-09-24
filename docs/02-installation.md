@@ -8,13 +8,19 @@ title: Installation
 
 - PHP 8.4+
 - Laravel 13+
-- `aiarmada/affiliates` package (for affiliate relationship)
 - `aiarmada/commerce-support` package (for owner traits)
+- `aiarmada/affiliates` package (optional; binds the local identity, ledger, program, and catalog adapters)
 
 ## Install via Composer
 
 ```bash
 composer require aiarmada/affiliate-network
+```
+
+For local shared-DB installs that resolve affiliates, post conversions to the ledger, enroll into core programs, or sync local catalogs, also require the affiliates engine:
+
+```bash
+composer require aiarmada/affiliates
 ```
 
 ## Publish Configuration

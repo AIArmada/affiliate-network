@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Actions;
 
+use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
@@ -12,15 +13,18 @@ use AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
-use AIArmada\Affiliates\Models\Affiliate;
 use AIArmada\CommerceSupport\Support\OwnerContext;
-use AIArmada\CommerceSupport\Support\OwnerWriteGuard;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 
 final class ApplyToOffer
 {
-    public function execute(AffiliateOffer $offer, Affiliate $affiliate, ?string $reason = null): AffiliateOfferApplication
+    public function __construct(
+        private readonly AffiliateIdentityResolver $identities,
+    ) {}
+
+    public function execute(AffiliateOffer $offer, string $affiliateId, ?string $reason = null): AffiliateOfferApplication
     {
         // Public application lookup is intentionally global; all application writes
         // re-enter the affiliate owner's context immediately below.
@@ -29,21 +33,20 @@ final class ApplyToOffer
                 ->whereKey($offer->getKey())
                 ->where('status', OfferStatus::Published)
                 ->where('visibility', OfferVisibility::Public)
+                ->whereSiteVerified()
                 ->firstOrFail();
         });
 
-        if (config('affiliates.owner.enabled', false)) {
-            $affiliate = OwnerWriteGuard::findOrFailForOwner(
-                Affiliate::class,
-                (string) $affiliate->getKey(),
-                includeGlobal: false,
-                message: 'Affiliate is not accessible in the current owner scope.',
+        $affiliate = $this->identities->findAccessible($affiliateId);
+
+        if ($affiliate === null) {
+            throw (new ModelNotFoundException)->setModel(
+                (string) config('affiliate-network.models.affiliate', 'affiliate'),
+                [$affiliateId],
             );
-        } else {
-            $affiliate = Affiliate::query()->whereKey($affiliate->getKey())->firstOrFail();
         }
 
-        return OwnerContext::withOwner($affiliate->owner, function () use ($offer, $affiliate, $reason): AffiliateOfferApplication {
+        return OwnerContext::withOwner($affiliate->owner(), function () use ($offer, $affiliate, $reason): AffiliateOfferApplication {
             $existing = AffiliateOfferApplication::query()
                 ->where('offer_id', $offer->id)
                 ->where('affiliate_id', $affiliate->id)
