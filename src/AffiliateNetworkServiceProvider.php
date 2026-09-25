@@ -7,6 +7,7 @@ namespace AIArmada\AffiliateNetwork;
 use AIArmada\AffiliateNetwork\Console\Commands\ArchiveExpiredOffersCommand;
 use AIArmada\AffiliateNetwork\Console\Commands\SyncSiteOffersCommand;
 use AIArmada\AffiliateNetwork\Http\Middleware\TrackNetworkLinkCookie;
+use AIArmada\AffiliateNetwork\Listeners\IncrementNetworkLinkClicks;
 use AIArmada\AffiliateNetwork\Listeners\RecordNetworkConversionForOrder;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 use AIArmada\AffiliateNetwork\Services\OfferManagementService;
@@ -14,7 +15,10 @@ use AIArmada\AffiliateNetwork\Services\SiteVerificationService;
 use AIArmada\AffiliateNetwork\Strategies\DnsVerificationStrategy;
 use AIArmada\AffiliateNetwork\Strategies\FileVerificationStrategy;
 use AIArmada\AffiliateNetwork\Strategies\MetaTagVerificationStrategy;
+use AIArmada\AffiliateNetwork\Support\OfferLinkGate;
 use AIArmada\AffiliateNetwork\Support\SiteContentFetcher;
+use AIArmada\Links\Contracts\LinkGateInterface;
+use AIArmada\Links\Events\LinkClicked;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Support\Facades\Event;
 use Spatie\LaravelPackageTools\Package;
@@ -46,11 +50,15 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
         $this->app->singleton(Services\Catalog\RemoteCatalogClient::class);
         $this->app->singleton(Services\OfferImportService::class);
 
+        $this->app->bind(LinkGateInterface::class, OfferLinkGate::class);
+
         $this->registerVerificationStrategies();
     }
 
     public function packageBooted(): void
     {
+        Event::listen(LinkClicked::class, IncrementNetworkLinkClicks::class);
+
         $this->bootCheckoutIntegration();
     }
 

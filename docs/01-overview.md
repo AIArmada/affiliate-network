@@ -40,7 +40,7 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 - **Services** — site verification, offer management, and offer link generation/tracking
 - **Events** — `OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`
 - **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `SiteVerificationFailedException`, `AffiliatesNotInstalled` (seam feature used without an adapter)
-- **Routes and middleware** — redirect and cookie-tracking flows for marketplace links
+- **Routes and middleware** — merchant postbacks and cookie-tracking flows; redirects ride on `aiarmada/links`
 
 ## Owner scoping and security notes
 
@@ -51,13 +51,13 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 
 ## Discovery, enrollment, and conversion boundaries
 
-`affiliate-network` owns discovery: merchant sites, marketplace offers, public signed redirects, clicks, and network-level applications for remote catalogs. `affiliates` owns merchant-local execution: `AffiliateProgram`, memberships, attribution, commissions, payouts, and fraud decisions. The network never writes commission or payout records.
+`affiliate-network` owns discovery: merchant sites, marketplace offers, signed-redirect policy, clicks, and network-level applications for remote catalogs. `affiliates` owns merchant-local execution: `AffiliateProgram`, memberships, attribution, commissions, payouts, and fraud decisions. The network never writes commission or payout records.
 
 Local catalog synchronization calls the read-only `ProgramCatalogService::snapshot()` path through the affiliates-provided local reader. A local imported offer keeps the core program ID in `external_program_id`; marketplace enrollment goes through the `LinkedProgramBridge` seam to the existing idempotent `ProgramService::joinProgram()` and never creates a duplicate core program or membership. Remote catalog offers use the network application flow and are marked with `metadata.catalog_source = remote`.
 
 Conversion precedence is intentionally split: the network side records discovery attribution (link clicks/conversions and `network_attribution` order metadata), while core `affiliates` records commission and payout state. Keep the guards separate when both paths observe one order: the network integration must reject an already-attributed order/link before recording a second network conversion, and core conversion calls must carry a stable `external_reference`, which `RecordAffiliateConversion` turns into its idempotency key. Core commission data is authoritative for commission and payout execution; network click/conversion counters remain discovery reporting. The `orders` listener is an integration boundary and is not replaced or modified by this package.
 
-Public redirects require a signed URL and a `60` requests-per-minute throttle. Link codes use `random_bytes(8)` encoded as 16 hexadecimal characters. Outbound catalog and verification HTTP uses the shared public-URL guard (HTTP/HTTPS only, public DNS/IPs, no credentials/fragments), pinned transport with redirects disabled, configured timeouts/retries, and a one-megabyte response cap.
+Public redirects are served by `aiarmada/links` (`GET /go/{slug}`): per-link signed URLs with `links.routing.signature_ttl_minutes` TTL, a network policy gate over link, offer, site, and approval state, and throttling through `links.routing.middleware`. Outbound catalog and verification HTTP uses the shared public-URL guard (HTTP/HTTPS only, public DNS/IPs, no credentials/fragments), pinned transport with redirects disabled, configured timeouts/retries, and a one-megabyte response cap.
 
 The `aiarmada/affiliate-network` package provides a complete multi-merchant affiliate network and marketplace system for Laravel. It runs standalone so merchants can publish offers and affiliates can discover and promote them; install `aiarmada/affiliates` alongside it to enable local identity, ledger, program, and catalog features.
 
@@ -140,8 +140,10 @@ $link = $linkService->createLink($offer, (string) $affiliate->getKey(), [
 ]);
 
 $trackingUrl = $linkService->generateTrackingUrl($link);
-// https://yoursite.com/affiliate-network/go/abc123?sig=xxx&expires=xxx
+// https://yoursite.com/go/aB3dE9fHjKlmN0p?signature=xxx&expires=xxx
 ```
+
+Redirects are served by `aiarmada/links`; the network contributes redirect policy (link, offer, site, and approval state) through a link gate.
 
 ## Architecture
 
@@ -151,9 +153,9 @@ affiliate-network/
 │   └── affiliate-network.php        # Package configuration
 ├── database/
 │   ├── factories/                   # 6 model factories
-│   ├── migrations/                  # 6 migration files
+│   ├── migrations/                  # 7 migration files
 ├── routes/
-│   └── api.php                      # Link redirect route
+│   └── api.php                      # Merchant postback route
 └── src/
     ├── Actions/
     │   ├── ApplyToOffer.php              # Apply to an offer
@@ -177,10 +179,11 @@ affiliate-network/
     │   └── SiteVerificationFailedException.php
     ├── Http/
     │   ├── Controllers/
-    │   │   └── LinkRedirectController.php
+    │   │   └── ReportNetworkConversionController.php
     │   └── Middleware/
     │       └── TrackNetworkLinkCookie.php
     ├── Listeners/
+    │   ├── IncrementNetworkLinkClicks.php
     │   └── RecordNetworkConversionForOrder.php
     ├── Models/
     │   ├── AffiliateSite.php
@@ -195,10 +198,13 @@ affiliate-network/
     │   ├── SiteVerificationService.php
     │   ├── OfferManagementService.php
     │   └── OfferLinkService.php
-    └── Strategies/
-        ├── DnsVerificationStrategy.php
-        ├── FileVerificationStrategy.php
-        └── MetaTagVerificationStrategy.php
+    ├── Strategies/
+    │   ├── DnsVerificationStrategy.php
+    │   ├── FileVerificationStrategy.php
+    │   └── MetaTagVerificationStrategy.php
+    └── Support/
+        ├── OfferLinkGate.php
+        └── SiteContentFetcher.php
 ```
 
 ## Database Schema
@@ -210,7 +216,7 @@ affiliate-network/
 | `affiliate_network_offers` | Affiliate offers | `site_id`, `category_id`, `rate_base_bp`, `rate_fixed_minor`, `status` |
 | `affiliate_network_offer_creatives` | Promotional assets | `offer_id`, `type`, `url`, `width`, `height` |
 | `affiliate_network_offer_applications` | Affiliate-to-offer applications | `offer_id`, `affiliate_id`, `status`, `reviewed_at` |
-| `affiliate_network_offer_links` | Tracking links | `offer_id`, `affiliate_id`, `code`, `clicks`, `conversions`, `revenue`, `currency` |
+| `affiliate_network_offer_links` | Tracking links | `link_id`, `offer_id`, `affiliate_id`, `clicks`, `conversions`, `revenue`, `currency` |
 
 ## Integration with Affiliates Package
 

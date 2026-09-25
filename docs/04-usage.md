@@ -224,21 +224,21 @@ $link = $linkService->createLink($offer, $affiliateId, [
     'sub_id_2' => 'sidebar-banner',
 ]);
 
-// Get tracking URL (signed, expires in 30 days)
+// Get tracking URL (signed, TTL from links config)
 $trackingUrl = $linkService->generateTrackingUrl($link);
-// https://yoursite.com/affiliate-network/go/abc123?sig=xxx
-
-// Or build direct link with parameters
-$directUrl = $linkService->buildDirectLink($link);
-// https://mystore.com/product/123?anl=abc123&sub1=blog-post-summer
+// https://yoursite.com/go/aB3dE9fHjKlmN0p?signature=xxx&expires=xxx
 ```
 
-### Track Clicks and Conversions
+Every offer link rides on a signed tracked link (`aiarmada/links`): the
+redirect appends `anl=<slug>` plus sub IDs to the destination, captures a raw
+click event, and increments the link counter through a `LinkClicked`
+listener. Unknown slugs return `404`; deactivated, expired, or
+policy-blocked links (inactive offer, unverified site, missing approval)
+return `410`.
+
+### Track Conversions
 
 ```php
-// Record a click
-$linkService->recordClick($link);
-
 // Record a conversion with revenue (pass the conversion currency)
 $linkService->recordConversion($link, 5999, 'USD'); // $59.99 in cents
 

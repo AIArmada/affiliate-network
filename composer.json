@@ -10,6 +10,7 @@
   "require": {
     "aiarmada/commerce-support": "self.version",
     "aiarmada/contacting": "self.version",
+    "aiarmada/links": "self.version",
     "php": "^8.4"
   },
   "autoload": {

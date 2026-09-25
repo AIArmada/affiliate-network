@@ -97,13 +97,9 @@ Registered services:
 
 ## Routes
 
-The package registers a link redirect route:
-
-```
-GET /affiliate-network/go/{code}
-```
-
-This handles click tracking and redirects to the target URL.
+Redirects are served by the `aiarmada/links` dependency (`GET /go/{slug}`).
+This package registers the merchant conversion postback route when
+`postbacks.enabled` is true.
 
 ## Next Steps
 

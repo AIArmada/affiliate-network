@@ -397,7 +397,7 @@ it('creates tracking link', function () {
     expect($link->offer_id)->toBe($offer->id);
     expect($link->affiliate_id)->toBe($affiliateId);
     expect($link->sub_id)->toBe('test-campaign');
-    expect($link->code)->toHaveLength(16);
+    expect($link->link->slug)->not->toBeEmpty();
 });
 
 it('generates signed tracking URL', function () {
@@ -406,15 +406,15 @@ it('generates signed tracking URL', function () {
 
     $url = $service->generateTrackingUrl($link);
 
-    expect($url)->toContain('/affiliate-network/go/');
-    expect($url)->toContain($link->code);
+    expect($url)->toContain('/go/' . $link->link->slug);
+    expect($url)->toContain('signature=');
 });
 
-it('records clicks', function () {
-    $link = AffiliateOfferLink::factory()->create(['clicks' => 0]);
+it('records clicks on redirect', function () {
+    $link = AffiliateOfferLink::factory()->create();
     $service = app(OfferLinkService::class);
 
-    $service->recordClick($link);
+    $this->get($service->generateTrackingUrl($link))->assertRedirect();
 
     expect($link->fresh()->clicks)->toBe(1);
 });

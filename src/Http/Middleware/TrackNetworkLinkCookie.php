@@ -48,9 +48,10 @@ final class TrackNetworkLinkCookie
         // New link code takes priority (allows attribution to most recent click)
         if ($linkCode !== null) {
             $link = $this->linkService->resolveLink($linkCode);
+            $slug = $link?->trackedSlug();
 
-            if ($link !== null && ! $link->isExpired() && $link->offer->isActive()) {
-                $cookieValue = $this->buildCookieValue($link->code, $link->affiliate_id, $link->offer_id);
+            if ($link !== null && $slug !== null && ! $link->isExpired() && $link->offer->isActive()) {
+                $cookieValue = $this->buildCookieValue($slug, $link->affiliate_id, $link->offer_id);
                 $this->setCookie($response, $cookieName, $cookieValue);
             }
         }

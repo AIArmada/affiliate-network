@@ -130,12 +130,11 @@ Tracking link for affiliate promotions.
 ```php
 $link->incrementClicks(): void              // Increment click counter
 $link->recordConversion(int $revenue): void // Record conversion with revenue
-$link->isExpired(): bool                    // Check if expires_at is past
+$link->isExpired(): bool                    // Check if the backing link is expired
+$link->link(): BelongsTo                    // Backing tracked Link
 $link->offer(): BelongsTo                   // Parent AffiliateOffer
 $link->affiliate(): BelongsTo               // Associated Affiliate
 $link->site(): BelongsTo                    // Optional AffiliateSite
-
-AffiliateOfferLink::generateCode(): string  // Generate 16-char hex code
 ```
 
 ---
@@ -215,15 +214,13 @@ $link = $service->createLink(
 // Note: metadata is the extension point if your application wants to carry
 // subject-specific context that may later be bridged into core affiliates flows.
 
-// Generate URLs
+// Generate URL
 $signedUrl = $service->generateTrackingUrl(AffiliateOfferLink $link): string;
-$directUrl = $service->buildDirectLink(AffiliateOfferLink $link): string;
 
 // Resolve link
-$link = $service->resolveLink(string $code): ?AffiliateOfferLink;
+$link = $service->resolveLink(string $slug): ?AffiliateOfferLink;
 
 // Track events
-$service->recordClick(AffiliateOfferLink $link): void;
 $service->recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0, ?string $currency = null): void;
 // On a currency mismatch the conversion is counted but revenue is skipped (and logged).
 
@@ -262,47 +259,12 @@ php artisan affiliate-network:sync-offers {site} [--program={id}]
 
 ## Routes
 
-| Method | URI | Name | Controller |
-|--------|-----|------|------------|
-| GET | `/affiliate-network/go/{code}` | `affiliate-network.redirect` | `LinkRedirectController` |
-
-The redirect controller:
-
-1. Resolves link by code
-2. Validates link is active and not expired
-3. Validates offer is active
-4. Records click
-5. Redirects to target URL with tracking parameters
-
-### Controller Logic
-
-```php
-final class LinkRedirectController
-{
-    public function __invoke(Request $request, string $code, OfferLinkService $linkService): RedirectResponse
-    {
-        $link = $linkService->resolveLink($code);
-
-        if ($link === null) {
-            abort(404, 'Link not found');
-        }
-
-        if ($link->isExpired()) {
-            abort(410, 'Link has expired');
-        }
-
-        if (! $link->offer->isActive()) {
-            abort(410, 'Offer is no longer active');
-        }
-
-        $linkService->recordClick($link);
-
-        $redirectUrl = $linkService->buildDirectLink($link);
-
-        return redirect()->away($redirectUrl);
-    }
-}
-```
+Redirects are served by `aiarmada/links` (`GET /go/{slug}`, signed URLs).
+The network binds an `OfferLinkGate` that blocks the redirect with `410`
+when the link is inactive, the offer is inactive, no site is verified, or a
+required approval is missing; unknown slugs return `404`. Clicks increment
+the link counter through the `IncrementNetworkLinkClicks` listener on
+`LinkClicked`.
 
 ---
 

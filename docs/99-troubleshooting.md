@@ -67,13 +67,13 @@ curl https://yourdomain.com/.well-known/affiliate-network-verify.txt
 
 ### Links Return 404
 
-**Symptoms:** `/affiliate-network/go/{code}` returns 404.
+**Symptoms:** `/go/{slug}` returns 404 for a network link.
 
 **Solutions:**
 
 1. Verify routes are registered:
 ```bash
-php artisan route:list | grep affiliate-network
+php artisan route:list | grep links.redirect
 ```
 
 2. Ensure service provider is loaded:
@@ -110,13 +110,16 @@ $linkService->recordConversion($link, $revenueMinor, $order->currency);
 1. Check link expiration:
 ```php
 $link = AffiliateOfferLink::find($id);
-$link->expires_at;  // Check if past
-$link->isExpired(); // Should return true
+$link->link->expires_at;  // Check if past
+$link->isExpired();        // Should return true
 ```
 
-2. Extend default TTL:
-```env
-AFFILIATE_NETWORK_LINK_TTL=129600  # 90 days
+2. Extend the signed-URL TTL in the links config:
+```php
+// config/links.php
+'routing' => [
+    'signature_ttl_minutes' => 129600, // 90 days
+],
 ```
 
 3. Create links without expiration:

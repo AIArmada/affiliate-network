@@ -250,39 +250,21 @@ Generate a signed tracking URL.
 
 ```php
 $url = $linkService->generateTrackingUrl($link);
-// Returns: https://yoursite.com/affiliate-network/go/abc123?sig=xxx&expires=xxx
+// Returns: https://yoursite.com/go/aB3dE9fHjKlmN0p?signature=xxx&expires=xxx
 ```
 
-Uses Laravel's signed URLs with configurable TTL.
-
-#### buildDirectLink
-
-Build a direct link with tracking parameters.
-
-```php
-$url = $linkService->buildDirectLink($link);
-// Returns: https://store.com/product/123?anl=abc123&sub1=campaign-a
-```
+Uses the backing tracked link's signed URL (TTL from `links.routing.signature_ttl_minutes`).
 
 #### resolveLink
 
-Resolve a link by its code.
+Resolve a link by its tracked slug.
 
 ```php
-$link = $linkService->resolveLink('abc123');
+$link = $linkService->resolveLink('aB3dE9fHjKlmN0p');
 // Returns: AffiliateOfferLink|null
 ```
 
-Only returns active, non-expired links.
-
-#### recordClick
-
-Record a click on a link.
-
-```php
-$linkService->recordClick($link);
-// Increments $link->clicks
-```
+Only returns active links; callers check expiry themselves.
 
 #### recordConversion
 

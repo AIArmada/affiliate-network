@@ -47,7 +47,6 @@ return [
     ],
 
     'links' => [
-        'default_ttl_minutes' => env('AFFILIATE_NETWORK_LINK_TTL', 60 * 24 * 30),
         'parameter' => env('AFFILIATE_NETWORK_LINK_PARAM', 'anl'),
     ],
 
@@ -133,7 +132,6 @@ return [
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `default_ttl_minutes` | Link expiration time | `43200` (30 days) |
 | `parameter` | URL parameter name | `anl` |
 
 ### Cookies

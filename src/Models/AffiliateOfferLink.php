@@ -9,6 +9,7 @@ use AIArmada\AffiliateNetwork\Exceptions\AffiliatesNotInstalled;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
+use AIArmada\Links\Models\Link;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,13 +18,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use OwenIt\Auditing\Contracts\Auditable;
 
 /**
+ * Attribution record for one affiliate/offer pair.
+ *
+ * Redirect mechanics (slug, destination, signed URLs, click events) live on
+ * the backing tracked link; this row owns attribution facts and counters.
+ *
  * @property string $id
+ * @property string|null $link_id
  * @property string $offer_id
  * @property string $affiliate_id
  * @property string|null $site_id
- * @property string $code
- * @property string $target_url
- * @property string|null $custom_parameters
  * @property string|null $sub_id
  * @property string|null $sub_id_2
  * @property string|null $sub_id_3
@@ -32,10 +36,10 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property int $revenue
  * @property string|null $currency
  * @property bool $is_active
- * @property CarbonImmutable|null $expires_at
  * @property array<string, mixed>|null $metadata
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
+ * @property-read Link|null $link
  * @property-read AffiliateOffer $offer
  * @property-read Model $affiliate
  * @property-read AffiliateSite|null $site
@@ -59,18 +63,15 @@ class AffiliateOfferLink extends Model implements Auditable
     }
 
     protected $fillable = [
+        'link_id',
         'offer_id',
         'affiliate_id',
         'site_id',
-        'code',
-        'target_url',
-        'custom_parameters',
         'sub_id',
         'sub_id_2',
         'sub_id_3',
         'currency',
         'is_active',
-        'expires_at',
         'metadata',
     ];
 
@@ -80,6 +81,14 @@ class AffiliateOfferLink extends Model implements Auditable
         $prefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
 
         return $tables['offer_links'] ?? $prefix . 'offer_links';
+    }
+
+    /**
+     * @return BelongsTo<Link, $this>
+     */
+    public function link(): BelongsTo
+    {
+        return $this->belongsTo(Link::class, 'link_id');
     }
 
     /**
@@ -120,15 +129,6 @@ class AffiliateOfferLink extends Model implements Auditable
         return $this->belongsTo(AffiliateSite::class, 'site_id');
     }
 
-    protected static function booted(): void
-    {
-        static::creating(function (self $link): void {
-            if (empty($link->code)) {
-                $link->code = static::generateCode();
-            }
-        });
-    }
-
     protected static function newFactory(): AffiliateOfferLinkFactory
     {
         return AffiliateOfferLinkFactory::new();
@@ -141,7 +141,6 @@ class AffiliateOfferLink extends Model implements Auditable
             'conversions' => 'integer',
             'revenue' => 'integer',
             'is_active' => 'boolean',
-            'expires_at' => 'immutable_datetime',
             'metadata' => 'array',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
@@ -161,12 +160,6 @@ class AffiliateOfferLink extends Model implements Auditable
         return 'affiliate-network';
     }
 
-    public static function generateCode(): string
-    {
-        // 64 bits of cryptographic randomness keeps public redirect codes unguessable.
-        return bin2hex(random_bytes(8));
-    }
-
     public function incrementClicks(): void
     {
         $this->increment('clicks');
@@ -182,6 +175,11 @@ class AffiliateOfferLink extends Model implements Auditable
 
     public function isExpired(): bool
     {
-        return $this->expires_at !== null && $this->expires_at->isPast();
+        return $this->link !== null && $this->link->isExpired();
+    }
+
+    public function trackedSlug(): ?string
+    {
+        return $this->link?->slug;
     }
 }

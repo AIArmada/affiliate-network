@@ -54,7 +54,7 @@ final class PostNetworkConversionToLedger
             offerId: (string) $link->offer_id,
             siteId: $link->site_id !== null ? (string) $link->site_id : null,
             affiliateId: (string) $link->affiliate_id,
-            linkCode: (string) $link->code,
+            linkCode: (string) $link->trackedSlug(),
             revenueMinor: max(0, $revenueMinor),
             currency: $resolvedCurrency,
             externalReference: $externalReference,

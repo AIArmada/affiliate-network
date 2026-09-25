@@ -114,7 +114,7 @@ final class RecordNetworkConversionForOrder
         }
 
         $metadata['network_attribution'] = [
-            'link_code' => $link->code,
+            'link_code' => $link->trackedSlug(),
             'link_id' => $link->id,
             'affiliate_id' => $link->affiliate_id,
             'offer_id' => $link->offer_id,

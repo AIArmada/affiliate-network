@@ -90,7 +90,6 @@ return [
     |--------------------------------------------------------------------------
     */
     'links' => [
-        'default_ttl_minutes' => env('AFFILIATE_NETWORK_LINK_TTL', 60 * 24 * 30),
         'parameter' => env('AFFILIATE_NETWORK_LINK_PARAM', 'anl'),
     ],
 

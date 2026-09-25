@@ -7,9 +7,14 @@ namespace AIArmada\AffiliateNetwork\Database\Factories;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
+use AIArmada\AffiliateNetwork\Support\QueryParameters;
+use AIArmada\Links\Actions\CreateLink;
+use AIArmada\Links\Actions\UpdateLink;
+use AIArmada\Links\Models\Link;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 /**
  * @extends Factory<AffiliateOfferLink>
@@ -27,9 +32,7 @@ class AffiliateOfferLinkFactory extends Factory
             'offer_id' => AffiliateOfferFactory::new(),
             'affiliate_id' => fn () => (string) Str::uuid(),
             'site_id' => null,
-            'code' => bin2hex(random_bytes(8)),
-            'target_url' => $this->faker->url(),
-            'custom_parameters' => null,
+            'link_id' => null,
             'sub_id' => null,
             'sub_id_2' => null,
             'sub_id_3' => null,
@@ -38,9 +41,32 @@ class AffiliateOfferLinkFactory extends Factory
             'revenue' => 0,
             'currency' => 'MYR',
             'is_active' => true,
-            'expires_at' => null,
             'metadata' => null,
         ];
+    }
+
+    public function configure(): static
+    {
+        // Every offer link rides on a signed tracked link, mirroring the
+        // service: slug minted by links, attribution parameter pointing at it.
+        return $this->afterCreating(function (AffiliateOfferLink $link): void {
+            $tracked = CreateLink::run([
+                'name' => sprintf('Factory offer link %s', mb_substr((string) $link->getKey(), 0, 8)),
+                'destination_url' => $this->faker->url(),
+                'require_signature' => true,
+                'subject_type' => $link->getMorphClass(),
+                'subject_id' => (string) $link->getKey(),
+            ], false);
+
+            $tracked = UpdateLink::run($tracked, [
+                'parameters' => [
+                    (string) config('affiliate-network.links.parameter', 'anl') => $tracked->slug,
+                ],
+            ], false);
+
+            $link->forceFill(['link_id' => $tracked->id])->save();
+            $link->setRelation('link', $tracked);
+        });
     }
 
     /**
@@ -68,9 +94,13 @@ class AffiliateOfferLinkFactory extends Factory
      */
     public function expired(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'expires_at' => now()->subDays(1),
-        ]);
+        return $this->afterCreating(function (AffiliateOfferLink $link): void {
+            $tracked = UpdateLink::run($this->trackedLink($link), [
+                'expires_at' => now()->subDays(1)->toDateTimeString(),
+            ], false);
+
+            $link->setRelation('link', $tracked);
+        });
     }
 
     /**
@@ -106,6 +136,37 @@ class AffiliateOfferLinkFactory extends Factory
     }
 
     /**
+     * Link with a specific tracked slug.
+     */
+    public function withSlug(string $slug): static
+    {
+        return $this->afterCreating(function (AffiliateOfferLink $link) use ($slug): void {
+            $tracked = UpdateLink::run($this->trackedLink($link), ['slug' => $slug], false);
+
+            $tracked = UpdateLink::run($tracked, [
+                'parameters' => array_merge(
+                    is_array($tracked->parameters) ? $tracked->parameters : [],
+                    [(string) config('affiliate-network.links.parameter', 'anl') => $tracked->slug],
+                ),
+            ], false);
+
+            $link->setRelation('link', $tracked);
+        });
+    }
+
+    /**
+     * Link with a specific destination URL.
+     */
+    public function withTarget(string $targetUrl): static
+    {
+        return $this->afterCreating(function (AffiliateOfferLink $link) use ($targetUrl): void {
+            $tracked = UpdateLink::run($this->trackedLink($link), ['destination_url' => $targetUrl], false);
+
+            $link->setRelation('link', $tracked);
+        });
+    }
+
+    /**
      * Link with sub IDs.
      */
     public function withSubIds(?string $sub1 = null, ?string $sub2 = null, ?string $sub3 = null): static
@@ -114,7 +175,22 @@ class AffiliateOfferLinkFactory extends Factory
             'sub_id' => $sub1 ?? $this->faker->word(),
             'sub_id_2' => $sub2 ?? $this->faker->word(),
             'sub_id_3' => $sub3 ?? $this->faker->word(),
-        ]);
+        ])->afterCreating(function (AffiliateOfferLink $link): void {
+            $tracked = $this->trackedLink($link);
+
+            $tracked = UpdateLink::run($tracked, [
+                'parameters' => array_merge(
+                    is_array($tracked->parameters) ? $tracked->parameters : [],
+                    array_filter([
+                        'sub1' => $link->sub_id,
+                        'sub2' => $link->sub_id_2,
+                        'sub3' => $link->sub_id_3,
+                    ]),
+                ),
+            ], false);
+
+            $link->setRelation('link', $tracked);
+        });
     }
 
     /**
@@ -139,9 +215,21 @@ class AffiliateOfferLinkFactory extends Factory
      */
     public function withCustomParams(string $params): static
     {
-        return $this->state(fn (array $attributes) => [
-            'custom_parameters' => $params,
-        ]);
+        return $this->afterCreating(function (AffiliateOfferLink $link) use ($params): void {
+            $custom = QueryParameters::parse($params);
+
+            $tracked = $this->trackedLink($link);
+
+            // Core attribution parameters win over custom ones.
+            $tracked = UpdateLink::run($tracked, [
+                'parameters' => array_merge(
+                    $custom,
+                    is_array($tracked->parameters) ? $tracked->parameters : [],
+                ),
+            ], false);
+
+            $link->setRelation('link', $tracked);
+        });
     }
 
     /**
@@ -149,8 +237,23 @@ class AffiliateOfferLinkFactory extends Factory
      */
     public function expiresAt(DateTimeInterface $date): static
     {
-        return $this->state(fn (array $attributes) => [
-            'expires_at' => $date,
-        ]);
+        return $this->afterCreating(function (AffiliateOfferLink $link) use ($date): void {
+            $tracked = UpdateLink::run($this->trackedLink($link), [
+                'expires_at' => $date,
+            ], false);
+
+            $link->setRelation('link', $tracked);
+        });
+    }
+
+    private function trackedLink(AffiliateOfferLink $link): Link
+    {
+        $tracked = $link->link()->withoutOwnerScope()->first();
+
+        if (! $tracked instanceof Link) {
+            throw new RuntimeException('Factory offer link has no tracked link.');
+        }
+
+        return $tracked;
     }
 }

@@ -225,23 +225,21 @@ Tracking link for affiliate promotions.
 | `offer_id` | `string` | Foreign key to offer |
 | `affiliate_id` | `string` | Foreign key to affiliate |
 | `site_id` | `string\|null` | Foreign key to site |
-| `code` | `string` | Unique tracking code |
-| `target_url` | `string` | Destination URL |
-| `custom_parameters` | `string\|null` | Custom URL params |
+| `link_id` | `string\|null` | Backing tracked link (`aiarmada/links`) |
 | `sub_id` | `string\|null` | Sub-tracking ID 1 |
 | `sub_id_2` | `string\|null` | Sub-tracking ID 2 |
 | `sub_id_3` | `string\|null` | Sub-tracking ID 3 |
 | `clicks` | `int` | Click count |
 | `conversions` | `int` | Conversion count |
 | `revenue` | `int` | Total revenue (minor units) |
-| `currency` | `string\|null` | Revenue currency (ISO code, inherited from the offer; null for legacy links) |
+| `currency` | `string\|null` | Revenue currency (ISO code, inherited from the offer) |
 | `is_active` | `bool` | Active status |
-| `expires_at` | `CarbonImmutable\|null` | Expiration date |
 | `metadata` | `array\|null` | Custom metadata |
 
 ### Relationships
 
 ```php
+$link->link;      // BelongsTo - Links Link (backing tracked link)
 $link->offer;     // BelongsTo - AffiliateOffer
 $link->affiliate; // BelongsTo - Affiliate
 $link->site;      // BelongsTo - AffiliateSite
@@ -252,8 +250,8 @@ $link->site;      // BelongsTo - AffiliateSite
 ```php
 $link->incrementClicks();           // Increment click counter
 $link->recordConversion($revenue);  // Record conversion
-$link->isExpired();                 // Check if expired
-AffiliateOfferLink::generateCode(); // Generate unique code
+$link->isExpired();                 // Check if the backing link is expired
+$link->trackedSlug();               // Backing link slug (or null)
 ```
 
 ### Traits
