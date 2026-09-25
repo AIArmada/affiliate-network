@@ -52,6 +52,12 @@ trait ScopesByBelongsToOwner
         });
 
         static::updating(function (Model $model): void {
+            $config = OwnerScopeConfig::fromConfig(static::ownerTableConfigKey());
+
+            if (! $config->enabled) {
+                return;
+            }
+
             if (self::ownerRelationForeignKey($model) !== null) {
                 self::assertOwnerRelationAccessible($model);
             }
