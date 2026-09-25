@@ -35,7 +35,8 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property OfferStatus $status
  * @property int|null $rate_base_bp
  * @property int|null $rate_fixed_minor
- * @property string $rate_source
+ * @property string $source
+ * @property int|null $network_fee_bp
  * @property string|null $currency
  * @property int|null $cookie_days
  * @property array<int, array{min_volume_minor: int, rate_bp: int, currency: string}>|null $volume_tiers
@@ -86,8 +87,8 @@ class AffiliateOffer extends Model implements Auditable
     }
 
     /**
-     * Rate-block columns owned by the merchant catalog when rate_source is
-     * synced. Any operator write to these flips the lock to manual.
+     * Rate-block columns owned by the merchant catalog when source is
+     * mirrored. Any operator write to these flips the offer to manual.
      *
      * @return array<int, string>
      */
@@ -121,7 +122,8 @@ class AffiliateOffer extends Model implements Auditable
         'description',
         'terms',
         'status',
-        'rate_source',
+        'source',
+        'network_fee_bp',
         'rate_base_bp',
         'rate_fixed_minor',
         'currency',
@@ -203,6 +205,14 @@ class AffiliateOffer extends Model implements Auditable
         return $this->hasMany(AffiliateOfferLink::class, 'offer_id');
     }
 
+    /**
+     * @return HasMany<NetworkConversionLeg, $this>
+     */
+    public function legs(): HasMany
+    {
+        return $this->hasMany(NetworkConversionLeg::class, 'offer_id');
+    }
+
     protected static function booted(): void
     {
         static::deleting(function (self $offer): void {
@@ -216,8 +226,8 @@ class AffiliateOffer extends Model implements Auditable
                 return;
             }
 
-            if ($offer->isDirty('rate_source')) {
-                if ($offer->rate_source === 'synced') {
+            if ($offer->isDirty('source')) {
+                if ($offer->source === 'mirrored') {
                     // Explicit unlock: drop the checksum so the next sync
                     // re-applies catalog rates instead of skipping.
                     $offer->source_checksum = null;
@@ -227,7 +237,7 @@ class AffiliateOffer extends Model implements Auditable
             }
 
             if ($offer->isDirty(self::rateBlockColumns())) {
-                $offer->rate_source = 'manual';
+                $offer->source = 'manual';
             }
         });
     }
@@ -244,6 +254,7 @@ class AffiliateOffer extends Model implements Auditable
             'visibility' => OfferVisibility::class,
             'rate_base_bp' => 'integer',
             'rate_fixed_minor' => 'integer',
+            'network_fee_bp' => 'integer',
             'cookie_days' => 'integer',
             'volume_tiers' => 'array',
             'active_promotions' => 'array',

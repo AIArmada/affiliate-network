@@ -26,4 +26,11 @@ interface NetworkLedger
      * @return array<int, array{commission_currency: string|null, value_minor: int, commission_minor: int}>
      */
     public function rowsForLink(string $linkId): array;
+
+    /**
+     * Merchant postings sharing one external reference, all origins.
+     *
+     * @return array<int, array{origin: string|null, source_ref: string|null, commission_currency: string|null, commission_minor: int}>
+     */
+    public function postingsForExternalReference(string $externalReference): array;
 }

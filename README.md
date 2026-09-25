@@ -36,6 +36,9 @@ Affiliates apply to promote specific offers. Merchants can auto-approve or manua
 ### Deep Links
 Once approved, affiliates generate tracking links that include site, offer, and affiliate identifiers for precise attribution.
 
+### Money Legs
+Every conversion with an order reference posts an append-only money leg: revenue, commission, network fee, and payout. Balances derive from posted legs at read time; reversals post negated companions. Exactly one payer fulfills each posted leg.
+
 ## Documentation
 
 See [docs/](docs/) for complete documentation.

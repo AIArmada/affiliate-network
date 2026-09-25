@@ -67,6 +67,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Network Fees
+    |--------------------------------------------------------------------------
+    |
+    | Take-rate in basis points on every network commission, unless the
+    | offer overrides it with network_fee_bp. Zero until the business
+    | sets a rate — plumbing ships rate-agnostic.
+    |
+    */
+    'fees' => [
+        'default_bp' => env('AFFILIATE_NETWORK_FEE_BP', 0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Notifications
+    |--------------------------------------------------------------------------
+    |
+    | Managed notifications via aiarmada/communications when installed
+    | (applications, conversions). On by default; silent when the
+    | communications package is absent regardless of this flag.
+    |
+    */
+    'notifications' => [
+        'enabled' => env('AFFILIATE_NETWORK_NOTIFICATIONS_ENABLED', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Offers
     |--------------------------------------------------------------------------
     */

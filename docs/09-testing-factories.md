@@ -300,6 +300,42 @@ $link = AffiliateOfferLink::factory()
     ->create();
 ```
 
+### NetworkConversionLegFactory
+
+```php
+use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
+
+// Posted leg (default)
+$leg = NetworkConversionLeg::factory()->create();
+
+// For a specific link (inherits offer, site, affiliate)
+$leg = NetworkConversionLeg::factory()
+    ->forLink($link)
+    ->create();
+
+// For a specific offer
+$leg = NetworkConversionLeg::factory()
+    ->forOffer($offer)
+    ->create();
+
+// Lifecycle states
+$leg = NetworkConversionLeg::factory()->provisional()->create();
+$leg = NetworkConversionLeg::factory()->superseded()->create();
+
+// Complete example
+$leg = NetworkConversionLeg::factory()
+    ->forLink($link)
+    ->create([
+        'revenue_minor' => 89900,
+        'revenue_currency' => 'MYR',
+        'external_reference' => 'ORDER-1001',
+    ]);
+```
+
+Prefer `NetworkBooks::post()` over the factory when the test cares about
+commission math — the factory writes money fields verbatim, while `post()`
+resolves tiers and fees.
+
 ---
 
 ## Test Examples

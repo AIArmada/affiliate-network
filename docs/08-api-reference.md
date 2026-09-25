@@ -246,7 +246,7 @@ $result = $service->syncAll($site);
 ```
 
 Upserts by `(site_id, external_program_id, subject_key)` with checksum
-skips. Imported offers land as `draft` with `rate_source = synced`.
+skips. Imported offers land as `draft` with `source = synced`.
 Operator rate edits flip the lock to `manual`; later syncs hold rates back
 (`locked`) until the operator flips it back. Artisan:
 

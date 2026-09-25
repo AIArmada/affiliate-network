@@ -24,6 +24,11 @@ Represents a merchant's website/domain in the network.
 | `verified_at` | `CarbonImmutable\|null` | Verification timestamp |
 | `settings` | `array\|null` | Site settings |
 | `metadata` | `array\|null` | Custom metadata |
+| `catalog_url` | `string\|null` | Merchant catalog base URL (empty = owned site) |
+| `catalog_token_encrypted` | `string\|null` | Encrypted catalog/postback token |
+| `catalog_token_issued_at` | `CarbonImmutable\|null` | Token issuance timestamp |
+| `sync_status` | `string\|null` | Last catalog sync outcome |
+| `last_synced_at` | `CarbonImmutable\|null` | Last catalog sync timestamp |
 
 ### Relationships
 
@@ -35,8 +40,11 @@ $site->offers;  // HasMany - AffiliateOffer
 ### Scopes & Methods
 
 ```php
-$site->isVerified();  // bool
-$site->isPending();   // bool
+$site->isVerified();          // bool
+$site->isPending();           // bool
+$site->issueCatalogToken();   // string (plaintext, shown once)
+$site->rotateCatalogToken();  // string (previous token dies immediately)
+$site->hasCatalogToken();     // bool
 ```
 
 ### Traits
@@ -62,22 +70,28 @@ Represents an affiliate offer/campaign.
 | `slug` | `string` | URL slug (unique per site) |
 | `description` | `string\|null` | Offer description |
 | `terms` | `string\|null` | Terms and conditions |
-| `status` | `string` | draft, pending, active, paused, expired, rejected |
+| `status` | `OfferStatus` | draft, published, archived |
+| `source` | `string` | `synced` (importer owns rates) or `manual` (operator override; sync holds rates back) |
+| `network_fee_bp` | `int\|null` | Marketplace take-rate in bp (null = configured default) |
 | `rate_base_bp` | `int` | Base percentage in basis points (1000 = 10%), null when fixed-only |
 | `rate_fixed_minor` | `int` | Fixed payout in minor units, null when percentage-based |
-| `rate_source` | `string` | `synced` (importer owns rates) or `manual` (operator override; sync holds rates back) |
-| `volume_tiers` | `array` | Volume bonus tiers (`min_volume_minor`, `rate_bp`) |
+| `volume_tiers` | `array` | Volume bonus tiers (`min_volume_minor`, `rate_bp`, `currency?`) |
 | `active_promotions` | `array` | Active promotions (`id`, `name`, `ends_at`) |
 | `currency` | `string\|null` | Currency code (e.g., USD) |
 | `cookie_days` | `int\|null` | Cookie duration |
 | `is_featured` | `bool` | Featured in marketplace |
-| `is_public` | `bool` | Visible in marketplace |
+| `visibility` | `OfferVisibility` | public, private, unlisted |
 | `requires_approval` | `bool` | Requires affiliate approval |
 | `landing_url` | `string\|null` | Default landing page |
 | `restrictions` | `array\|null` | Traffic restrictions |
 | `metadata` | `array\|null` | Custom metadata |
 | `starts_at` | `CarbonImmutable\|null` | Campaign start |
 | `ends_at` | `CarbonImmutable\|null` | Campaign end |
+| `published_at` | `CarbonImmutable\|null` | Last publish timestamp |
+| `archived_at` | `CarbonImmutable\|null` | Last archive timestamp |
+| `external_program_id` | `string\|null` | Merchant program id (catalog imports) |
+| `subject_type` | `string\|null` | Imported subject type |
+| `subject_key` | `string\|null` | Imported subject key |
 
 ### Relationships
 
@@ -87,6 +101,7 @@ $offer->category;     // BelongsTo - AffiliateOfferCategory
 $offer->creatives;    // HasMany - AffiliateOfferCreative
 $offer->applications; // HasMany - AffiliateOfferApplication
 $offer->links;        // HasMany - AffiliateOfferLink
+$offer->legs;         // HasMany - NetworkConversionLeg
 ```
 
 ### Methods
@@ -252,6 +267,51 @@ $link->incrementClicks();           // Increment click counter
 $link->recordConversion($revenue);  // Record conversion
 $link->isExpired();                 // Check if the backing link is expired
 $link->trackedSlug();               // Backing link slug (or null)
+```
+
+### Traits
+
+- `ScopesByBelongsToOwner` - Owner scoping via the `affiliate` relationship
+- `HasUuids` - UUID primary keys
+
+---
+
+## NetworkConversionLeg
+
+One posted money leg per network conversion. Append-only: legs are never
+edited except for status finalization and reversal markers. Balances,
+counters, and reconciliation derive from these rows.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | UUID primary key |
+| `link_id` | `string` | Foreign key to offer link |
+| `offer_id` | `string` | Foreign key to offer |
+| `site_id` | `string\|null` | Foreign key to site |
+| `affiliate_id` | `string` | Creator key |
+| `link_code` | `string` | Tracked link code snapshot |
+| `revenue_minor` | `int` | Order revenue (minor units) |
+| `revenue_currency` | `string\|null` | Revenue currency |
+| `commission_minor` | `int` | Commission before fee (minor units) |
+| `commission_currency` | `string` | Commission currency |
+| `fee_minor` | `int` | Network fee carved out (minor units) |
+| `fee_bp` | `int` | Fee rate applied (basis points) |
+| `payout_minor` | `int` | Commission minus fee (minor units) |
+| `tier_rate_bp` | `int\|null` | Volume tier rate applied, if any |
+| `tier_min_volume_minor` | `int\|null` | Tier floor cleared, if any |
+| `external_reference` | `string` | Merchant order reference (idempotency) |
+| `status` | `LegStatus` | provisional, posted, superseded, reversed |
+| `metadata` | `array\|null` | Custom metadata (reversals link here) |
+| `occurred_at` | `CarbonImmutable\|null` | Conversion timestamp |
+
+### Relationships
+
+```php
+$leg->link;   // BelongsTo - AffiliateOfferLink
+$leg->offer;  // BelongsTo - AffiliateOffer
+$leg->site;   // BelongsTo - AffiliateSite
 ```
 
 ### Traits

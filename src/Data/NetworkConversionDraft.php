@@ -22,5 +22,7 @@ final readonly class NetworkConversionDraft
         public string $currency,
         public string $externalReference,
         public int $commissionMinor,
+        /** @var array<string, mixed> */
+        public array $metadata = [],
     ) {}
 }

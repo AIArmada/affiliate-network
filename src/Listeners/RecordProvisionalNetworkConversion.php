@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Listeners;
 
+use AIArmada\AffiliateNetwork\Enums\LegStatus;
 use AIArmada\AffiliateNetwork\Http\Middleware\TrackNetworkLinkCookie;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
@@ -13,12 +14,14 @@ use Carbon\CarbonImmutable;
 use Throwable;
 
 /**
- * Records network affiliate conversions when orders are completed.
+ * Records a provisional network conversion when orders complete.
  *
- * Listens for the CommissionAttributionRequired event and checks if the order
- * originated from a network affiliate link (via cookie tracking).
+ * First of the ordered attribution listeners (provisional, engine,
+ * finalizer): resolves the network touch from the cookie, stamps
+ * `network_touch_at` on the order, and posts a provisional leg. The
+ * finalizer confirms or supersedes it once the engine has spoken.
  */
-final class RecordNetworkConversionForOrder
+final class RecordProvisionalNetworkConversion
 {
     public function __construct(
         private readonly OfferLinkService $linkService,
@@ -39,48 +42,41 @@ final class RecordNetworkConversionForOrder
             return;
         }
 
-        // Get attribution data from cookie
         $attribution = $this->getAttributionFromCookie();
 
         if ($attribution === null) {
+            $this->writeTouch($order, null);
+
             return;
         }
 
-        // Resolve the link to ensure it's still valid
         $link = $this->linkService->resolveLink($attribution['code']);
 
-        if ($link === null) {
+        if ($link === null || $link->isExpired() || ! $link->offer->isActive()) {
+            $this->writeTouch($order, null);
+
             return;
         }
 
-        // Verify the link is still active and offer is valid
-        if ($link->isExpired() || ! $link->offer->isActive()) {
+        if (! $this->withinWindow($attribution)) {
+            $this->writeTouch($order, null);
+
             return;
         }
 
-        // Check attribution window (optional)
-        $attributionWindow = config('affiliate-network.checkout.attribution_window_hours', 720); // 30 days
         $clickedAt = $attribution['clicked_at'] ?? null;
+        $this->writeTouch($order, is_string($clickedAt) ? $clickedAt : null);
 
-        if (is_string($clickedAt) && $clickedAt !== '' && $attributionWindow > 0) {
-            try {
-                $clickTime = CarbonImmutable::parse($clickedAt);
-
-                if ($clickTime->addHours($attributionWindow)->isPast()) {
-                    return; // Click is outside attribution window
-                }
-            } catch (Throwable) {
-                // Malformed clicked_at from cookie — treat as expired to be safe.
-                return;
-            }
-        }
-
-        // Record the conversion
         $revenueMinor = $order->grand_total ?? 0;
-        $this->linkService->recordConversion($link, $revenueMinor, $order->currency ?? null, $order->order_number ?? (string) $order->getKey());
+        $leg = $this->linkService->recordConversion(
+            $link,
+            $revenueMinor,
+            $order->currency ?? null,
+            $order->order_number ?? (string) $order->getKey(),
+            LegStatus::Provisional,
+        );
 
-        // Store attribution data in order metadata for tracking
-        $this->storeAttributionInOrder($order, $link, $attribution);
+        $this->storeAttributionInOrder($order, $link, $attribution, $leg?->getKey());
     }
 
     /**
@@ -101,21 +97,46 @@ final class RecordNetworkConversionForOrder
     }
 
     /**
+     * @param  array{code: string, affiliate_id: string, offer_id: string, clicked_at: string}  $attribution
+     */
+    private function withinWindow(array $attribution): bool
+    {
+        $attributionWindow = config('affiliate-network.checkout.attribution_window_hours', 720);
+        $clickedAt = $attribution['clicked_at'] ?? null;
+
+        if (! is_string($clickedAt) || $clickedAt === '' || $attributionWindow <= 0) {
+            return true;
+        }
+
+        try {
+            return ! CarbonImmutable::parse($clickedAt)->addHours($attributionWindow)->isPast();
+        } catch (Throwable) {
+            // Malformed clicked_at from cookie — treat as expired to be safe.
+            return false;
+        }
+    }
+
+    private function writeTouch(Order $order, ?string $clickedAt): void
+    {
+        $metadata = is_array($order->metadata) ? $order->metadata : [];
+        $metadata['network_touch_at'] = $clickedAt;
+
+        $order->update(['metadata' => $metadata]);
+    }
+
+    /**
      * Store network attribution data in the order for tracking/reporting.
      *
      * @param  array<string, mixed>  $attribution
      */
-    private function storeAttributionInOrder(Order $order, AffiliateOfferLink $link, array $attribution): void
+    private function storeAttributionInOrder(Order $order, AffiliateOfferLink $link, array $attribution, mixed $legId): void
     {
-        $metadata = $order->metadata ?? [];
-
-        if (! is_array($metadata)) {
-            $metadata = [];
-        }
+        $metadata = is_array($order->metadata) ? $order->metadata : [];
 
         $metadata['network_attribution'] = [
             'link_code' => $link->trackedSlug(),
             'link_id' => $link->id,
+            'leg_id' => $legId !== null ? (string) $legId : null,
             'affiliate_id' => $link->affiliate_id,
             'offer_id' => $link->offer_id,
             'site_id' => $link->site_id,

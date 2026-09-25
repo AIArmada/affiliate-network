@@ -45,9 +45,11 @@ return new class extends Migration
             $table->string('source_url')->nullable();
             $table->string('source_checksum', 64)->nullable();
             $table->timestampTz('last_synced_at')->nullable();
-            // synced: importer owns the rate block. manual: an operator
-            // overrode rates; sync holds rates back (counts as locked).
-            $table->string('rate_source', 16)->default('synced')->index();
+            // manual: hand-written offer. mirrored: imported from a merchant
+            // catalog; sync refreshes the rate block wholesale, and an
+            // operator rate edit flips the offer back to manual.
+            $table->string('source', 16)->default('manual')->index();
+            $table->unsignedInteger('network_fee_bp')->nullable();
 
             $table->timestampTz('starts_at')->nullable();
             $table->timestampTz('ends_at')->nullable();

@@ -220,7 +220,7 @@ final class OfferImportService
             'description' => null,
             'status' => OfferStatus::Draft,
             'visibility' => OfferVisibility::Public,
-            'rate_source' => 'synced',
+            'source' => 'mirrored',
             'landing_url' => $url,
             'source_url' => $url,
             'external_program_id' => (string) ($snapshot['program_id'] ?? ''),
@@ -241,10 +241,10 @@ final class OfferImportService
             // rename, or blank them (the snapshot carries no description).
             unset($data['status'], $data['visibility'], $data['slug'], $data['description']);
 
-            if ($existing->rate_source === 'manual') {
+            if ($existing->source === 'manual') {
                 // Never touch the lock itself here; only an explicit operator
                 // write may flip it (see the model hook).
-                unset($data['rate_source']);
+                unset($data['source']);
 
                 if (self::ratesDiffer($existing, $incomingRates)) {
                     // Operator overrode the rate block: hold every rate field

@@ -37,6 +37,14 @@ return [
         'default' => env('AFFILIATE_NETWORK_DEFAULT_CURRENCY', 'MYR'),
     ],
 
+    'fees' => [
+        'default_bp' => env('AFFILIATE_NETWORK_FEE_BP', 0),
+    ],
+
+    'notifications' => [
+        'enabled' => env('AFFILIATE_NETWORK_NOTIFICATIONS_ENABLED', true),
+    ],
+
     'offers' => [
         'require_approval' => env('AFFILIATE_NETWORK_OFFERS_REQUIRE_APPROVAL', true),
     ],
@@ -83,6 +91,12 @@ return [
         'max_subjects' => env('AFFILIATE_NETWORK_SYNC_MAX_SUBJECTS', 500),
         'max_programs' => env('AFFILIATE_NETWORK_SYNC_MAX_PROGRAMS', 100),
     ],
+
+    'postbacks' => [
+        'enabled' => env('AFFILIATE_NETWORK_POSTBACKS_ENABLED', false),
+        'prefix' => env('AFFILIATE_NETWORK_POSTBACKS_PREFIX', 'api/affiliate-network'),
+        'middleware' => ['api', 'throttle:60,1'],
+    ],
 ];
 ```
 
@@ -114,6 +128,18 @@ return [
 | Key | Description | Default |
 |-----|-------------|---------|
 | `default` | Fallback ISO currency for reporting totals and currency-less records | `MYR` |
+
+### Fees
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `default_bp` | Marketplace take-rate in bp on commission (offers override via `network_fee_bp`) | `0` |
+
+### Notifications
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `enabled` | Managed notifications via `aiarmada/communications` (silent when absent) | `true` |
 
 ### Offers
 
@@ -177,3 +203,11 @@ Site-content and catalog requests always validate DNS results, reject private/re
 | `enabled` | Enable catalog sync | `true` |
 | `max_subjects` | Imported subjects per program sync | `500` |
 | `max_programs` | Programs per `syncAll` run | `100` |
+
+### Postbacks
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `enabled` | Expose the merchant postback endpoint | `false` |
+| `prefix` | API prefix for postback routes | `api/affiliate-network` |
+| `middleware` | Postback route middleware | `['api', 'throttle:60,1']` |

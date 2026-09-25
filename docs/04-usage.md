@@ -27,10 +27,10 @@ $result = app(OfferImportService::class)->sync($site, $programId);
 - Imported rates are the fully-resolved **base** (product/category/program
   rules folded); volume/promotions ride along in `volume_tiers` /
   `active_promotions` columns.
-- **Rate lock:** editing any rate field on an offer flips `rate_source` to
+- **Rate lock:** editing any rate field on an offer flips `source` to
   `manual`, and sync holds those rates back (reported as `locked`) instead
   of silently reverting them. Non-rate fields still mirror. Flip
-  `rate_source` back to `synced` to re-apply catalog rates on next sync.
+  `source` back to `synced` to re-apply catalog rates on next sync.
 - One bad subject never aborts the run: failures are counted as `failed`
   and the site is stamped `partial`. Runs are capped by
   `sync.max_subjects` (per program) and `sync.max_programs` (per `syncAll`).
@@ -98,20 +98,45 @@ app(ApproveApplication::class)->execute($application, auth()->id());
 ```php
 use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
 
-app(RecordNetworkConversion::class)->execute($link, 5999, 'USD', 'ORDER-123'); // $59.99 in cents
+$leg = app(RecordNetworkConversion::class)->execute($link, 5999, 'USD', 'ORDER-123'); // $59.99 in cents
 ```
 
 Pass the conversion currency whenever it is known. When it differs from the
 link currency, the conversion is counted but revenue is skipped (and logged)
 so totals never mix currencies silently.
 
-Pass an external reference (usually the order number) to also post the
-conversion to the affiliates ledger: commission follows the offer terms
-(fixed amount or basis points of revenue), the ledger row links back via
-`network_link_id`, and replays of the same reference reuse the existing row
-instead of double-counting. Without a reference only the link counters move.
-Use `NetworkLedgerReconciliationService::reconcileLink()` /
-`reconcileOffer()` to prove counters and ledger agree.
+Pass an external reference (usually the order number) to post a money leg:
+commission follows the offer terms (fixed amount, volume tier, or basis
+points of revenue), the network fee is carved out, and the posted leg is
+handed to fulfillment exactly once. Replays of the same reference reuse the
+existing leg instead of double-counting. Without a reference only the link
+counters move and no leg posts. Use
+`NetworkLedgerReconciliationService::reconcileLink()` / `reconcileOffer()`
+to prove counters, legs, and the merchant ledger agree.
+
+## Money Legs & Fees
+
+Every conversion with an external reference posts one
+`NetworkConversionLeg`: revenue, commission, fee, and payout in minor units,
+plus the tier that priced it. Legs are append-only — balances, counters,
+and reconciliation all derive from them:
+
+- **Fee:** `offer.network_fee_bp` overrides
+  `affiliate-network.fees.default_bp` (default `0`). The fee is basis
+  points on commission; payout is commission minus fee.
+- **Volume tiers:** `offer.volume_tiers` is a list of
+  `{min_volume_minor, rate_bp, currency?}`. The highest tier whose floor
+  the affiliate's cumulative offer revenue clears wins; otherwise the
+  base rate applies.
+- **Reversals:** `NetworkBooks::reverse($leg, $reason)` marks the leg
+  reversed and posts a negated companion leg. Reversed legs never pay.
+- **Balances:** `CreatorBalances::for($affiliateId)` sums posted-leg
+  payouts per currency at read time — no balance rows to drift.
+- **Fulfillment:** posted legs go to exactly one payer. With
+  `aiarmada/affiliates` installed the engine fulfills merchant payouts;
+  standalone installs record runs on the host
+  (`HostManualFulfillment`). The provider enforces mutual exclusion, so
+  two payers can never both be active.
 
 ## Managing Merchant Sites
 
@@ -162,14 +187,17 @@ New verification methods can be added by implementing `SiteVerificationStrategyI
 
 ## Offer Statuses
 
-| Status | Constant | Description |
-|--------|----------|-------------|
-| `draft` | `STATUS_DRAFT` | Not published |
-| `pending` | `STATUS_PENDING` | Awaiting approval |
-| `active` | `STATUS_ACTIVE` | Live and accepting traffic |
-| `paused` | `STATUS_PAUSED` | Temporarily disabled |
-| `expired` | `STATUS_EXPIRED` | Past end date |
-| `rejected` | `STATUS_REJECTED` | Declined by admin |
+`AffiliateOffer::$status` is an `OfferStatus` enum:
+
+| Status | Value | Description |
+|--------|-------|-------------|
+| `Draft` | `draft` | Not published |
+| `Published` | `published` | Live and accepting traffic |
+| `Archived` | `archived` | Paused or retired |
+
+Submitting an offer always lands as `draft`; publishing stays an explicit
+operator decision. Expired offers are archived by the
+`affiliate-network:archive-expired` command.
 
 ### Commission Rates
 
@@ -256,9 +284,7 @@ $stats = $linkService->getStats($link);
 
 ### Tracking Model Notes
 
-`OfferLinkService::recordConversion()` updates the package's own `AffiliateOfferLink` counters and revenue totals.
-
-It does not create or mutate core `aiarmada/affiliates` `AffiliateConversion` rows, so the newer core affiliates fields like `external_reference`, `value_minor`, and subject metadata are not required here.
+`OfferLinkService::recordConversion()` updates the package's own `AffiliateOfferLink` counters and revenue totals, and — when an external reference is passed — posts a `NetworkConversionLeg` through `NetworkBooks` and hands it to fulfillment. Merchant-ledger posting (engine `AffiliateConversion` rows with `origin: marketplace`, linked back via `source_ref`) happens in the fulfillment step when `aiarmada/affiliates` is installed, never inline in the counter update.
 
 Links inherit the offer currency at creation. When a conversion arrives in a
 different currency, the conversion is counted but its revenue is skipped (and
@@ -362,8 +388,9 @@ When a network-attributed order converts, the listener stores network attributio
 
 1. **Tracking**: When a user visits your site with a network link parameter (default: `anl`), the `TrackNetworkLinkCookie` middleware captures the link identifier and stores it in an encrypted cookie.
 2. **Attribution**: The cookie persists based on the configured lifetime (default: 30 days).
-3. **Conversion**: When an order is completed via the `checkout` package, it triggers a `CommissionAttributionRequired` event.
-4. **Recording**: The `RecordNetworkConversionForOrder` listener catches this event, reads the attribution cookie, and records a conversion for the respective affiliate offer through the `OfferLinkService`.
+3. **Conversion**: When an order is completed, the orders side triggers a `CommissionAttributionRequired` event.
+4. **Provisional leg**: `RecordProvisionalNetworkConversion` reads the attribution cookie and posts a `provisional` leg — money sketched, nothing payable yet.
+5. **Last-touch decider**: `FinalizeNetworkAttribution` compares the engine touch against the network touch. An engine win supersedes the provisional leg; a network win confirms and fulfills it. When the engine abstains — or isn't installed — the network wins by default. Every decision is recorded, so exactly one side ever pays.
 
 ### Configuration Options
 

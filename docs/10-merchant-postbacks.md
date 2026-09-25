@@ -48,10 +48,12 @@ Success response:
   "network": {"clicks": 12, "conversions": 3, "revenue": 179800},
   "conversion": {
     "id": "uuid",
-    "affiliate_code": "PARTNER42",
+    "affiliate_id": "PARTNER42",
     "commission_minor": 13485,
     "commission_currency": "MYR",
-    "status": "approved"
+    "fee_minor": 269,
+    "payout_minor": 13216,
+    "status": "posted"
   }
 }
 ```
@@ -71,8 +73,10 @@ ledger twice. Always send a stable merchant order reference.
 
 ## Ledger
 
-Each first-seen report also posts an `AffiliateConversion` ledger row
-(`origin: network`, commission resolved from the offer rates) so balances,
-payouts, and dashboards update automatically. The `NetworkConversionRecorded`
-event fires for custom automation. Expired links and inactive offers are
-rejected with `410`.
+Each first-seen report posts a `NetworkConversionLeg` (commission resolved
+from the offer rates, fee carved out) and hands it to fulfillment, so
+balances, payouts, and dashboards update automatically. When
+`aiarmada/affiliates` is installed, fulfillment also posts the merchant
+ledger row (`origin: marketplace`, linked back via `source_ref`).
+The `NetworkConversionRecorded` event fires for custom automation. Expired
+links and inactive offers are rejected with `410`.

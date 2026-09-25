@@ -27,6 +27,7 @@ return new class extends Migration
 
             $table->string('catalog_url')->nullable();
             $table->text('catalog_token_encrypted')->nullable();
+            $table->timestampTz('catalog_token_issued_at')->nullable();
             $table->string('sync_status', 32)->default('never');
             $table->timestampTz('last_synced_at')->nullable();
 

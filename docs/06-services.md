@@ -14,7 +14,7 @@ The canonical orchestration surface for affiliate-network is the `Actions` tree.
 | `app(UpdateOffer::class)->execute($offer, $data)` | Update an existing offer |
 | `app(ApplyToOffer::class)->execute($offer, $affiliate, $message)` | Apply to an offer |
 | `app(ApproveApplication::class)->execute($application, $reviewerId)` | Approve/reject applications |
-| `app(RecordNetworkConversion::class)->execute($link, $amount, $currency)` | Record a conversion |
+| `app(RecordNetworkConversion::class)->execute($link, $amount, $currency, $reference)` | Record a conversion (posts a leg when `$reference` is set) |
 
 Events are automatically dispatched by each Action (`OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`).
 
@@ -100,8 +100,10 @@ Manages offers and affiliate applications.
 
 This is the discovery-side API. Every offer — local import or remote
 mirror — enrolls through the network application flow; joining never
-requires, resolves, or creates a merchant-side account. Commission and
-payout writes remain exclusively in `affiliates`.
+requires, resolves, or creates a merchant-side account. Commission
+writes land as network legs (`NetworkBooks`); the merchant ledger only
+receives postings through the fulfillment step when `aiarmada/affiliates`
+is installed.
 
 ### Dependency Injection
 
@@ -260,9 +262,10 @@ Only returns active links; callers check expiry themselves.
 Record a conversion with revenue.
 
 ```php
-$linkService->recordConversion($link, 5999, 'USD'); // $59.99 in cents
+$leg = $linkService->recordConversion($link, 5999, 'USD', 'ORDER-123'); // $59.99 in cents
 // Increments $link->conversions and adds to $link->revenue. On a currency
 // mismatch the conversion is counted but revenue is skipped (and logged).
+// With a reference, also posts a NetworkConversionLeg and fulfills it.
 ```
 
 #### getStats
@@ -286,3 +289,59 @@ $stats = $linkService->getStats($link);
 Public `resolveLink()` uses an explicit global lookup window. Click and
 conversion writes re-enter the link affiliate's owner context before mutating
 network attribution counters.
+
+---
+
+## NetworkBooks
+
+The network ledger. Posts, finalizes, and reverses money legs.
+
+```php
+use AIArmada\AffiliateNetwork\Services\NetworkBooks;
+
+$books = app(NetworkBooks::class);
+
+$leg = $books->post($link, 89900, 'MYR', 'ORDER-1001');
+// Idempotent on (link, reference): replays return the existing leg.
+
+$books->confirm($leg);              // provisional -> posted (caller fulfills)
+$books->supersede($leg, $reason);   // provisional -> superseded (lost the decider)
+$books->reverse($leg, 'refund');    // posted -> reversed + negated companion leg
+$books->recountLinkCounters($link); // rebuild counters/revenue from posted legs
+```
+
+Commission resolution per post: fixed rate wins, else the volume tier
+matching cumulative affiliate+offer revenue (including this conversion),
+else the base rate. The fee is basis points on commission
+(`offer.network_fee_bp`, falling back to `fees.default_bp`); payout is
+commission minus fee.
+
+---
+
+## CreatorBalances
+
+Creator earnings derived from posted legs at read time — no balance rows.
+
+```php
+use AIArmada\AffiliateNetwork\Services\CreatorBalances;
+
+app(CreatorBalances::class)->for('affiliate-id');
+// ['MYR' => 13216, 'USD' => 4000] — currency => payout minor
+```
+
+Only `posted` legs count. If volume ever demands a cache, it backfills
+exactly from these rows behind this same seam.
+
+---
+
+## Fulfillment
+
+Posted legs go to exactly one payer through the `Fulfillment` contract:
+
+- Engine installed: `EnginePayoutFulfillment` fulfills merchant payouts
+  (and posts the merchant ledger row) via the affiliates seam.
+- Standalone: `HostManualFulfillment` records the run on the host; the
+  operator pays out of band.
+
+The service provider binds exactly one implementation — mutual exclusion
+is structural, so a leg can never be paid twice by two payers.

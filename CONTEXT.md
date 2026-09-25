@@ -42,9 +42,9 @@ keywords:
 - Owner/security: Owner-scoped (sites/categories direct; rest relationship-inherited).
 
 ## Key surfaces
-- Models: `AffiliateOffer`, `AffiliateOfferApplication`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferLink`, `AffiliateSite`
-- Actions/Services: `Actions/ApplyToOffer`, `Actions/ApproveApplication`, `Actions/CreateOffer`, `Actions/RecordNetworkConversion`, `Actions/UpdateOffer`, `Services/OfferLinkService`, `Services/OfferManagementService`, `Services/OfferImportService`, `Services/Catalog/*`, `Services/SiteVerificationService`
-- Config `affiliate-network.php`: `sites`, `offers`, `sync`, `database`, `table_prefix`, `tables`, `json_column_type`
+- Models: `AffiliateOffer`, `AffiliateOfferApplication`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferLink`, `AffiliateSite`, `NetworkConversionLeg`
+- Actions/Services: `Actions/ApplyToOffer`, `Actions/ApproveApplication`, `Actions/CreateOffer`, `Actions/RecordNetworkConversion`, `Actions/UpdateOffer`, `Services/NetworkBooks`, `Services/CreatorBalances`, `Services/OfferLinkService`, `Services/OfferManagementService`, `Services/OfferImportService`, `Services/Catalog/*`, `Services/SiteVerificationService`, `Contracts/Fulfillment`
+- Config `affiliate-network.php`: `sites`, `offers`, `sync`, `database`, `table_prefix`, `tables`, `json_column_type`, `fees`, `notifications`, `currency`, `postbacks`
 
 ## Docs map
 - Start: `01-overview` → `03-configuration` → `04-usage` → `99-troubleshooting`

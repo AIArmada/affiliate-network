@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Events;
 
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
+use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -19,5 +20,6 @@ final class NetworkConversionRecorded
         public AffiliateOfferLink $link,
         public int $revenueMinor,
         public ?string $currency = null,
+        public ?NetworkConversionLeg $leg = null,
     ) {}
 }

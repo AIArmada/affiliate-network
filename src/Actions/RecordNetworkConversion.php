@@ -4,14 +4,27 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Actions;
 
+use AIArmada\AffiliateNetwork\Contracts\Fulfillment;
+use AIArmada\AffiliateNetwork\Enums\LegStatus;
 use AIArmada\AffiliateNetwork\Events\NetworkConversionRecorded;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
+use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
+use AIArmada\AffiliateNetwork\Services\NetworkBooks;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Record one network conversion: cached counters, a book leg, fulfillment.
+ *
+ * Counters increment on every call (reporting caches). The book leg needs
+ * an external reference for idempotency — calls without one keep
+ * counters only. Fulfillment runs only for final (posted) legs;
+ * provisional legs fulfill when the attribution finalizer confirms them.
+ */
 final class RecordNetworkConversion
 {
     public function __construct(
-        private readonly PostNetworkConversionToLedger $postToLedger,
+        private readonly NetworkBooks $books,
+        private readonly Fulfillment $fulfillment,
     ) {}
 
     public function execute(
@@ -19,7 +32,8 @@ final class RecordNetworkConversion
         int $revenueMinor = 0,
         ?string $currency = null,
         ?string $externalReference = null,
-    ): void {
+        LegStatus $status = LegStatus::Posted,
+    ): ?NetworkConversionLeg {
         $counterRevenue = $revenueMinor;
 
         if ($revenueMinor !== 0 && self::isCurrencyMismatch($link->currency, $currency)) {
@@ -39,13 +53,21 @@ final class RecordNetworkConversion
 
         $link->recordConversion($counterRevenue);
 
-        event(new NetworkConversionRecorded($link, $counterRevenue, $currency));
+        if ($externalReference === null || $externalReference === '') {
+            event(new NetworkConversionRecorded($link, $counterRevenue, $currency));
 
-        // The ledger keeps per-currency rows, so it records the real money
-        // even when the single-currency link counter cannot.
-        if ($externalReference !== null && $externalReference !== '') {
-            $this->postToLedger->execute($link, $revenueMinor, $currency, $externalReference);
+            return null;
         }
+
+        $leg = $this->books->post($link, $revenueMinor, $currency, $externalReference, $status);
+
+        event(new NetworkConversionRecorded($link, $counterRevenue, $currency, $leg));
+
+        if ($leg->status === LegStatus::Posted) {
+            $this->fulfillment->fulfill($leg);
+        }
+
+        return $leg;
     }
 
     private static function isCurrencyMismatch(?string $linkCurrency, ?string $conversionCurrency): bool

@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Str;
 use OwenIt\Auditing\Contracts\Auditable;
 
 /**
@@ -73,6 +74,7 @@ class AffiliateSite extends Model implements Auditable
         'metadata',
         'catalog_url',
         'catalog_token_encrypted',
+        'catalog_token_issued_at',
         'sync_status',
         'last_synced_at',
     ];
@@ -124,6 +126,7 @@ class AffiliateSite extends Model implements Auditable
         return [
             'verified_at' => 'immutable_datetime',
             'last_synced_at' => 'immutable_datetime',
+            'catalog_token_issued_at' => 'immutable_datetime',
             'settings' => 'array',
             'metadata' => 'array',
             'created_at' => 'immutable_datetime',
@@ -161,5 +164,38 @@ class AffiliateSite extends Model implements Auditable
             ->first();
 
         return $site instanceof self && $site->isVerified();
+    }
+
+    /**
+     * Issue the site's catalog token, returning the plaintext once.
+     *
+     * The token authenticates merchant postbacks and catalog pulls. Only
+     * the encrypted form is stored; show the return value to the
+     * operator immediately — it cannot be recovered later.
+     */
+    public function issueCatalogToken(): string
+    {
+        $token = Str::random(48);
+
+        $this->forceFill([
+            'catalog_token_encrypted' => encrypt($token),
+            'catalog_token_issued_at' => CarbonImmutable::now(),
+        ])->save();
+
+        return $token;
+    }
+
+    /**
+     * Rotate the catalog token. The previous token stops working
+     * immediately; only one token is ever valid per site.
+     */
+    public function rotateCatalogToken(): string
+    {
+        return $this->issueCatalogToken();
+    }
+
+    public function hasCatalogToken(): bool
+    {
+        return ! empty($this->catalog_token_encrypted);
     }
 }

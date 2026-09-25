@@ -6,9 +6,11 @@ namespace AIArmada\AffiliateNetwork\Services;
 
 use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
 use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
+use AIArmada\AffiliateNetwork\Enums\LegStatus;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
+use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\AffiliateNetwork\Support\QueryParameters;
 use AIArmada\CommerceSupport\Support\MoneyFormatter;
@@ -130,10 +132,15 @@ final class OfferLinkService
     /**
      * Record a conversion on a link.
      */
-    public function recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0, ?string $currency = null, ?string $externalReference = null): void
-    {
-        $this->withLinkOwnerContext($link, function () use ($link, $revenueMinor, $currency, $externalReference): void {
-            $this->recordNetworkConversionAction->execute($link, $revenueMinor, $currency, $externalReference);
+    public function recordConversion(
+        AffiliateOfferLink $link,
+        int $revenueMinor = 0,
+        ?string $currency = null,
+        ?string $externalReference = null,
+        LegStatus $status = LegStatus::Posted,
+    ): ?NetworkConversionLeg {
+        return $this->withLinkOwnerContext($link, function () use ($link, $revenueMinor, $currency, $externalReference, $status): ?NetworkConversionLeg {
+            return $this->recordNetworkConversionAction->execute($link, $revenueMinor, $currency, $externalReference, $status);
         });
     }
 

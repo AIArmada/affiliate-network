@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Http\Controllers;
 
-use AIArmada\AffiliateNetwork\Contracts\NetworkLedger;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
+use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,17 +17,16 @@ use Throwable;
  * Merchant conversion reporting.
  *
  * Remote merchants POST paid orders here; the network records the link
- * counters and the idempotent ledger row. Merchants authenticate with the
- * site's catalog token (shared secret, bearer). Reporting is idempotent
- * on (network link, external reference): redeliveries return the existing
- * state without touching counters.
+ * counters, an idempotent book leg, and triggers fulfillment. Merchants
+ * authenticate with the site's catalog token. Reporting is idempotent
+ * on (network link, external reference): redeliveries return the
+ * existing state without touching counters.
+ *
+ * Trust boundary: authentication and site verification are enforced,
+ * but the reported amount is merchant-reported and taken on trust.
  */
 final class ReportNetworkConversionController extends Controller
 {
-    public function __construct(
-        private readonly ?NetworkLedger $ledger = null,
-    ) {}
-
     public function __invoke(Request $request, OfferLinkService $links): JsonResponse
     {
         $validated = $request->validate([
@@ -61,9 +60,12 @@ final class ReportNetworkConversionController extends Controller
             return response()->json(['message' => 'Offer is no longer active.'], 410);
         }
 
-        $existing = $this->ledger?->findPosted((string) $link->getKey(), $validated['external_reference']);
+        $existing = NetworkConversionLeg::query()
+            ->where('link_id', $link->getKey())
+            ->where('external_reference', $validated['external_reference'])
+            ->first();
 
-        if ($existing !== null) {
+        if ($existing instanceof NetworkConversionLeg) {
             return response()->json([
                 'ok' => true,
                 'duplicate' => true,
@@ -74,15 +76,13 @@ final class ReportNetworkConversionController extends Controller
 
         $currency = isset($validated['currency']) ? mb_strtoupper($validated['currency']) : null;
 
-        $links->recordConversion($link, (int) $validated['revenue_minor'], $currency, $validated['external_reference']);
-
-        $conversion = $this->ledger?->findPosted((string) $link->getKey(), $validated['external_reference']);
+        $leg = $links->recordConversion($link, (int) $validated['revenue_minor'], $currency, $validated['external_reference']);
 
         return response()->json([
             'ok' => true,
             'duplicate' => false,
             'network' => $links->getStats($link->refresh()),
-            'conversion' => $conversion?->toArray(),
+            'conversion' => $leg?->toArray(),
         ]);
     }
 
