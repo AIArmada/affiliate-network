@@ -98,11 +98,10 @@ $instructions = $verificationService->getInstructions($site, 'file');
 
 Manages offers and affiliate applications.
 
-This is the discovery-side API. A local imported offer links to an existing
-core `affiliates` program through `external_program_id`; use
-`enrollInLinkedProgram()` for idempotent enrollment. Do not create a network
-application for that offer. Remote catalog offers use the network application
-flow. Commission and payout writes remain exclusively in `affiliates`.
+This is the discovery-side API. Every offer — local import or remote
+mirror — enrolls through the network application flow; joining never
+requires, resolves, or creates a merchant-side account. Commission and
+payout writes remain exclusively in `affiliates`.
 
 ### Dependency Injection
 
@@ -194,17 +193,7 @@ Get all active offers an affiliate is approved for.
 ```php
 $offers = $offerService->getApprovedOffers($affiliateId);
 // Returns: Collection<AffiliateOffer> — published offers with an approved
-// network application, plus published local imports whose core program has
-// an approved membership (same rule as isApprovedForOffer()).
-```
-
-#### enrollInLinkedProgram
-
-```php
-$membership = $offerService->enrollInLinkedProgram($offer, $affiliateId);
-// Returns a NetworkMembership DTO for an existing/new core membership,
-// or null for remote offers, vanished programs, or when no program
-// bridge is bound.
+// network application (same rule as isApprovedForOffer()).
 ```
 
 ---

@@ -9,7 +9,7 @@ title: Overview
 The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliate marketplace with sites, offers, applications, creatives, and tracking links. It never requires `aiarmada/affiliates`; when that package is installed it binds local adapters for affiliate identity, the conversion ledger, core programs, and catalog sync.
 
 > [!WARNING]
-> Breaking change: the network seam. Public APIs now take affiliate IDs (`string`) instead of `Affiliate` models (`applyForOffer()`, `createLink()`, `isApprovedForOffer()`, `getApprovedOffers()`, and friends), factories use `forAffiliateId()`, and `OfferManagementService::linkedProgram()` is removed. Migration: pass `(string) $affiliate->getKey()` at call sites, swap factory states, and read memberships through `membershipsForPrograms()` / `applicationStatusMap()`. No data migration: `affiliate_id` columns are unchanged.
+> Breaking change: the network seam. Public APIs take affiliate IDs (`string`) instead of `Affiliate` models (`applyForOffer()`, `createLink()`, `isApprovedForOffer()`, `getApprovedOffers()`, and friends), and factories use `forAffiliateId()`. Every offer — mirrored or hand-written — uses the network application flow: the program-membership bridge (`LinkedProgramBridge`, `membershipsForPrograms()`, `enrollInLinkedProgram()`, `isLocalProgramOffer()`) is removed. Migration: pass `(string) $affiliate->getKey()` at call sites and read application state through the network rows. No data migration: `affiliate_id` columns are unchanged.
 
 ## What this package owns
 
@@ -21,7 +21,7 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 ## What this package does not own
 
 - Core affiliate attribution, commissions, payouts, or fraud models; those stay in `aiarmada/affiliates`
-- Merchant-local program enrollment and commission execution; the network is a discovery/marketplace layer and delegates local enrollment to `aiarmada/affiliates`
+- Merchant-local commission execution; enrollment for every offer — mirrored or hand-written — is a network application. Joining never requires, resolves, or creates a merchant-side account
 - Filament marketplace/admin surfaces; those belong to `aiarmada/filament-affiliate-network`
 - General checkout, cart, or order persistence beyond its integration hooks
 
@@ -36,7 +36,7 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 
 - **Models** — `AffiliateSite`, `AffiliateOffer`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferApplication`, `AffiliateOfferLink`
 - **Actions** — `CreateOffer`, `UpdateOffer`, `ApplyToOffer`, `ApproveApplication`, `RecordNetworkConversion`
-- **Contracts** — `SiteVerificationStrategyInterface` (DNS, meta tag, file verification strategies); the network seam `AffiliateIdentityResolver`, `NetworkLedger`, `LinkedProgramBridge` plus `CatalogReaderInterface`
+- **Contracts** — `SiteVerificationStrategyInterface` (DNS, meta tag, file verification strategies); the network seam `AffiliateIdentityResolver`, `NetworkLedger` plus `CatalogReaderInterface`
 - **Services** — site verification, offer management, and offer link generation/tracking
 - **Events** — `OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`
 - **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `SiteVerificationFailedException`, `AffiliatesNotInstalled` (seam feature used without an adapter)
@@ -53,7 +53,7 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 
 `affiliate-network` owns discovery: merchant sites, marketplace offers, signed-redirect policy, clicks, and network-level applications for remote catalogs. `affiliates` owns merchant-local execution: `AffiliateProgram`, memberships, attribution, commissions, payouts, and fraud decisions. The network never writes commission or payout records.
 
-Local catalog synchronization calls the read-only `ProgramCatalogService::snapshot()` path through the affiliates-provided local reader. A local imported offer keeps the core program ID in `external_program_id`; marketplace enrollment goes through the `LinkedProgramBridge` seam to the existing idempotent `ProgramService::joinProgram()` and never creates a duplicate core program or membership. Remote catalog offers use the network application flow and are marked with `metadata.catalog_source = remote`.
+Local catalog synchronization calls the read-only `ProgramCatalogService::snapshot()` path through the affiliates-provided local reader. A local imported offer keeps the core program ID in `external_program_id` for reference, but enrollment for every offer is a network application — remote mirrors are marked with `metadata.catalog_source = remote`, and neither path touches merchant program memberships.
 
 Conversion precedence is intentionally split: the network side records discovery attribution (link clicks/conversions and `network_attribution` order metadata), while core `affiliates` records commission and payout state. Keep the guards separate when both paths observe one order: the network integration must reject an already-attributed order/link before recording a second network conversion, and core conversion calls must carry a stable `external_reference`, which `RecordAffiliateConversion` turns into its idempotency key. Core commission data is authoritative for commission and payout execution; network click/conversion counters remain discovery reporting. The `orders` listener is an integration boundary and is not replaced or modified by this package.
 
@@ -220,7 +220,7 @@ affiliate-network/
 
 ## Integration with Affiliates Package
 
-This package does **not** require the core `aiarmada/affiliates` package. Integration happens through the network seam (`AffiliateIdentityResolver`, `NetworkLedger`, `LinkedProgramBridge`, `CatalogReaderInterface`), which the affiliates package implements when both are installed:
+This package does **not** require the core `aiarmada/affiliates` package. Integration happens through the network seam (`AffiliateIdentityResolver`, `NetworkLedger`, `CatalogReaderInterface`), which the affiliates package implements when both are installed:
 
 - `AffiliateOfferApplication` and `AffiliateOfferLink` hold opaque `affiliate_id` UUIDs; the `affiliate()` relations resolve the model bound at `affiliate-network.models.affiliate`
 - Owner scoping respects affiliate ownership through relationship-based scoping

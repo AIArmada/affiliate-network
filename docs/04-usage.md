@@ -204,8 +204,7 @@ $offerService = app(OfferManagementService::class);
 
 $isApproved = $offerService->isApprovedForOffer($offer, $affiliateId);
 
-// Get all approved offers for an affiliate (approved network applications
-// plus published local imports with an approved core program membership)
+// Get all approved offers for an affiliate (approved network applications)
 $approvedOffers = $offerService->getApprovedOffers($affiliateId);
 ```
 

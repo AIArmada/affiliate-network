@@ -183,8 +183,7 @@ $service->revokeApplication(AffiliateOfferApplication $app, string $reason, ?str
 // Check approval status
 $isApproved = $service->isApprovedForOffer(AffiliateOffer $offer, string $affiliateId): bool;
 
-// Get approved offers (approved network applications plus published local
-// imports with an approved core program membership)
+// Get approved offers (approved network applications)
 $offers = $service->getApprovedOffers(string $affiliateId, int $limit = 500): Collection;
 
 // Batch per-offer statuses in a fixed handful of queries

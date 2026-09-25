@@ -7,8 +7,6 @@ namespace AIArmada\AffiliateNetwork\Services;
 use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
 use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
 use AIArmada\AffiliateNetwork\Actions\CreateOffer;
-use AIArmada\AffiliateNetwork\Contracts\LinkedProgramBridge;
-use AIArmada\AffiliateNetwork\Data\NetworkMembership;
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
@@ -18,7 +16,6 @@ use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
@@ -38,7 +35,6 @@ final class OfferManagementService
         private readonly CreateOffer $createOfferAction,
         private readonly ApplyToOffer $applyToOfferAction,
         private readonly ApproveApplication $approveApplicationAction,
-        private readonly ?LinkedProgramBridge $programs = null,
     ) {}
 
     /**
@@ -59,65 +55,8 @@ final class OfferManagementService
         return $this->applyToOfferAction->execute($offer, $affiliateId, $reason);
     }
 
-    public function isLocalProgramOffer(AffiliateOffer $offer): bool
-    {
-        if (empty($offer->external_program_id)) {
-            return false;
-        }
-
-        /** @var array<string, mixed>|null $metadata */
-        $metadata = $offer->metadata;
-
-        return ($metadata['catalog_source'] ?? 'local') === 'local';
-    }
-
-    /**
-     * Resolve the linked core program id for an imported offer.
-     *
-     * Null for remote offers, offers whose program vanished, and when no
-     * program bridge is bound — all of which use the network flow instead.
-     */
-    private function linkedProgramId(AffiliateOffer $offer): ?string
-    {
-        if (! $this->isLocalProgramOffer($offer) || $this->programs === null) {
-            return null;
-        }
-
-        $programId = (string) $offer->external_program_id;
-
-        return $this->programs->existingProgramIds([$programId]) !== [] ? $programId : null;
-    }
-
-    private function membershipFor(string $affiliateId, string $programId): ?NetworkMembership
-    {
-        return $this->membershipsForPrograms($affiliateId, [$programId])[$programId] ?? null;
-    }
-
-    /**
-     * Enroll an affiliate in an imported offer's existing core program.
-     *
-     * Null for remote-only offers, offers whose program vanished, and when
-     * no program bridge is bound.
-     */
-    public function enrollInLinkedProgram(AffiliateOffer $offer, string $affiliateId): ?NetworkMembership
-    {
-        $programId = $this->linkedProgramId($offer);
-
-        if ($programId === null) {
-            return null;
-        }
-
-        return $this->programs?->join($affiliateId, $programId);
-    }
-
     public function hasAppliedForOffer(AffiliateOffer $offer, string $affiliateId): bool
     {
-        $programId = $this->linkedProgramId($offer);
-
-        if ($programId !== null) {
-            return $this->membershipFor($affiliateId, $programId) !== null;
-        }
-
         return AffiliateOfferApplication::query()
             ->where('offer_id', $offer->id)
             ->where('affiliate_id', $affiliateId)
@@ -126,12 +65,6 @@ final class OfferManagementService
 
     public function applicationStatusForOffer(AffiliateOffer $offer, string $affiliateId): ?string
     {
-        $programId = $this->linkedProgramId($offer);
-
-        if ($programId !== null) {
-            return $this->membershipFor($affiliateId, $programId)?->status;
-        }
-
         /** @var ApplicationStatus|string|null $status */
         $status = AffiliateOfferApplication::query()
             ->where('offer_id', $offer->id)
@@ -142,82 +75,35 @@ final class OfferManagementService
     }
 
     /**
-     * Batch membership statuses for local-program offers.
-     *
-     * @param  array<int, string>  $programIds
-     * @return array<string, NetworkMembership> Memberships keyed by program id.
-     */
-    public function membershipsForPrograms(string $affiliateId, array $programIds): array
-    {
-        if ($this->programs === null || $programIds === []) {
-            return [];
-        }
-
-        return $this->programs->membershipsFor($affiliateId, $programIds);
-    }
-
-    /**
-     * Batch per-offer application statuses in a fixed handful of queries
-     * (programs + memberships + applications) instead of 1–3 per offer.
+     * Batch per-offer application statuses in one query instead of one
+     * per offer.
      *
      * @param  Collection<int, AffiliateOffer>  $offers
      * @return array<string, ?string> offer id => status value (null when never applied)
      */
     public function applicationStatusMap(string $affiliateId, Collection $offers): array
     {
-        /** @var array<string, array<int, string>> $programOfferIds program id => offer ids */
-        $programOfferIds = [];
-        /** @var array<int, string> $networkOfferIds */
-        $networkOfferIds = [];
-
         /** @var array<string, ?string> $map */
         $map = [];
+
+        /** @var array<int, string> $offerIds */
+        $offerIds = [];
 
         foreach ($offers as $offer) {
             $offerId = (string) $offer->getKey();
             $map[$offerId] = null;
-
-            if ($this->isLocalProgramOffer($offer)) {
-                $programOfferIds[(string) $offer->external_program_id][] = $offerId;
-            } else {
-                $networkOfferIds[] = $offerId;
-            }
+            $offerIds[] = $offerId;
         }
 
-        if ($programOfferIds !== []) {
-            $existing = array_fill_keys(
-                $this->programs?->existingProgramIds(array_keys($programOfferIds)) ?? [],
-                true
-            );
-
-            $statusByProgram = [];
-
-            foreach ($this->membershipsForPrograms($affiliateId, array_keys($existing)) as $programId => $membership) {
-                $statusByProgram[$programId] = $membership->status;
-            }
-
-            foreach ($programOfferIds as $programId => $offerIds) {
-                if (! isset($existing[$programId])) {
-                    // Missing local program (or no bridge): same fallback as
-                    // everywhere else — resolve through the network flow.
-                    array_push($networkOfferIds, ...$offerIds);
-
-                    continue;
-                }
-
-                foreach ($offerIds as $offerId) {
-                    $map[$offerId] = $statusByProgram[$programId] ?? null;
-                }
-            }
+        if ($offerIds === []) {
+            return $map;
         }
 
-        if ($networkOfferIds !== []) {
-            foreach (AffiliateOfferApplication::query()
-                ->where('affiliate_id', $affiliateId)
-                ->whereIn('offer_id', $networkOfferIds)
-                ->pluck('status', 'offer_id') as $offerId => $status) {
-                $map[(string) $offerId] = $status instanceof ApplicationStatus ? $status->value : (string) $status;
-            }
+        foreach (AffiliateOfferApplication::query()
+            ->where('affiliate_id', $affiliateId)
+            ->whereIn('offer_id', $offerIds)
+            ->pluck('status', 'offer_id') as $offerId => $status) {
+            $map[(string) $offerId] = $status instanceof ApplicationStatus ? $status->value : (string) $status;
         }
 
         return $map;
@@ -276,12 +162,6 @@ final class OfferManagementService
      */
     public function isApprovedForOffer(AffiliateOffer $offer, string $affiliateId): bool
     {
-        $programId = $this->linkedProgramId($offer);
-
-        if ($programId !== null) {
-            return $this->membershipFor($affiliateId, $programId)?->isApproved() ?? false;
-        }
-
         return AffiliateOfferApplication::query()
             ->where('offer_id', $offer->id)
             ->where('affiliate_id', $affiliateId)
@@ -307,44 +187,15 @@ final class OfferManagementService
             ->map(fn (mixed $id): string => (string) $id)
             ->all();
 
-        /** @var array<int, string> $approvedProgramIds */
-        $approvedProgramIds = $this->programs?->approvedProgramIds($affiliateId, $limit) ?? [];
+        if ($approvedOfferIds === []) {
+            return new EloquentCollection;
+        }
 
-        $offers = AffiliateOffer::query()
+        return AffiliateOffer::query()
             ->where('status', OfferStatus::Published)
-            ->where(function (Builder $query) use ($approvedOfferIds, $approvedProgramIds): void {
-                $query->whereIn('id', $approvedOfferIds);
-
-                if ($approvedProgramIds !== []) {
-                    $query->orWhereIn('external_program_id', $approvedProgramIds);
-                }
-            })
+            ->whereIn('id', $approvedOfferIds)
             ->limit($limit)
             ->get();
-
-        /** @var array<int, string> $importedProgramIds */
-        $importedProgramIds = $offers
-            ->map(fn (AffiliateOffer $offer): ?string => $offer->external_program_id)
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        /** @var array<int, string> $existingProgramIds */
-        $existingProgramIds = $importedProgramIds === [] || $this->programs === null
-            ? []
-            : $this->programs->existingProgramIds($importedProgramIds);
-
-        // Local imports delegate approval to the linked core program;
-        // remote mirrors and offers whose program vanished keep the
-        // network application flow, mirroring isApprovedForOffer().
-        return $offers
-            ->filter(fn (AffiliateOffer $offer): bool => in_array((string) $offer->getKey(), $approvedOfferIds, true)
-                || ($this->isLocalProgramOffer($offer)
-                    && $offer->external_program_id !== null
-                    && in_array($offer->external_program_id, $existingProgramIds, true)))
-            ->take($limit)
-            ->values();
     }
 
     /**
