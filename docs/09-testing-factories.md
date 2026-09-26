@@ -56,12 +56,10 @@ use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 // Active offer with auto-created site
 $offer = AffiliateOffer::factory()->create();
 
-// Status variants
+// Status variants — OfferStatus is draft | published | archived
 $offer = AffiliateOffer::factory()->draft()->create();
-$offer = AffiliateOffer::factory()->pending()->create();
-$offer = AffiliateOffer::factory()->active()->create();
-$offer = AffiliateOffer::factory()->paused()->create();
-$offer = AffiliateOffer::factory()->expired()->create();
+$offer = AffiliateOffer::factory()->published()->create();
+$offer = AffiliateOffer::factory()->archived()->create();
 
 // Featured offer
 $offer = AffiliateOffer::factory()->featured()->create();
@@ -91,12 +89,16 @@ $offer = AffiliateOffer::factory()
 $offer = AffiliateOffer::factory()
     ->forSite($site)
     ->forCategory($category)
-    ->active()
+    ->published()
     ->featured()
     ->percentage(2000)
     ->withDateRange(now(), now()->addYear())
     ->create();
 ```
+
+> **warning:**
+> There are no `pending()`, `active()`, `paused()`, or `expired()` factory
+> states — `OfferStatus` has exactly three cases.
 
 ---
 
@@ -376,7 +378,7 @@ use AIArmada\AffiliateNetwork\Services\OfferManagementService;
 use Illuminate\Support\Str;
 
 it('creates application for offer', function () {
-    $offer = AffiliateOffer::factory()->active()->create();
+    $offer = AffiliateOffer::factory()->published()->create();
     $affiliateId = (string) Str::uuid();
     $service = app(OfferManagementService::class);
 
@@ -409,7 +411,7 @@ it('prevents reapplication during cooldown period', function () {
 
     // Try to reapply immediately
     expect(fn () => $service->applyForOffer($offer, $affiliateId))
-        ->toThrow(RuntimeException::class);
+        ->toThrow(ApplicationAlreadySubmittedException::class);
 });
 ```
 
@@ -422,7 +424,7 @@ use AIArmada\AffiliateNetwork\Services\OfferLinkService;
 use Illuminate\Support\Str;
 
 it('creates tracking link', function () {
-    $offer = AffiliateOffer::factory()->active()->create();
+    $offer = AffiliateOffer::factory()->published()->create();
     $affiliateId = (string) Str::uuid();
     $service = app(OfferLinkService::class);
 
@@ -562,7 +564,7 @@ beforeEach(function () {
     $this->affiliate = Affiliate::factory()->create();
     $this->offer = AffiliateOffer::factory()
         ->forSite($this->site)
-        ->active()
+        ->published()
         ->create();
 });
 ```

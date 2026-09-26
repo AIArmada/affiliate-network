@@ -10,13 +10,21 @@ The canonical orchestration surface for affiliate-network is the `Actions` tree.
 
 | Action | Purpose |
 |--------|---------|
+| `app(RegisterSite::class)->execute($owner, $data)` | Create a merchant site |
 | `app(CreateOffer::class)->execute($site, $data)` | Create a new offer |
 | `app(UpdateOffer::class)->execute($offer, $data)` | Update an existing offer |
-| `app(ApplyToOffer::class)->execute($offer, $affiliate, $message)` | Apply to an offer |
-| `app(ApproveApplication::class)->execute($application, $reviewerId)` | Approve/reject applications |
-| `app(RecordNetworkConversion::class)->execute($link, $amount, $currency, $reference)` | Record a conversion (posts a leg when `$reference` is set) |
+| `app(SubmitOffer::class)->execute($site, $data)` | Merchant-submitted offer (always `draft`) |
+| `app(ApplyToOffer::class)->execute($offer, $affiliateId, $reason)` | Apply to an offer |
+| `app(ApproveApplication::class)->execute($application, $reviewedBy)` | Approve an application |
+| `app(RecordNetworkConversion::class)->execute($link, $revenueMinor, $currency, $externalReference, $status)` | Record a conversion (posts a leg when `$externalReference` is set) |
 
-Events are automatically dispatched by each Action (`OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`).
+`ApplyToOffer` takes an affiliate **id string**, not a model, and the third
+argument is `$reason`. None of these actions use `AsAction` — call them through
+the container with `execute()`.
+
+Events are automatically dispatched by each Action (`OfferCreated`,
+`OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`,
+`NetworkConversionRecorded`).
 
 ---
 
@@ -129,7 +137,14 @@ $offer = $offerService->createOffer($site, [
 ]);
 ```
 
-Auto-generates slug if not provided. Sets status based on `offers.require_approval` config.
+Auto-generates slug if not provided. `status` defaults to `draft`.
+
+> **warning:**
+> `affiliate-network.offers.require_approval` is defined in the shipped config
+> but never read by any code path. `createOffer()` does not consult it. Approval
+> is decided per offer by the `requires_approval` column, which
+> `ApplyToOffer` reads (together with the live
+> `affiliate-network.applications.auto_approve` flag).
 
 #### applyForOffer
 
@@ -138,14 +153,19 @@ Apply for an offer as an affiliate.
 ```php
 $application = $offerService->applyForOffer(
     $offer,
-    $affiliate,
+    $affiliateId,
     'I have relevant traffic for this offer'
 );
 ```
 
-- Creates new application or returns existing
-- Handles cooldown period for rejected applications
-- Auto-approves if offer doesn't require approval or config allows
+- Creates a new application or returns the existing one
+- Re-application after a rejection throws
+  `AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException`
+  until `affiliate-network.applications.cooldown_days` has elapsed, then
+  resets the existing row back to `pending` and dispatches
+  `ApplicationSubmitted`
+- Auto-approves when the offer's `requires_approval` column is false, or when
+  `affiliate-network.applications.auto_approve` is true
 
 #### approveApplication
 
@@ -234,7 +254,6 @@ $link = $linkService->createLink($offer, $affiliateId, [
     'metadata' => ['creative_id' => 'banner-001'],
 ]);
 ```
-
 #### generateTrackingUrl
 
 Generate a signed tracking URL.
@@ -262,10 +281,14 @@ Only returns active links; callers check expiry themselves.
 Record a conversion with revenue.
 
 ```php
-$leg = $linkService->recordConversion($link, 5999, 'USD', 'ORDER-123'); // $59.99 in cents
+// recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0,
+//                   ?string $currency = null, ?string $externalReference = null,
+//                   LegStatus $status = LegStatus::Posted): ?NetworkConversionLeg
+$leg = $linkService->recordConversion($link, 5999, 'USD', 'ORDER-123'); // 5999 minor units
 // Increments $link->conversions and adds to $link->revenue. On a currency
 // mismatch the conversion is counted but revenue is skipped (and logged).
-// With a reference, also posts a NetworkConversionLeg and fulfills it.
+// With a reference, also posts a NetworkConversionLeg and fulfills it, and
+// returns it. Returns null when no reference is supplied.
 ```
 
 #### getStats
@@ -285,7 +308,6 @@ $stats = $linkService->getStats($link);
 //     'revenue_per_click' => 214.36,
 // ]
 ```
-
 Public `resolveLink()` uses an explicit global lookup window. Click and
 conversion writes re-enter the link affiliate's owner context before mutating
 network attribution counters.

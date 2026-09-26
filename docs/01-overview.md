@@ -8,7 +8,7 @@ title: Overview
 
 The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliate marketplace with sites, offers, applications, creatives, and tracking links. It never requires `aiarmada/affiliates`; when that package is installed it binds local adapters for affiliate identity, the conversion ledger, core programs, and catalog sync.
 
-> [!WARNING]
+> **warning**
 > Breaking change: the network seam. Public APIs take affiliate IDs (`string`) instead of `Affiliate` models (`applyForOffer()`, `createLink()`, `isApprovedForOffer()`, `getApprovedOffers()`, and friends), and factories use `forAffiliateId()`. Every offer — mirrored or hand-written — uses the network application flow: the program-membership bridge (`LinkedProgramBridge`, `membershipsForPrograms()`, `enrollInLinkedProgram()`, `isLocalProgramOffer()`) is removed. Migration: pass `(string) $affiliate->getKey()` at call sites and read application state through the network rows. No data migration: `affiliate_id` columns are unchanged.
 
 ## What this package owns
@@ -82,10 +82,10 @@ Build an affiliate marketplace where merchants list offers and affiliates browse
 ```php
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 
-// Get active public offers for marketplace display
+// Get published public offers for marketplace display
 $offers = AffiliateOffer::query()
-    ->where('status', AffiliateOffer::STATUS_ACTIVE)
-    ->where('is_public', true)
+    ->where('status', OfferStatus::Published)
+    ->where('visibility', OfferVisibility::Public)
     ->orderByDesc('is_featured')
     ->orderByDesc('created_at')
     ->with(['site', 'category', 'creatives'])
@@ -97,13 +97,15 @@ $offers = AffiliateOffer::query()
 Run a private network with invite-only offers:
 
 ```php
+use AIArmada\AffiliateNetwork\Enums\OfferStatus;
+use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 
 // Private offers requiring manual approval
 $offers = AffiliateOffer::query()
     ->where('requires_approval', true)
-    ->where('is_public', false)
-    ->where('status', AffiliateOffer::STATUS_ACTIVE)
+    ->where('visibility', OfferVisibility::Private)
+    ->where('status', OfferStatus::Published)
     ->get();
 ```
 
@@ -152,8 +154,8 @@ affiliate-network/
 ├── config/
 │   └── affiliate-network.php        # Package configuration
 ├── database/
-│   ├── factories/                   # 6 model factories
-│   ├── migrations/                  # 7 migration files
+│   ├── factories/                   # 7 model factories
+│   ├── migrations/                  # 8 migration files
 ├── routes/
 │   └── api.php                      # Merchant postback route
 └── src/
@@ -162,9 +164,13 @@ affiliate-network/
     │   ├── ApproveApplication.php        # Approve/reject applications
     │   ├── CreateOffer.php               # Create a new offer
     │   ├── RecordNetworkConversion.php   # Record a conversion
+    │   ├── RegisterSite.php              # Register a merchant site
+    │   ├── SubmitOffer.php               # Submit an offer for approval
     │   └── UpdateOffer.php               # Update an existing offer
     ├── Console/Commands/
-    │   └── ArchiveExpiredOffersCommand.php # Batch archive expired offers
+    │   ├── ArchiveExpiredOffersCommand.php # Batch archive expired offers
+    │   ├── ReconcileNetworkLedgerCommand.php
+    │   └── SyncSiteOffersCommand.php
     ├── Contracts/
     │   └── SiteVerificationStrategyInterface.php
     ├── Events/
@@ -183,8 +189,12 @@ affiliate-network/
     │   └── Middleware/
     │       └── TrackNetworkLinkCookie.php
     ├── Listeners/
+    │   ├── FinalizeNetworkAttribution.php
     │   ├── IncrementNetworkLinkClicks.php
-    │   └── RecordNetworkConversionForOrder.php
+    │   ├── NotifyApplicationApproved.php
+    │   ├── NotifyApplicationSubmitted.php
+    │   ├── NotifyNetworkConversion.php
+    │   └── RecordProvisionalNetworkConversion.php
     ├── Models/
     │   ├── AffiliateSite.php
     │   ├── AffiliateOffer.php
@@ -192,6 +202,7 @@ affiliate-network/
     │   ├── AffiliateOfferCreative.php
     │   ├── AffiliateOfferApplication.php
     │   ├── AffiliateOfferLink.php
+    │   ├── NetworkConversionLeg.php
     │   └── Concerns/
     │       └── ScopesByBelongsToOwner.php
     ├── Services/
@@ -217,6 +228,7 @@ affiliate-network/
 | `affiliate_network_offer_creatives` | Promotional assets | `offer_id`, `type`, `url`, `width`, `height` |
 | `affiliate_network_offer_applications` | Affiliate-to-offer applications | `offer_id`, `affiliate_id`, `status`, `reviewed_at` |
 | `affiliate_network_offer_links` | Tracking links | `link_id`, `offer_id`, `affiliate_id`, `clicks`, `conversions`, `revenue`, `currency` |
+| `affiliate_network_conversion_legs` | Append-only money legs per conversion | `link_id`, `offer_id`, `affiliate_id`, `link_code`, `revenue_minor`, `commission_minor`, `fee_minor`, `fee_bp`, `payout_minor`, `external_reference`, `status`, `occurred_at` |
 
 ## Integration with Affiliates Package
 
