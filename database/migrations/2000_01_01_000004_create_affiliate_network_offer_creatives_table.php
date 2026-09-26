@@ -21,10 +21,8 @@ return new class extends Migration
             $table->string('name');
             $table->text('description')->nullable();
             $table->string('url')->nullable();
-            $table->string('file_path')->nullable();
             $table->unsignedSmallInteger('width')->nullable();
             $table->unsignedSmallInteger('height')->nullable();
-            $table->string('alt_text')->nullable();
             $table->text('html_code')->nullable();
 
             $table->boolean('is_active')->default(true);

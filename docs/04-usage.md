@@ -344,7 +344,6 @@ $banner = AffiliateOfferCreative::create([
     'url' => 'https://cdn.mystore.com/banners/summer-728x90.jpg',
     'width' => 728,
     'height' => 90,
-    'alt_text' => 'Summer Sale - 20% Off',
     'is_active' => true,
     'sort_order' => 1,
 ]);

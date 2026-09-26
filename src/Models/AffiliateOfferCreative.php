@@ -22,10 +22,8 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string $name
  * @property string|null $description
  * @property string|null $url
- * @property string|null $file_path
  * @property int|null $width
  * @property int|null $height
- * @property string|null $alt_text
  * @property string|null $html_code
  * @property bool $is_active
  * @property int $sort_order
@@ -68,10 +66,8 @@ class AffiliateOfferCreative extends Model implements Auditable
         'name',
         'description',
         'url',
-        'file_path',
         'width',
         'height',
-        'alt_text',
         'html_code',
         'is_active',
         'sort_order',

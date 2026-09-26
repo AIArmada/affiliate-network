@@ -15,13 +15,11 @@ return new class extends Migration
 
         Schema::create($tablePrefix . 'offer_links', function (Blueprint $table) use ($jsonType): void {
             $table->uuid('id')->primary();
+            $table->foreignUuid('link_id')->nullable();
             $table->foreignUuid('offer_id');
             $table->foreignUuid('affiliate_id');
             $table->foreignUuid('site_id')->nullable();
 
-            $table->string('code', 32)->unique();
-            $table->string('target_url');
-            $table->string('custom_parameters')->nullable();
             $table->string('sub_id')->nullable();
             $table->string('sub_id_2')->nullable();
             $table->string('sub_id_3')->nullable();
@@ -32,11 +30,11 @@ return new class extends Migration
             $table->string('currency', 3)->nullable();
 
             $table->boolean('is_active')->default(true);
-            $table->timestampTz('expires_at')->nullable();
             $table->{$jsonType}('metadata')->nullable();
 
             $table->timestampsTz();
 
+            $table->index('link_id');
             $table->index(['affiliate_id', 'is_active']);
             $table->index(['offer_id', 'affiliate_id']);
             $table->index('site_id');

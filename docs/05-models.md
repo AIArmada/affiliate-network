@@ -167,10 +167,8 @@ Banner, text link, or other promotional asset.
 | `name` | `string` | Creative name |
 | `description` | `string\|null` | Description |
 | `url` | `string\|null` | Asset URL |
-| `file_path` | `string\|null` | Local file path |
 | `width` | `int\|null` | Width in pixels |
 | `height` | `int\|null` | Height in pixels |
-| `alt_text` | `string\|null` | Alt text |
 | `html_code` | `string\|null` | HTML embed code |
 | `is_active` | `bool` | Active status |
 | `sort_order` | `int` | Display order |
