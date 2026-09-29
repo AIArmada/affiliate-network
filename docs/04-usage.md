@@ -27,10 +27,10 @@ $result = app(OfferImportService::class)->sync($site, $programId);
 - Imported rates are the fully-resolved **base** (product/category/program
   rules folded); volume/promotions ride along in `volume_tiers` /
   `active_promotions` columns.
-- **Rate lock:** editing any rate field on an offer flips `source` to
+- **Rate lock:** editing any rate-block field on an offer (`rate_base_bp`, `rate_fixed_minor`, `currency`, `cookie_days`, `volume_tiers`, `active_promotions`) flips `source` to
   `manual`, and sync holds those rates back (reported as `locked`) instead
   of silently reverting them. Non-rate fields still mirror. Flip
-  `source` back to `synced` to re-apply catalog rates on next sync.
+  `source` back to `mirrored` to re-apply catalog rates on next sync.
 - One bad subject never aborts the run: failures are counted as `failed`
   and the site is stamped `partial`. Runs are capped by
   `sync.max_subjects` (per program) and `sync.max_programs` (per `syncAll`).
@@ -38,9 +38,9 @@ $result = app(OfferImportService::class)->sync($site, $programId);
 The importer has one `resolveField(source, local, remote)` precedence helper:
 local syncs prefer the local value and remote syncs prefer the remote value,
 with null fallback. Imported local offers retain the core program ID in
-`external_program_id`; marketplace enrollment links to that existing program
-through `affiliates` and never creates a duplicate program or network
-application. Remote offers use the network application flow.
+`external_program_id` for reference, but enrollment for every offer —
+mirrored or hand-written — is a network application; joining never
+requires, resolves, or creates a merchant-side account.
 
 Catalog reads are scoped to the synced site's owner: local syncs only see
 that owner's programs, never whatever ambient context the caller runs in.
@@ -86,7 +86,6 @@ app(UpdateOffer::class)->execute($offer, [
 use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
 use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
 
-// Public APIs take the affiliate ID, not the model
 $application = app(ApplyToOffer::class)->execute(
     $offer,
     (string) $affiliate->getKey(),
@@ -131,9 +130,9 @@ and reconciliation all derive from them:
   `{min_volume_minor, rate_bp, currency?}`. The highest tier whose floor
   the affiliate's cumulative offer revenue clears wins; otherwise the
   base rate applies.
-- **Reversals:** `NetworkBooks::reverse($leg, $reason)` marks the leg
+- **Reversals:** `app(NetworkBooks::class)->reverse($leg, $reason)` marks the leg
   reversed and posts a negated companion leg. Reversed legs never pay.
-- **Balances:** `CreatorBalances::for($affiliateId)` sums posted-leg
+- **Balances:** `app(CreatorBalances::class)->for($affiliateId)` sums posted-leg
   payouts per currency at read time — no balance rows to drift.
 - **Fulfillment:** posted legs go to exactly one payer. With
   `aiarmada/affiliates` installed the engine fulfills merchant payouts;
@@ -294,21 +293,6 @@ different currency, the conversion is counted but its revenue is skipped (and
 logged as `affiliate-network.conversion.currency_mismatch`) so link and
 network totals never mix currencies.
 
-## Artisan Commands
-
-```bash
-# Mirror a merchant program as network offers (omit --program to sync all on the site)
-php artisan affiliate-network:sync-offers {site} --program={id}
-php artisan affiliate-network:sync-offers mystore.com
-
-# Archive offers whose end date passed
-php artisan affiliate-network:archive-expired --older-than=90 --dry-run
-
-# Prove network legs, counters, and merchant postings agree
-php artisan affiliate-network:reconcile --offer={offerId} --fail-on-mismatch
-php artisan affiliate-network:reconcile
-```
-
 ## Categories
 
 ### Create Categories
@@ -397,15 +381,15 @@ To enable the integration, set the following environment variable or update your
 ```php
 // .env
 AFFILIATE_NETWORK_CHECKOUT_ENABLED=true
-```
 
 When a network-attributed order converts, the listener stores network attribution details under `order.metadata.network_attribution` and increments the related `AffiliateOfferLink` conversion metrics.
+```
 
 ### How it Works
 
 1. **Tracking**: When a user visits your site with a network link parameter (default: `anl`), the `TrackNetworkLinkCookie` middleware captures the link identifier and stores it in an encrypted cookie.
 2. **Attribution**: The cookie persists based on the configured lifetime (default: 30 days).
-3. **Conversion**: When an order is completed, the orders side triggers a `CommissionAttributionRequired` event.
+3. **Conversion**: When order fulfillment is required (paid and free orders alike), the orders side triggers a `CommissionAttributionRequired` event.
 4. **Provisional leg**: `RecordProvisionalNetworkConversion` reads the attribution cookie and posts a `provisional` leg — money sketched, nothing payable yet.
 5. **Last-touch decider**: `FinalizeNetworkAttribution` compares the engine touch against the network touch. An engine win supersedes the provisional leg; a network win confirms and fulfills it. When the engine abstains — or isn't installed — the network wins by default. Every decision is recorded, so exactly one side ever pays.
 

@@ -137,7 +137,7 @@ $linkService->createLink($offer, $affiliateId, [
 
 1. Check offer status:
 ```php
-$offer->status;     // Should be 'active'
+$offer->status;     // Should be OfferStatus::Published
 $offer->isActive(); // Should return true
 ```
 
@@ -207,7 +207,7 @@ app(OwnerResolverInterface::class)->resolve();
 
 ### RuntimeException on Create
 
-**Symptoms:** "Cannot create record for a site owned by a different owner."
+**Symptoms:** "Cannot create or update {Class} for an inaccessible or missing owner relation."
 
 **Cause:** Attempting to create record linking to entity from different tenant.
 

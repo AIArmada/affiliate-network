@@ -34,7 +34,6 @@ When enabled, these models are automatically scoped:
 | `AffiliateOfferCreative` | Via offer/site (`ScopesByBelongsToOwner`, `offer.site`) |
 | `AffiliateOfferApplication` | Via affiliate (`ScopesByBelongsToOwner`, `affiliate`) |
 | `AffiliateOfferLink` | Via affiliate (`ScopesByBelongsToOwner`, `affiliate`) |
-| `NetworkConversionLeg` | Via affiliate (`ScopesByBelongsToOwner`, `affiliate`) |
 
 ## Direct Owner Scoping
 
@@ -74,15 +73,12 @@ $offers = AffiliateOffer::all();
 Cross-tenant validation is enforced on create/update:
 
 ```php
-// This throws RuntimeException: the offer's site has no accessible owner
+// This throws RuntimeException if site belongs to different owner
 $offer = AffiliateOffer::create([
     'site_id' => $otherOwnerSite->id, // ❌ Blocked
     'name' => 'Test Offer',
 ]);
 ```
-
-The message interpolates the model class:
-`Cannot create or update AIArmada\AffiliateNetwork\Models\AffiliateOffer for an inaccessible or missing owner relation.`
 
 ### ScopesByBelongsToOwner via affiliate
 
@@ -104,16 +100,12 @@ the same mechanism across two belongs-to hops: `creative.offer.site`.
 
 ## Global Records
 
-Global records are rows whose `owner_type` / `owner_id` are both null. They are
-global-*only*, not "owned by everyone": a normal owner-scoped query skips them
-unless `include_global` is true.
+When `include_global` is `true`, queries include records with `owner_id = null`:
 
 ```php
-'affiliate-network' => [
-    'owner' => [
-        'enabled' => true,
-        'include_global' => true, // Opt in to seeing global records
-    ],
+'owner' => [
+    'enabled' => true,
+    'include_global' => true, // Include global records
 ],
 ```
 
@@ -182,8 +174,7 @@ try {
         'affiliate_id' => $otherTenantAffiliate->id, // Different owner
     ]);
 } catch (RuntimeException $e) {
-    // "Cannot create or update AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication
-    //  for an inaccessible or missing owner relation."
+    // "Cannot create or update {Class} for an inaccessible or missing owner relation."
 }
 ```
 

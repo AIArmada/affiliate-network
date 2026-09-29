@@ -71,7 +71,7 @@ Represents an affiliate offer/campaign.
 | `description` | `string\|null` | Offer description |
 | `terms` | `string\|null` | Terms and conditions |
 | `status` | `OfferStatus` | draft, published, archived |
-| `source` | `string` | `synced` (importer owns rates) or `manual` (operator override; sync holds rates back) |
+| `source` | `string` | `mirrored` (importer owns rates) or `manual` (operator override; sync holds rates back) |
 | `network_fee_bp` | `int\|null` | Marketplace take-rate in bp (null = configured default) |
 | `rate_base_bp` | `int` | Base percentage in basis points (1000 = 10%), null when fixed-only |
 | `rate_fixed_minor` | `int` | Fixed payout in minor units, null when percentage-based |
@@ -198,11 +198,14 @@ Affiliate's application to promote an offer.
 | `id` | `string` | UUID primary key |
 | `offer_id` | `string` | Foreign key to offer |
 | `affiliate_id` | `string` | Foreign key to affiliate |
-| `status` | `string` | pending, approved, rejected, revoked |
+| `status` | `ApplicationStatus` | pending, approved, rejected, revoked |
 | `reason` | `string\|null` | Application reason |
 | `rejection_reason` | `string\|null` | Rejection reason |
 | `reviewed_by` | `string\|null` | Reviewer ID |
 | `reviewed_at` | `CarbonImmutable\|null` | Review timestamp |
+| `approved_at` | `CarbonImmutable\|null` | Approval timestamp |
+| `rejected_at` | `CarbonImmutable\|null` | Rejection timestamp (cooldown base) |
+| `revoked_at` | `CarbonImmutable\|null` | Revocation timestamp |
 | `metadata` | `array\|null` | Custom metadata |
 
 ### Relationships
@@ -307,9 +310,10 @@ counters, and reconciliation derive from these rows.
 ### Relationships
 
 ```php
-$leg->link;   // BelongsTo - AffiliateOfferLink
-$leg->offer;  // BelongsTo - AffiliateOffer
-$leg->site;   // BelongsTo - AffiliateSite
+$leg->link;      // BelongsTo - AffiliateOfferLink
+$leg->offer;     // BelongsTo - AffiliateOffer
+$leg->site;      // BelongsTo - AffiliateSite
+$leg->affiliate; // BelongsTo - Affiliate (owner boundary)
 ```
 
 ### Traits

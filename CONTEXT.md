@@ -17,7 +17,7 @@ keywords:
 
 ## Snapshot
 - Composer: `aiarmada/affiliate-network`
-- Role: Multi-merchant affiliate marketplace: sites, offers, applications, tracking links on top of affiliates.
+- Role: Multi-merchant affiliate marketplace: sites, offers, applications, tracking links. Standalone; integrates with affiliates only when that package is installed.
 - Triggers: marketplace, offers, sites, merchant-network, applications, tracking-links
 - Search first: `src/Models, src/Actions, src/Services, config, docs`
 - Related: `filament-affiliate-network`, `affiliates`, `checkout`
@@ -44,7 +44,7 @@ keywords:
 ## Key surfaces
 - Models: `AffiliateOffer`, `AffiliateOfferApplication`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferLink`, `AffiliateSite`, `NetworkConversionLeg`
 - Actions/Services: `Actions/ApplyToOffer`, `Actions/ApproveApplication`, `Actions/CreateOffer`, `Actions/RecordNetworkConversion`, `Actions/UpdateOffer`, `Services/NetworkBooks`, `Services/CreatorBalances`, `Services/OfferLinkService`, `Services/OfferManagementService`, `Services/OfferImportService`, `Services/Catalog/*`, `Services/SiteVerificationService`, `Contracts/Fulfillment`
-- Config `affiliate-network.php`: `sites`, `offers`, `sync`, `database`, `table_prefix`, `tables`, `json_column_type`, `fees`, `notifications`, `currency`, `postbacks`
+- Config `affiliate-network.php`: `database`, `table_prefix`, `tables`, `json_column_type`, `models`, `owner`, `currency`, `fees`, `notifications`, `offers`, `applications`, `links`, `cookies`, `checkout`, `sync`, `postbacks`, `http`
 
 ## Docs map
 - Start: `01-overview` → `03-configuration` → `04-usage` → `99-troubleshooting`

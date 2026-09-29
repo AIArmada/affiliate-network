@@ -57,6 +57,13 @@ final class AffiliatesLedgerPoster implements NetworkLedger
         return $posted === null ? null : self::toNetworkPosted($posted);
     }
 
+    public function voidPosting(string $linkId, string $externalReference, string $reason): ?NetworkPostedConversion
+    {
+        $posted = $this->merchants->voidPosted(self::SOURCE, $linkId, $externalReference, $reason);
+
+        return $posted === null ? null : self::toNetworkPosted($posted);
+    }
+
     public function rowsForLink(string $linkId): array
     {
         return $this->merchants->postingsForSourceRef(self::SOURCE, $linkId);

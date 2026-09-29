@@ -21,6 +21,11 @@ interface NetworkLedger
     public function findPosted(string $linkId, string $externalReference): ?NetworkPostedConversion;
 
     /**
+     * Retract a posting (refund/void). Idempotent; null when never posted.
+     */
+    public function voidPosting(string $linkId, string $externalReference, string $reason): ?NetworkPostedConversion;
+
+    /**
      * Ledger legs for one link, for counter reconciliation.
      *
      * @return array<int, array{commission_currency: string|null, value_minor: int, commission_minor: int}>

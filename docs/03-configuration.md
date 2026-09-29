@@ -14,6 +14,7 @@ The package configuration is located at `config/affiliate-network.php`.
 return [
     'database' => [
         'table_prefix' => 'affiliate_network_',
+        'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', 'jsonb'),
         'tables' => [
             'sites' => 'affiliate_network_sites',
             'offers' => 'affiliate_network_offers',
@@ -22,7 +23,6 @@ return [
             'offer_applications' => 'affiliate_network_offer_applications',
             'offer_links' => 'affiliate_network_offer_links',
         ],
-        'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', 'jsonb'),
     ],
 
     'models' => [
@@ -108,7 +108,7 @@ return [
 | Key | Description | Default |
 |-----|-------------|---------|
 | `table_prefix` | Prefix for all tables | `affiliate_network_` |
-| `json_column_type` | JSON column type (json/jsonb) | `jsonb` |
+| `json_column_type` | JSON column type (json/jsonb) | `AFFILIATE_NETWORK_JSON_COLUMN_TYPE`, default `jsonb` |
 | `tables` | Table name mapping | Array |
 
 ### Models
@@ -146,11 +146,10 @@ return [
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `require_approval` | New offers need approval | `true` |
+| `require_approval` | Reserved offer-approval default | `true` |
 
-> **warning**: `offers.require_approval` is defined in the shipped config but never read by the
-> package. Approval is enforced per offer through the fillable `requires_approval` column and
-> `AffiliateOfferApplication`, not through this key.
+> [!NOTE]
+> `offers.require_approval` is currently informational: `CreateOffer` always lands new offers as `draft` and publishing stays an explicit operator decision regardless of this flag.
 
 ### Applications
 

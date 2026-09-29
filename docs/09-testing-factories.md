@@ -56,7 +56,7 @@ use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 // Active offer with auto-created site
 $offer = AffiliateOffer::factory()->create();
 
-// Status variants — OfferStatus is draft | published | archived
+// Status variants
 $offer = AffiliateOffer::factory()->draft()->create();
 $offer = AffiliateOffer::factory()->published()->create();
 $offer = AffiliateOffer::factory()->archived()->create();
@@ -95,10 +95,6 @@ $offer = AffiliateOffer::factory()
     ->withDateRange(now(), now()->addYear())
     ->create();
 ```
-
-> **warning:**
-> There are no `pending()`, `active()`, `paused()`, or `expired()` factory
-> states — `OfferStatus` has exactly three cases.
 
 ---
 
@@ -411,7 +407,7 @@ it('prevents reapplication during cooldown period', function () {
 
     // Try to reapply immediately
     expect(fn () => $service->applyForOffer($offer, $affiliateId))
-        ->toThrow(ApplicationAlreadySubmittedException::class);
+        ->toThrow(RuntimeException::class);
 });
 ```
 

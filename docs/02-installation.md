@@ -47,9 +47,6 @@ This creates the following tables (with configurable prefix):
 ## Environment Variables
 
 ```env
-# Table prefix (default: affiliate_network_)
-AFFILIATE_NETWORK_TABLE_PREFIX=affiliate_network_
-
 # JSON column type (json or jsonb for PostgreSQL)
 AFFILIATE_NETWORK_JSON_COLUMN_TYPE=json
 
@@ -65,7 +62,6 @@ AFFILIATE_NETWORK_APPLICATIONS_AUTO_APPROVE=false
 AFFILIATE_NETWORK_APPLICATIONS_COOLDOWN_DAYS=7
 
 # Links
-AFFILIATE_NETWORK_LINK_TTL=43200
 AFFILIATE_NETWORK_LINK_PARAM=anl
 
 # Cookies

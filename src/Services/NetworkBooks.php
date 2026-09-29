@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Services;
 
+use AIArmada\AffiliateNetwork\Contracts\NetworkLedger;
 use AIArmada\AffiliateNetwork\Enums\LegStatus;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Network books: the marketplace system of record for money.
@@ -134,32 +136,108 @@ final class NetworkBooks
 
     public function reverse(NetworkConversionLeg $leg, string $reason): NetworkConversionLeg
     {
-        if ($leg->status === LegStatus::Reversed) {
-            return $leg;
-        }
+        return DB::transaction(function () use ($leg, $reason): NetworkConversionLeg {
+            $locked = NetworkConversionLeg::query()
+                ->whereKey($leg->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $leg->update(['status' => LegStatus::Reversed]);
+            if (is_array($locked->metadata) && isset($locked->metadata['reverses_id'])) {
+                // Companions are reversal records, not reversible
+                // originals: re-reversing one is an idempotent no-op
+                // (retry-safe), never a second-order leg.
+                return $locked;
+            }
 
-        return NetworkConversionLeg::create([
-            'link_id' => $leg->link_id,
-            'offer_id' => $leg->offer_id,
-            'site_id' => $leg->site_id,
-            'affiliate_id' => $leg->affiliate_id,
-            'link_code' => $leg->link_code,
+            if ($locked->status === LegStatus::Reversed) {
+                $existing = $this->findCompanionLeg($locked);
+
+                if ($existing !== null) {
+                    // The merchant void is idempotent: re-run it so a
+                    // retry also settles postings a previous
+                    // implementation left payable behind its companion.
+                    $this->voidPostedConversion($locked, $reason);
+
+                    return $existing;
+                }
+
+                // A companionless reversed leg is legacy damage (a
+                // previous non-transactional implementation could leave
+                // it behind): repair it idempotently instead of silently
+                // returning the leg with no reversal leg and no void.
+                return $this->createCompanionLeg($locked, $reason);
+            }
+
+            $locked->update(['status' => LegStatus::Reversed]);
+
+            return $this->createCompanionLeg($locked, $reason);
+        }, attempts: 3);
+    }
+
+    private function createCompanionLeg(NetworkConversionLeg $locked, string $reason): NetworkConversionLeg
+    {
+        $companion = NetworkConversionLeg::create([
+            'link_id' => $locked->link_id,
+            'offer_id' => $locked->offer_id,
+            'site_id' => $locked->site_id,
+            'affiliate_id' => $locked->affiliate_id,
+            'link_code' => $locked->link_code,
             'revenue_minor' => 0,
-            'revenue_currency' => $leg->revenue_currency,
-            'commission_minor' => -1 * (int) $leg->commission_minor,
-            'commission_currency' => $leg->commission_currency,
-            'fee_minor' => -1 * (int) $leg->fee_minor,
-            'fee_bp' => $leg->fee_bp,
-            'payout_minor' => -1 * (int) $leg->payout_minor,
-            'tier_rate_bp' => $leg->tier_rate_bp,
-            'tier_min_volume_minor' => $leg->tier_min_volume_minor,
-            'external_reference' => $leg->external_reference . ':reversal:' . $reason,
+            'revenue_currency' => $locked->revenue_currency,
+            'commission_minor' => -1 * (int) $locked->commission_minor,
+            'commission_currency' => $locked->commission_currency,
+            'fee_minor' => -1 * (int) $locked->fee_minor,
+            'fee_bp' => $locked->fee_bp,
+            'payout_minor' => -1 * (int) $locked->payout_minor,
+            'tier_rate_bp' => $locked->tier_rate_bp,
+            'tier_min_volume_minor' => $locked->tier_min_volume_minor,
+            // Keyed by original leg only: the reason lives in
+            // metadata, so concurrent reversals with different
+            // reasons converge on one companion (backstopped by the
+            // unique link/external_reference pair).
+            'external_reference' => self::reversalReference(
+                (string) $locked->external_reference,
+                (string) $locked->getKey()
+            ),
             'status' => LegStatus::Reversed,
-            'metadata' => ['reverses_id' => (string) $leg->getKey(), 'reversal_reason' => $reason],
+            'metadata' => ['reverses_id' => (string) $locked->getKey(), 'reversal_reason' => $reason],
             'occurred_at' => CarbonImmutable::now(),
         ]);
+
+        $this->voidPostedConversion($locked, $reason);
+
+        return $companion;
+    }
+
+    private static function reversalReference(string $original, string $legId): string
+    {
+        // The column caps at 120 chars. The full leg id rides the suffix
+        // instead of a truncated hash: same-link collisions are
+        // impossible (leg ids are unique), the key stays deterministic
+        // per leg, and the original prefix flexes to fit the column.
+        $suffix = ':rev:' . $legId;
+
+        return mb_substr($original, 0, max(0, 120 - mb_strlen($suffix))) . $suffix;
+    }
+
+    private function findCompanionLeg(NetworkConversionLeg $leg): ?NetworkConversionLeg
+    {
+        return NetworkConversionLeg::query()
+            ->where('metadata->reverses_id', (string) $leg->getKey())
+            ->first();
+    }
+
+    private function voidPostedConversion(NetworkConversionLeg $leg, string $reason): void
+    {
+        if (! app()->bound(NetworkLedger::class)) {
+            return;
+        }
+
+        app(NetworkLedger::class)->voidPosting(
+            (string) $leg->link_id,
+            (string) $leg->external_reference,
+            $reason,
+        );
     }
 
     /**

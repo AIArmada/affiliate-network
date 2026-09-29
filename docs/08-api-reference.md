@@ -34,36 +34,29 @@ $site->owner(): MorphTo     // Owner relationship (multi-tenancy)
 
 ### AffiliateOffer
 
-Represents an affiliate offer/campaign. `status` is the
-`AIArmada\AffiliateNetwork\Enums\OfferStatus` enum.
+Represents an affiliate offer/campaign.
+
+#### Status Enum
+
+Offer status is the `OfferStatus` enum (`draft`, `published`, `archived`):
 
 ```php
 use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 
-OfferStatus::Draft;     // 'draft'
-OfferStatus::Published; // 'published'
-OfferStatus::Archived;  // 'archived'
+OfferStatus::Draft     // 'draft'
+OfferStatus::Published // 'published'
+OfferStatus::Archived  // 'archived'
 ```
-
-> **warning:**
-> `AffiliateOffer` declares no `STATUS_*` constants, and there is no `pending`,
-> `active`, `paused`, `expired`, or `rejected` status. The Filament `activate`
-> action publishes (`Published`, stamps `published_at`); `pause` archives
-> (`Archived`, stamps `archived_at`).
 
 #### Methods
 
 ```php
-$offer->isDraft(): bool           // status === Draft
-$offer->isActive(): bool          // status === Published AND within starts_at/ends_at
-$offer->isFixed(): bool           // rate_fixed_minor path
-$offer->formattedRate(): string
+$offer->isActive(): bool        // Checks status AND date range
 $offer->site(): BelongsTo       // Parent AffiliateSite
 $offer->category(): BelongsTo   // Optional AffiliateOfferCategory
 $offer->creatives(): HasMany    // AffiliateOfferCreative models
 $offer->applications(): HasMany // AffiliateOfferApplication models
 $offer->links(): HasMany        // AffiliateOfferLink models
-$offer->legs(): HasMany         // NetworkConversionLeg models
 ```
 
 ---
@@ -107,20 +100,20 @@ $creative->offer(): BelongsTo  // Parent AffiliateOffer
 
 ### AffiliateOfferApplication
 
-Affiliate's application to promote an offer. `status` is the
-`AIArmada\AffiliateNetwork\Enums\ApplicationStatus` enum.
+Affiliate's application to promote an offer.
+
+#### Status Enum
+
+Application status is the `ApplicationStatus` enum:
 
 ```php
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 
-ApplicationStatus::Pending;   // 'pending'
-ApplicationStatus::Approved;  // 'approved'
-ApplicationStatus::Rejected;  // 'rejected'
-ApplicationStatus::Revoked;   // 'revoked'
+ApplicationStatus::Pending  // 'pending'
+ApplicationStatus::Approved // 'approved'
+ApplicationStatus::Rejected // 'rejected'
+ApplicationStatus::Revoked  // 'revoked'
 ```
-
-> **warning:**
-> `AffiliateOfferApplication` declares no `STATUS_*` constants. Read the enum.
 
 #### Methods
 
@@ -232,15 +225,8 @@ $signedUrl = $service->generateTrackingUrl(AffiliateOfferLink $link): string;
 $link = $service->resolveLink(string $slug): ?AffiliateOfferLink;
 
 // Track events
-$leg = $service->recordConversion(
-    AffiliateOfferLink $link,
-    int $revenueMinor = 0,
-    ?string $currency = null,
-    ?string $externalReference = null,
-    LegStatus $status = LegStatus::Posted,
-): ?NetworkConversionLeg;
-// Returns null when no external reference is supplied. On a currency mismatch
-// the conversion is counted but revenue is skipped (and logged).
+$leg = $service->recordConversion(AffiliateOfferLink $link, int $revenueMinor = 0, ?string $currency = null, ?string $externalReference = null, LegStatus $status = LegStatus::Posted): ?NetworkConversionLeg;
+// On a currency mismatch the conversion is counted but revenue is skipped (and logged).
 
 // Get statistics
 $stats = $service->getStats(AffiliateOfferLink $link): array;
@@ -265,7 +251,7 @@ $result = $service->syncAll($site);
 ```
 
 Upserts by `(site_id, external_program_id, subject_key)` with checksum
-skips. Imported offers land as `draft` with `source = synced`.
+skips. Imported offers land as `draft` with `source = mirrored`.
 Operator rate edits flip the lock to `manual`; later syncs hold rates back
 (`locked`) until the operator flips it back. Artisan:
 
@@ -288,50 +274,40 @@ the link counter through the `IncrementNetworkLinkClicks` listener on
 
 ## Events
 
-The package ships five events in `AIArmada\AffiliateNetwork\Events`, dispatched
-by the corresponding Action: `OfferCreated`, `OfferUpdated`,
-`ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`.
-
-> **warning:**
-> "The package does not emit custom events" is wrong. Every Action fires one.
-> Model events on `AffiliateOfferApplication` are still available for finer
-> hooks:
+Actions dispatch five domain events automatically:
 
 ```php
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
+use AIArmada\AffiliateNetwork\Events\ApplicationApproved;
+use AIArmada\AffiliateNetwork\Events\ApplicationSubmitted;
+use AIArmada\AffiliateNetwork\Events\NetworkConversionRecorded;
+use AIArmada\AffiliateNetwork\Events\OfferCreated;
+use AIArmada\AffiliateNetwork\Events\OfferUpdated;
 
-AffiliateOfferApplication::created(function ($application) {
-    // Notify merchant of new application
-});
-
-AffiliateOfferApplication::updated(function ($application) {
-    if ($application->wasChanged('status')) {
-        // Notify affiliate of status change
-    }
-});
+OfferCreated::class;             // (AffiliateOffer $offer)
+OfferUpdated::class;             // (AffiliateOffer $offer)
+ApplicationSubmitted::class;     // (AffiliateOfferApplication $application)
+ApplicationApproved::class;      // (AffiliateOfferApplication $application)
+NetworkConversionRecorded::class; // (AffiliateOfferLink $link, int $revenueMinor, ?string $currency, ?NetworkConversionLeg $leg)
 ```
 
 ---
 
 ## Exceptions
 
-### Cross-tenant owner violations
+### RuntimeException
 
-Thrown by `ScopesByBelongsToOwner` on create/update when the owner relation is
-missing or owned by someone else. The message is generic and interpolates the
-model class:
+Thrown by scoping traits for cross-tenant violations:
 
 ```php
-// From ScopesByBelongsToOwner (site, offer.site, and affiliate paths alike)
-"Cannot create or update {ModelClass} for an inaccessible or missing owner relation."
-
-// When ownerViaRelation() does not start with a belongs-to relation
-"{ModelClass}::ownerViaRelation() must begin with a belongs-to relation."
+// From ScopesByBelongsToOwner
+"Cannot create or update {Class} for an inaccessible or missing owner relation."
 ```
 
 ### Reapplication Cooldown
 
-`ApplyToOffer` throws
-`AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException`
-(a `RuntimeException`) while a rejected application is still inside
-`affiliate-network.applications.cooldown_days`.
+Duplicates and in-cooldown reapplications throw `ApplicationAlreadySubmittedException` (extends `RuntimeException`):
+
+```php
+// From OfferManagementService::applyForOffer
+"An application for offer [{$offerId}] has already been submitted."
+```
