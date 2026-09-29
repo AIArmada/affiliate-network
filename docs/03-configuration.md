@@ -23,6 +23,7 @@ return [
             'offer_applications' => 'affiliate_network_offer_applications',
             'offer_links' => 'affiliate_network_offer_links',
         ],
+        'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', 'jsonb'),
     ],
 
     'models' => [
@@ -150,6 +151,10 @@ return [
 
 > [!NOTE]
 > `offers.require_approval` is currently informational: `CreateOffer` always lands new offers as `draft` and publishing stays an explicit operator decision regardless of this flag.
+
+> **warning**: `offers.require_approval` is defined in the shipped config but never read by the
+> package. Approval is enforced per offer through the fillable `requires_approval` column and
+> `AffiliateOfferApplication`, not through this key.
 
 ### Applications
 

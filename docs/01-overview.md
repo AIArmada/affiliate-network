@@ -8,7 +8,7 @@ title: Overview
 
 The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliate marketplace with sites, offers, applications, creatives, and tracking links. It never requires `aiarmada/affiliates`; when that package is installed it binds local adapters for affiliate identity, the conversion ledger, core programs, and catalog sync.
 
-> [!WARNING]
+> **warning**
 > Breaking change: the network seam. Public APIs take affiliate IDs (`string`) instead of `Affiliate` models (`applyForOffer()`, `createLink()`, `isApprovedForOffer()`, `getApprovedOffers()`, and friends), and factories use `forAffiliateId()`. Every offer — mirrored or hand-written — uses the network application flow: the program-membership bridge (`LinkedProgramBridge`, `membershipsForPrograms()`, `enrollInLinkedProgram()`, `isLocalProgramOffer()`) is removed. Migration: pass `(string) $affiliate->getKey()` at call sites and read application state through the network rows. No data migration: `affiliate_id` columns are unchanged.
 
 ## What this package owns
@@ -166,14 +166,14 @@ affiliate-network/
     │   ├── ApproveApplication.php        # Approve/reject applications
     │   ├── CreateOffer.php               # Create a new offer
     │   ├── RecordNetworkConversion.php   # Record a conversion
-    │   ├── RegisterSite.php              # Merchant self-service signup
-    │   ├── SubmitOffer.php               # Merchant offer submission
+    │   ├── RegisterSite.php              # Register a merchant site
+    │   ├── SubmitOffer.php               # Submit an offer for approval
     │   └── UpdateOffer.php               # Update an existing offer
     ├── Adapters/Affiliates/         # Local engine adapters (identity, ledger, catalog, fulfillment)
     ├── Console/Commands/
-    │   ├── ArchiveExpiredOffersCommand.php  # Batch archive expired offers
-    │   ├── ReconcileNetworkLedgerCommand.php # Prove legs/counters/ledger agree
-    │   └── SyncSiteOffersCommand.php        # Sync merchant catalogs
+    │   ├── ArchiveExpiredOffersCommand.php # Batch archive expired offers
+    │   ├── ReconcileNetworkLedgerCommand.php
+    │   └── SyncSiteOffersCommand.php
     ├── Contracts/
     │   ├── AffiliateIdentityResolver.php
     │   ├── CatalogReaderInterface.php
@@ -242,6 +242,7 @@ affiliate-network/
 | `affiliate_network_offer_creatives` | Promotional assets | `offer_id`, `type`, `url`, `width`, `height` |
 | `affiliate_network_offer_applications` | Affiliate-to-offer applications | `offer_id`, `affiliate_id`, `status`, `reviewed_at` |
 | `affiliate_network_offer_links` | Tracking links | `link_id`, `offer_id`, `affiliate_id`, `clicks`, `conversions`, `revenue`, `currency` |
+| `affiliate_network_conversion_legs` | Append-only money legs per conversion | `link_id`, `offer_id`, `affiliate_id`, `link_code`, `revenue_minor`, `commission_minor`, `fee_minor`, `fee_bp`, `payout_minor`, `external_reference`, `status`, `occurred_at` |
 
 ## Integration with Affiliates Package
 

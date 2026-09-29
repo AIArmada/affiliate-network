@@ -86,6 +86,7 @@ app(UpdateOffer::class)->execute($offer, [
 use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
 use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
 
+// Public APIs take the affiliate ID, not the model
 $application = app(ApplyToOffer::class)->execute(
     $offer,
     (string) $affiliate->getKey(),
@@ -293,6 +294,21 @@ different currency, the conversion is counted but its revenue is skipped (and
 logged as `affiliate-network.conversion.currency_mismatch`) so link and
 network totals never mix currencies.
 
+## Artisan Commands
+
+```bash
+# Mirror a merchant program as network offers (omit --program to sync all on the site)
+php artisan affiliate-network:sync-offers {site} --program={id}
+php artisan affiliate-network:sync-offers mystore.com
+
+# Archive offers whose end date passed
+php artisan affiliate-network:archive-expired --older-than=90 --dry-run
+
+# Prove network legs, counters, and merchant postings agree
+php artisan affiliate-network:reconcile --offer={offerId} --fail-on-mismatch
+php artisan affiliate-network:reconcile
+```
+
 ## Categories
 
 ### Create Categories
@@ -381,9 +397,9 @@ To enable the integration, set the following environment variable or update your
 ```php
 // .env
 AFFILIATE_NETWORK_CHECKOUT_ENABLED=true
+```
 
 When a network-attributed order converts, the listener stores network attribution details under `order.metadata.network_attribution` and increments the related `AffiliateOfferLink` conversion metrics.
-```
 
 ### How it Works
 

@@ -34,9 +34,16 @@ cuts a merchant off immediately without touching their data:
 
 ## Merchant capabilities
 
-Verified merchants manage their own slice through the portal service
-pattern (see the rizq `AffiliateMerchantService`): offer drafts, the
-`requires_approval` toggle (manual review vs auto-approve), application
-review for their own offers, per-offer stats, and postback integration
-settings. Draft terms stay editable; published terms are operator-locked so
-live deals cannot change after affiliates join.
+Verified merchants manage their own slice through the Filament resources
+(`AffiliateOfferResource`, `AffiliateOfferApplicationResource`,
+`AffiliateSiteResource`), which are owner-scoped through their `site` relation:
+offer drafts, the `requires_approval` toggle (manual review vs auto-approve),
+application review for their own offers, per-offer stats, and postback
+integration settings (catalog URL + token). Draft terms stay editable; published
+terms are operator-locked so live deals cannot change after affiliates join.
+
+> **warning:**
+> There is no `AffiliateMerchantService` in this repo, and this package ships
+> no merchant-facing portal. `aiarmada/filament-affiliates` ships the
+> *affiliate*-facing `Portal*` pages — that is a different actor from a
+> network merchant.
