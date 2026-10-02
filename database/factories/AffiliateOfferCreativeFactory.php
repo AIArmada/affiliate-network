@@ -25,7 +25,6 @@ class AffiliateOfferCreativeFactory extends Factory
             'type' => AffiliateOfferCreative::TYPE_BANNER,
             'name' => $this->faker->words(3, true),
             'description' => $this->faker->sentence(),
-            'url' => $this->faker->imageUrl(728, 90),
             'width' => 728,
             'height' => 90,
             'html_code' => null,
@@ -44,7 +43,6 @@ class AffiliateOfferCreativeFactory extends Factory
             'type' => AffiliateOfferCreative::TYPE_BANNER,
             'width' => $width,
             'height' => $height,
-            'url' => $this->faker->imageUrl($width, $height),
         ]);
     }
 
@@ -57,7 +55,6 @@ class AffiliateOfferCreativeFactory extends Factory
             'type' => AffiliateOfferCreative::TYPE_TEXT,
             'width' => null,
             'height' => null,
-            'url' => null,
         ]);
     }
 
@@ -96,7 +93,6 @@ class AffiliateOfferCreativeFactory extends Factory
             'type' => AffiliateOfferCreative::TYPE_VIDEO,
             'width' => 1920,
             'height' => 1080,
-            'url' => $this->faker->url(),
         ]);
     }
 

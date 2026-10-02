@@ -47,13 +47,13 @@ class AffiliateOfferLinkFactory extends Factory
 
     public function configure(): static
     {
-        // Every offer link rides on a signed tracked link, mirroring the
-        // service: slug minted by links, attribution parameter pointing at it.
+        // Every offer link uses a public tracked URL: slugs and attribution
+        // parameters come from links.
         return $this->afterCreating(function (AffiliateOfferLink $link): void {
             $tracked = CreateLink::run([
                 'name' => sprintf('Factory offer link %s', mb_substr((string) $link->getKey(), 0, 8)),
                 'destination_url' => $this->faker->url(),
-                'require_signature' => true,
+                'require_signature' => false,
                 'subject_type' => $link->getMorphClass(),
                 'subject_id' => (string) $link->getKey(),
             ], false);

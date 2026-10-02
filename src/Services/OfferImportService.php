@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Services;
 
 use AIArmada\AffiliateNetwork\Actions\CreateOffer;
+use AIArmada\AffiliateNetwork\Actions\SyncOfferCreatives;
 use AIArmada\AffiliateNetwork\Actions\UpdateOffer;
 use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
@@ -32,6 +33,7 @@ final class OfferImportService
         private readonly CatalogReaderResolver $readers,
         private readonly CreateOffer $createOffer,
         private readonly UpdateOffer $updateOffer,
+        private readonly SyncOfferCreatives $syncCreatives,
     ) {}
 
     /**
@@ -49,7 +51,7 @@ final class OfferImportService
 
         foreach (array_slice($snapshot['subjects'] ?? [], 0, $maxSubjects) as $subject) {
             try {
-                $result = $this->syncSubject($site, $snapshot, $subject, $source, $existingBySubject);
+                $result = DB::transaction(fn (): string => $this->syncSubject($site, $snapshot, $subject, $source, $existingBySubject));
             } catch (Throwable $exception) {
                 Log::warning('affiliate-network.sync.subject_failed', [
                     'site_id' => $site->getKey(),
@@ -188,10 +190,21 @@ final class OfferImportService
             'active_promotions' => $promotions,
         ]));
 
-        $existing = $existingBySubject[$subjectKey] ?? null;
+        $creatives = $this->syncCreatives->normalize($snapshot['creatives'] ?? null);
+        $creativesChecksum = hash('sha256', json_encode($creatives, JSON_THROW_ON_ERROR));
+        $existing = isset($existingBySubject[$subjectKey])
+            ? AffiliateOffer::query()->whereKey($existingBySubject[$subjectKey]->getKey())->lockForUpdate()->firstOrFail()
+            : null;
 
         if ($existing && $existing->source_checksum === $checksum) {
-            return 'skipped';
+            if ($existing->creatives_checksum === $creativesChecksum) {
+                return 'skipped';
+            }
+
+            $this->syncCreatives->execute($existing, $creatives);
+            $existing->forceFill(['creatives_checksum' => $creativesChecksum])->save();
+
+            return 'updated';
         }
 
         $programSuffix = mb_substr((string) str_replace('-', '', (string) ($snapshot['program_id'] ?? '')), 0, 8);
@@ -227,11 +240,12 @@ final class OfferImportService
             'subject_type' => $subject['subject_type'] ?? null,
             'subject_key' => $subjectKey,
             'source_checksum' => $checksum,
+            'creatives_checksum' => $creativesChecksum,
             'last_synced_at' => CarbonImmutable::now(),
             'metadata' => [
                 'subject' => $subject,
                 'catalog_source' => $source,
-                'catalog_version' => $snapshot['version'] ?? 'v1',
+                'catalog_version' => $snapshot['version'],
             ],
         ] + $incomingRates;
 
@@ -255,18 +269,21 @@ final class OfferImportService
                         unset($data[$column]);
                     }
 
-                    $this->write($existing, $data);
+                    $offer = $this->write($existing, $data);
+                    $this->syncCreatives->execute($offer, $creatives);
 
                     return 'locked';
                 }
             }
 
-            $this->write($existing, $data);
+            $offer = $this->write($existing, $data);
+            $this->syncCreatives->execute($offer, $creatives);
 
             return 'updated';
         }
 
-        $this->write(null, $data, $site);
+        $offer = $this->write(null, $data, $site);
+        $this->syncCreatives->execute($offer, $creatives);
 
         return 'created';
     }
@@ -322,20 +339,14 @@ final class OfferImportService
     /**
      * @param  array<string, mixed>  $data
      */
-    private function write(?AffiliateOffer $existing, array $data, ?AffiliateSite $site = null): void
+    private function write(?AffiliateOffer $existing, array $data, ?AffiliateSite $site = null): AffiliateOffer
     {
         AffiliateOffer::setSyncingImport(true);
 
         try {
-            DB::transaction(function () use ($existing, $data, $site): void {
-                if ($existing) {
-                    $this->updateOffer->execute($existing, $data);
-
-                    return;
-                }
-
-                $this->createOffer->execute($site, $data);
-            });
+            return $existing
+                ? $this->updateOffer->execute($existing, $data)
+                : $this->createOffer->execute($site, $data);
         } finally {
             AffiliateOffer::setSyncingImport(false);
         }

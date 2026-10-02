@@ -51,13 +51,13 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 
 ## Discovery, enrollment, and conversion boundaries
 
-`affiliate-network` owns discovery: merchant sites, marketplace offers, signed-redirect policy, clicks, and network-level applications for remote catalogs. `affiliates` owns merchant-local execution: `AffiliateProgram`, memberships, attribution, commissions, payouts, and fraud decisions. The network never writes commission or payout records.
+`affiliate-network` owns discovery: merchant sites, marketplace offers, redirect policy, clicks, and network-level applications for remote catalogs. `affiliates` owns merchant-local execution: `AffiliateProgram`, memberships, attribution, commissions, payouts, and fraud decisions. The network never writes commission or payout records.
 
 Local catalog synchronization calls the read-only `ProgramCatalogService::snapshot()` path through the affiliates-provided local reader. A local imported offer keeps the core program ID in `external_program_id` for reference, but enrollment for every offer is a network application — remote mirrors are marked with `metadata.catalog_source = remote`, and neither path touches merchant program memberships.
 
 Conversion precedence is intentionally split: the network side records discovery attribution (link clicks/conversions and `network_attribution` order metadata), while core `affiliates` records commission and payout state. Keep the guards separate when both paths observe one order: the network integration must reject an already-attributed order/link before recording a second network conversion, and core conversion calls must carry a stable `external_reference`, which `RecordAffiliateConversion` turns into its idempotency key. Core commission data is authoritative for commission and payout execution; network click/conversion counters remain discovery reporting. The `orders` listener is an integration boundary and is not replaced or modified by this package.
 
-Public redirects are served by `aiarmada/links` (`GET /go/{slug}`): per-link signed URLs with `links.routing.signature_ttl_minutes` TTL, a network policy gate over link, offer, site, and approval state, and throttling through `links.routing.middleware`. Outbound catalog and verification HTTP uses the shared public-URL guard (HTTP/HTTPS only, public DNS/IPs, no credentials/fragments), pinned transport with redirects disabled, configured timeouts/retries, and a one-megabyte response cap.
+Public redirects are served by `aiarmada/links` (`GET /go/{slug}`): unsigned public slug URLs without signature expiry, a network policy gate over link, offer, site, and approval state, and throttling through `links.routing.middleware`. Outbound catalog and verification HTTP uses the shared public-URL guard (HTTP/HTTPS only, public DNS/IPs, no credentials/fragments), pinned transport with redirects disabled, configured timeouts/retries, and a one-megabyte response cap.
 
 The `aiarmada/affiliate-network` package provides a complete multi-merchant affiliate network and marketplace system for Laravel. It runs standalone so merchants can publish offers and affiliates can discover and promote them; install `aiarmada/affiliates` alongside it to enable local identity, ledger, program, and catalog features.
 
@@ -67,7 +67,7 @@ The `aiarmada/affiliate-network` package provides a complete multi-merchant affi
 - **Offer Publishing** - Create affiliate offers with flexible commission structures (percentage or fixed)
 - **Offer Categories** - Hierarchical category organization with configurable depth
 - **Offer Applications** - Affiliates apply to promote offers with approval workflows
-- **Tracking Links** - Signed deep link generation with click/conversion tracking and sub-ID support
+- **Tracking Links** - Public deep link generation with click/conversion tracking and sub-ID support
 - **Creative Assets** - Banners, text links, email templates, HTML widgets, and video content
 - **Checkout Integration** - Native tracking and conversion recording for sites using the commerce checkout package
 - **Multi-Tenancy** - Full owner scoping with relationship-based inheritance
@@ -130,7 +130,7 @@ $sites = AffiliateSite::forOwner($merchant)->get();
 
 ### Deep Link Tracking
 
-Generate signed tracking URLs with full attribution:
+Generate clean tracking URLs with full attribution:
 
 ```php
 use AIArmada\AffiliateNetwork\Services\OfferLinkService;
@@ -144,7 +144,7 @@ $link = $linkService->createLink($offer, (string) $affiliate->getKey(), [
 ]);
 
 $trackingUrl = $linkService->generateTrackingUrl($link);
-// https://yoursite.com/go/aB3dE9fHjKlmN0p?signature=xxx&expires=xxx
+// https://yoursite.com/go/aB3dE9fHjKlmN0p
 ```
 
 Redirects are served by `aiarmada/links`; the network contributes redirect policy (link, offer, site, and approval state) through a link gate.
@@ -239,7 +239,7 @@ affiliate-network/
 | `affiliate_network_sites` | Merchant domains | `owner_type`, `owner_id`, `domain`, `status`, `verification_method` |
 | `affiliate_network_offer_categories` | Hierarchical categories | `owner_type`, `owner_id`, `parent_id`, `name`, `slug` |
 | `affiliate_network_offers` | Affiliate offers | `site_id`, `category_id`, `rate_base_bp`, `rate_fixed_minor`, `status` |
-| `affiliate_network_offer_creatives` | Promotional assets | `offer_id`, `type`, `url`, `width`, `height` |
+| `affiliate_network_offer_creatives` | Promotional assets | `offer_id`, `type`, `external_creative_id`, `source_asset_url`, `width`, `height` |
 | `affiliate_network_offer_applications` | Affiliate-to-offer applications | `offer_id`, `affiliate_id`, `status`, `reviewed_at` |
 | `affiliate_network_offer_links` | Tracking links | `link_id`, `offer_id`, `affiliate_id`, `clicks`, `conversions`, `revenue`, `currency` |
 | `affiliate_network_conversion_legs` | Append-only money legs per conversion | `link_id`, `offer_id`, `affiliate_id`, `link_code`, `revenue_minor`, `commission_minor`, `fee_minor`, `fee_bp`, `payout_minor`, `external_reference`, `status`, `occurred_at` |

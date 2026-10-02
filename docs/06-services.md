@@ -166,6 +166,10 @@ $application = $offerService->applyForOffer(
   `ApplicationSubmitted`
 - Auto-approves when the offer's `requires_approval` column is false, or when
   `affiliate-network.applications.auto_approve` is true
+- A new automatic approval dispatches `ApplicationSubmitted` first, then
+  `ApplicationApproved` after the enclosing database transaction commits
+- Pending creation and cooldown reapplication dispatch only `ApplicationSubmitted`;
+  returning an existing application dispatches neither event
 
 #### approveApplication
 
@@ -174,6 +178,12 @@ Approve a pending application.
 ```php
 $application = $offerService->approveApplication($application, $reviewerId);
 ```
+
+Locks and rechecks the owner-scoped application within a transaction. An already
+approved application is returned unchanged, preserving its reviewer and approval
+timestamps and emitting no new event. A new approval dispatches
+`ApplicationApproved` only after the enclosing transaction commits; rollback
+discards it.
 
 #### rejectApplication
 
@@ -256,14 +266,14 @@ $link = $linkService->createLink($offer, $affiliateId, [
 ```
 #### generateTrackingUrl
 
-Generate a signed tracking URL.
+Generate a clean public tracking URL.
 
 ```php
 $url = $linkService->generateTrackingUrl($link);
-// Returns: https://yoursite.com/go/aB3dE9fHjKlmN0p?signature=xxx&expires=xxx
+// Returns: https://yoursite.com/go/aB3dE9fHjKlmN0p
 ```
 
-Uses the backing tracked link's signed URL (TTL from `links.routing.signature_ttl_minutes`).
+Uses the backing tracked link’s public cloaked URL, without signature expiry. Row-level controls and network policy still apply.
 
 #### resolveLink
 

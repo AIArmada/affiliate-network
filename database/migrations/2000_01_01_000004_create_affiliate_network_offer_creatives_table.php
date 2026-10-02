@@ -20,7 +20,9 @@ return new class extends Migration
             $table->string('type')->default('banner');
             $table->string('name');
             $table->text('description')->nullable();
-            $table->string('url')->nullable();
+            $table->string('external_creative_id')->nullable();
+            $table->string('source_asset_url', 2048)->nullable();
+            $table->string('destination_url', 2048)->nullable();
             $table->unsignedSmallInteger('width')->nullable();
             $table->unsignedSmallInteger('height')->nullable();
             $table->text('html_code')->nullable();
@@ -33,6 +35,7 @@ return new class extends Migration
 
             $table->index(['offer_id', 'is_active']);
             $table->index('type');
+            $table->index(['offer_id', 'external_creative_id']);
         });
     }
 };

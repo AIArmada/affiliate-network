@@ -65,6 +65,7 @@ final class AffiliatesIdentityReader implements AffiliateIdentityResolver
         return new NetworkAffiliate(
             id: (string) $affiliate->getKey(),
             code: (string) $affiliate->code,
+            handle: $affiliate->handle,
             email: $affiliate->contact_email,
             ownerType: $affiliate->owner_type,
             ownerId: $affiliate->owner_id,
@@ -82,6 +83,7 @@ final class AffiliatesIdentityReader implements AffiliateIdentityResolver
         return new NetworkAffiliate(
             id: $merchant->id,
             code: $merchant->code,
+            handle: $merchant->handle,
             email: $merchant->email,
             ownerType: $merchant->ownerType,
             ownerId: $merchant->ownerId,

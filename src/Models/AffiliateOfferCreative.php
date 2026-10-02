@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use OwenIt\Auditing\Contracts\Auditable;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * @property string $id
@@ -21,7 +23,9 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string $type
  * @property string $name
  * @property string|null $description
- * @property string|null $url
+ * @property string|null $external_creative_id
+ * @property string|null $destination_url
+ * @property string|null $source_asset_url
  * @property int|null $width
  * @property int|null $height
  * @property string|null $html_code
@@ -32,11 +36,12 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property CarbonImmutable $updated_at
  * @property-read AffiliateOffer $offer
  */
-class AffiliateOfferCreative extends Model implements Auditable
+class AffiliateOfferCreative extends Model implements Auditable, HasMedia
 {
     use HasCommerceAudit;
     use HasFactory;
     use HasUuids;
+    use InteractsWithMedia;
     use LogsCommerceActivity;
     use ScopesByBelongsToOwner;
 
@@ -60,12 +65,18 @@ class AffiliateOfferCreative extends Model implements Auditable
 
     public const TYPE_VIDEO = 'video';
 
+    public const TYPE_IMAGE = 'image';
+
+    public const TYPE_DOCUMENT = 'document';
+
     protected $fillable = [
         'offer_id',
+        'external_creative_id',
+        'destination_url',
         'type',
         'name',
         'description',
-        'url',
+        'source_asset_url',
         'width',
         'height',
         'html_code',
@@ -73,6 +84,47 @@ class AffiliateOfferCreative extends Model implements Auditable
         'sort_order',
         'metadata',
     ];
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('creative_asset')
+            ->useDisk('public')
+            ->singleFile()
+            ->acceptsMimeTypes([
+                'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+                'video/mp4', 'video/webm', 'application/pdf', 'application/zip',
+            ]);
+    }
+
+    public function getAssetUrl(): ?string
+    {
+        return $this->external_creative_id !== null
+            ? $this->source_asset_url
+            : $this->getFirstMedia('creative_asset')?->getFullUrl();
+    }
+
+    public function getEmbedCode(string $trackingUrl): ?string
+    {
+        $href = htmlspecialchars($trackingUrl, ENT_QUOTES, 'UTF-8');
+        $name = htmlspecialchars($this->name, ENT_QUOTES, 'UTF-8');
+        $asset = $this->getAssetUrl();
+
+        if (in_array($this->type, [self::TYPE_BANNER, self::TYPE_IMAGE], true)) {
+            if ($asset === null) {
+                return null;
+            }
+
+            $src = htmlspecialchars($asset, ENT_QUOTES, 'UTF-8');
+
+            return sprintf('<a href="%s" rel="sponsored"><img src="%s" alt="%s"></a>', $href, $src, $name);
+        }
+
+        if (in_array($this->type, [self::TYPE_HTML, self::TYPE_EMAIL], true) && $this->html_code !== null) {
+            return str_replace('{{tracking_url}}', $href, $this->html_code);
+        }
+
+        return sprintf('<a href="%s" rel="sponsored">%s</a>', $href, $name);
+    }
 
     public function getTable(): string
     {

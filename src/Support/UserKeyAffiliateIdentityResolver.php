@@ -7,7 +7,9 @@ namespace AIArmada\AffiliateNetwork\Support;
 use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
 use AIArmada\AffiliateNetwork\Data\NetworkAffiliate;
 use AIArmada\CommerceSupport\Support\OwnerContext;
+use AIArmada\CommerceSupport\Support\PublicHandle;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Validator;
 
 /**
  * Default affiliate identity for engine-less installs: the app user itself.
@@ -95,10 +97,15 @@ final class UserKeyAffiliateIdentityResolver implements AffiliateIdentityResolve
     private function toNetworkAffiliate(Model $user): NetworkAffiliate
     {
         $email = $user->getAttribute('email');
+        $handle = $user->hasAttribute('handle') ? $user->getAttribute('handle') : null;
+        $handle ??= PublicHandle::forIdentity($user->getMorphClass() . ':' . $user->getKey());
+        $handle = is_string($handle) ? PublicHandle::normalize($handle) : $handle;
+        Validator::make(['handle' => $handle], ['handle' => PublicHandle::rules()])->validate();
 
         return new NetworkAffiliate(
             id: (string) $user->getKey(),
             code: (string) $user->getKey(),
+            handle: $handle,
             email: is_string($email) ? $email : null,
             ownerType: $user->getMorphClass(),
             ownerId: $user->getKey(),

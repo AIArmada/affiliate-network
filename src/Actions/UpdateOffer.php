@@ -54,6 +54,7 @@ final class UpdateOffer
             'subject_key',
             'source_url',
             'source_checksum',
+            'creatives_checksum',
             'last_synced_at',
         ];
     }
@@ -85,8 +86,8 @@ final class UpdateOffer
 
         // Sync internals are deliberately not fillable; persist them via an
         // explicit forceFill so mass assignment can never touch them.
-        $offer->fill(Arr::except($data, ['source_checksum', 'last_synced_at']));
-        $offer->forceFill(Arr::only($data, ['source_checksum', 'last_synced_at']));
+        $offer->fill(Arr::except($data, ['source_checksum', 'creatives_checksum', 'last_synced_at']));
+        $offer->forceFill(Arr::only($data, ['source_checksum', 'creatives_checksum', 'last_synced_at']));
         $offer->save();
 
         $fresh = $offer->fresh() ?? $offer;

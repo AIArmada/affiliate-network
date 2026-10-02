@@ -57,7 +57,8 @@ final class RemoteCatalogClient implements CatalogReaderInterface
 
         $data = $this->decodePayload($response, 'Catalog');
 
-        if (! isset($data['program_id'], $data['subjects']) || ! is_array($data['subjects'])) {
+        if (($data['version'] ?? null) !== 'v2' || ($data['program_id'] ?? null) !== $programId
+            || ! is_array($data['subjects'] ?? null) || ! is_array($data['creatives'] ?? null)) {
             throw new OfferNotFoundException('Invalid catalog payload.');
         }
 

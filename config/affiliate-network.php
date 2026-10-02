@@ -118,6 +118,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'links' => [
+        'default_style' => 'short',
         'parameter' => env('AFFILIATE_NETWORK_LINK_PARAM', 'anl'),
     ],
 

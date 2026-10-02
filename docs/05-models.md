@@ -155,7 +155,10 @@ $category->offers;   // HasMany - AffiliateOffer
 
 ## AffiliateOfferCreative
 
-Banner, text link, or other promotional asset.
+Banner, text link, or other promotional asset. Implements Spatie Media
+Library's `HasMedia` contract. Manual files live in the single-file
+`creative_asset` collection; `getAssetUrl()` resolves media for manual rows
+and `source_asset_url` for imported rows.
 
 ### Properties
 
@@ -163,10 +166,12 @@ Banner, text link, or other promotional asset.
 |----------|------|-------------|
 | `id` | `string` | UUID primary key |
 | `offer_id` | `string` | Foreign key to offer |
-| `type` | `string` | banner, text, email, html, video |
+| `type` | `string` | banner, text, image, document, email, html, video |
 | `name` | `string` | Creative name |
 | `description` | `string\|null` | Description |
-| `url` | `string\|null` | Asset URL |
+| `external_creative_id` | `string\|null` | Merchant creative ID for imported rows |
+| `source_asset_url` | `string\|null` | Imported merchant asset URL |
+| `destination_url` | `string\|null` | Click destination |
 | `width` | `int\|null` | Width in pixels |
 | `height` | `int\|null` | Height in pixels |
 | `html_code` | `string\|null` | HTML embed code |

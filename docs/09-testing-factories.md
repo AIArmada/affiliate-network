@@ -438,14 +438,13 @@ it('creates tracking link', function () {
     expect($link->link->slug)->not->toBeEmpty();
 });
 
-it('generates signed tracking URL', function () {
+it('generates a clean public tracking URL', function () {
     $link = AffiliateOfferLink::factory()->create();
     $service = app(OfferLinkService::class);
 
     $url = $service->generateTrackingUrl($link);
 
-    expect($url)->toContain('/go/' . $link->link->slug);
-    expect($url)->toContain('signature=');
+    expect($url)->toBe(route('links.redirect', ['slug' => $link->link->slug]));
 });
 
 it('records clicks on redirect', function () {

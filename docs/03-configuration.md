@@ -57,6 +57,7 @@ return [
     ],
 
     'links' => [
+        'default_style' => 'short',
         'parameter' => env('AFFILIATE_NETWORK_LINK_PARAM', 'anl'),
     ],
 
@@ -220,3 +221,15 @@ Site-content and catalog requests always validate DNS results, reject private/re
 | `enabled` | Expose the merchant postback endpoint | `false` |
 | `prefix` | API prefix for postback routes | `api/affiliate-network` |
 | `middleware` | Postback route middleware | `['api', 'throttle:60,1']` |
+
+
+`links.default_style` selects `short` or `branded`. `OfferLinkService::createLink()`
+accepts `link_style` to override the default and `link_label` for the branded
+campaign segment. Handles come from `AffiliateIdentityResolver`, never a second
+network profile. Custom resolvers must provide the required `NetworkAffiliate::handle`.
+The default user resolver reads the host user's `handle` attribute or assigns a
+stable `creator-{identity-hash}` handle when the host does not expose one.
+
+Hosts own onboarding, handle updates, and uniqueness across their public user
+namespace. The affiliates adapter supplies the core affiliate handle. Updating a
+handle affects new links; issued URLs retain their stored handle segment.

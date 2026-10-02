@@ -8,6 +8,7 @@ use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
+use AIArmada\AffiliateNetwork\Events\ApplicationApproved;
 use AIArmada\AffiliateNetwork\Events\ApplicationSubmitted;
 use AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
@@ -17,6 +18,7 @@ use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 
 final class ApplyToOffer
 {
@@ -87,14 +89,24 @@ final class ApplyToOffer
             }
 
             try {
-                $application = AffiliateOfferApplication::create([
-                    'offer_id' => $offer->id,
-                    'affiliate_id' => $affiliate->id,
-                    'status' => $status,
-                    'reason' => $reason,
-                    'reviewed_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
-                    'approved_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
-                ]);
+                return DB::transaction(function () use ($offer, $affiliate, $status, $reason): AffiliateOfferApplication {
+                    $application = AffiliateOfferApplication::create([
+                        'offer_id' => $offer->id,
+                        'affiliate_id' => $affiliate->id,
+                        'status' => $status,
+                        'reason' => $reason,
+                        'reviewed_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
+                        'approved_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
+                    ]);
+
+                    event(new ApplicationSubmitted($application));
+
+                    if ($status === ApplicationStatus::Approved) {
+                        event(new ApplicationApproved($application));
+                    }
+
+                    return $application;
+                });
             } catch (QueryException $exception) {
                 // Concurrent double-apply: the unique(offer_id, affiliate_id)
                 // row already exists, so return it instead of 500ing.
@@ -113,10 +125,6 @@ final class ApplyToOffer
 
                 return $raced;
             }
-
-            event(new ApplicationSubmitted($application));
-
-            return $application;
         });
     }
 

@@ -51,6 +51,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property string|null $source_url
  * @property array<string, mixed>|null $restrictions
  * @property array<string, mixed>|null $metadata
+ * @property string|null $creatives_checksum
  * @property string|null $source_checksum
  * @property CarbonImmutable|null $starts_at
  * @property CarbonImmutable|null $ends_at
@@ -216,7 +217,7 @@ class AffiliateOffer extends Model implements Auditable
     protected static function booted(): void
     {
         static::deleting(function (self $offer): void {
-            $offer->creatives()->delete();
+            $offer->creatives()->each(fn (AffiliateOfferCreative $creative) => $creative->delete());
             $offer->applications()->delete();
             $offer->links()->delete();
         });

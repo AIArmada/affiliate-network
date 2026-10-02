@@ -75,7 +75,7 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
         $this->app->singleton(CreatorBalances::class);
         $this->app->singleton(NetworkLedgerReconciliationService::class);
 
-        $this->app->bind(LinkGateInterface::class, OfferLinkGate::class);
+        $this->app->tag([OfferLinkGate::class], LinkGateInterface::class);
 
         // Standalone defaults. When the engine is installed, boot-time
         // rebinding swaps every seam to its engine adapter — provider

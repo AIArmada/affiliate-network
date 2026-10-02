@@ -9,6 +9,7 @@ title: Installation
 - PHP 8.5+
 - Laravel 13+
 - `aiarmada/commerce-support` package (for owner traits)
+- Spatie Media Library v11 (installed with the package)
 - `aiarmada/affiliates` package (optional; binds the local identity, ledger, program, and catalog adapters)
 
 ## Install via Composer
@@ -43,6 +44,11 @@ This creates the following tables (with configurable prefix):
 - `affiliate_network_offer_creatives` - Banners, text links, etc.
 - `affiliate_network_offer_applications` - Affiliate applications
 - `affiliate_network_offer_links` - Tracking links
+
+Manual creative files use the `public` disk. `commerce-support` loads the
+Media Library table migration when no published copy exists, with UUID morph
+keys matching offer creative IDs. Configure media storage through
+`config/media-library.php`. Imported creatives hotlink public merchant assets.
 
 ## Environment Variables
 

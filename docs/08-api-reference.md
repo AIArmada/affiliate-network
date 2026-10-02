@@ -95,6 +95,8 @@ AffiliateOfferCreative::TYPE_TEXT    // 'text'
 AffiliateOfferCreative::TYPE_EMAIL   // 'email'
 AffiliateOfferCreative::TYPE_HTML    // 'html'
 AffiliateOfferCreative::TYPE_VIDEO   // 'video'
+AffiliateOfferCreative::TYPE_IMAGE   // 'image'
+AffiliateOfferCreative::TYPE_DOCUMENT // 'document'
 ```
 
 #### Methods
@@ -226,7 +228,7 @@ $link = $service->createLink(
 // subject-specific context that may later be bridged into core affiliates flows.
 
 // Generate URL
-$signedUrl = $service->generateTrackingUrl(AffiliateOfferLink $link): string;
+$trackingUrl = $service->generateTrackingUrl(AffiliateOfferLink $link): string;
 
 // Resolve link
 $link = $service->resolveLink(string $slug): ?AffiliateOfferLink;
@@ -277,7 +279,7 @@ php artisan affiliate-network:sync-offers {site} [--program={id}]
 
 ## Routes
 
-Redirects are served by `aiarmada/links` (`GET /go/{slug}`, signed URLs).
+Redirects are served by `aiarmada/links` (`GET /go/{slug}`, unsigned public URLs).
 The network binds an `OfferLinkGate` that blocks the redirect with `410`
 when the link is inactive, the offer is inactive, no site is verified, or a
 required approval is missing; unknown slugs return `404`. Clicks increment
@@ -292,10 +294,7 @@ The package ships five events in `AIArmada\AffiliateNetwork\Events`, dispatched
 by the corresponding Action: `OfferCreated`, `OfferUpdated`,
 `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`.
 
-> **warning:**
-> "The package does not emit custom events" is wrong. Every Action fires one.
-> Model events on `AffiliateOfferApplication` are still available for finer
-> hooks:
+Model events on `AffiliateOfferApplication` are also available for finer hooks:
 
 ```php
 use AIArmada\AffiliateNetwork\Events\ApplicationApproved;
@@ -310,6 +309,27 @@ ApplicationSubmitted::class;     // (AffiliateOfferApplication $application)
 ApplicationApproved::class;      // (AffiliateOfferApplication $application)
 NetworkConversionRecorded::class; // (AffiliateOfferLink $link, int $revenueMinor, ?string $currency, ?NetworkConversionLeg $leg)
 ```
+
+
+### Approval event contract
+
+Listen to `ApplicationApproved` for approved-side effects. Both manual approval
+and automatic approval through package actions emit it with the approved
+application. Automatic approval emits `ApplicationSubmitted` first.
+`ApplicationApproved` waits for the enclosing database transaction to commit and
+is discarded on rollback. Pending creation, cooldown reapplication, returning an
+existing application, and repeating approval on an already-approved application
+emit no approval event. Direct model updates do not emit this domain event.
+
+The built-in approval notification listener also runs for automatic approvals.
+Default tracking-link provisioning remains host policy. Hosts should make their
+side effects idempotent; this event does not guarantee exactly-once delivery.
+
+> **warning:**
+> This changes the approval event contract. Hosts should handle approval through
+> `ApplicationApproved` and remove approval side effects from
+> `ApplicationSubmitted` listeners to avoid running them twice. Already-approved
+> records are not replayed or backfilled. No schema change is required.
 
 ---
 
@@ -335,3 +355,53 @@ model class:
 `AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException`
 (a `RuntimeException`) while a rejected application is still inside
 `affiliate-network.applications.cooldown_days`.
+
+## Mirrored and manual creatives
+
+`AffiliateOfferCreative::external_creative_id` identifies merchant-origin
+rows; null identifies manual rows. Imported `source_asset_url` stores the public merchant
+asset URL. Manual assets use only Media Library's single-file `creative_asset`
+collection on the `public` disk; `getAssetUrl()` resolves the relevant asset
+and returns null for file-less creatives. `destination_url` is the click target.
+
+Catalog snapshots must use version `v2` and include `creatives` (even when
+empty). `text_link` maps to `text`; image/document/video/banner/email types
+retain their meaning. Merchant type and tracking code are retained as
+`metadata.merchant_type` and `metadata.merchant_tracking_code`; merchant
+personalized HTML is never imported.
+
+The importer matches `(offer_id, external_creative_id)`, preserves `is_active`
+and `sort_order`, and deletes absent imported rows while keeping manual rows.
+A separate `creatives_checksum` propagates creative-only changes without
+rewriting rates. Each subject's offer and creative reconciliation is atomic;
+failures count toward `failed` and mark the site `partial`.
+
+Hosts can use these services from their storefront or API. Issue a creative
+link once and retain its ID; rendering existing links does not need new links.
+
+```php
+use AIArmada\AffiliateNetwork\Models\AffiliateOfferCreative;
+use AIArmada\AffiliateNetwork\Services\OfferLinkService;
+
+$creative = AffiliateOfferCreative::query()->findOrFail($creativeId);
+$service = app(OfferLinkService::class);
+$link = $service->createCreativeLink($creative, $affiliateId);
+$payload = $service->creativePayload($creative, $link);
+// id, type, name, description, asset_url, tracking_url, embed_code, width, height
+```
+
+`createCreativeLink()` requires an active creative and retains the normal
+verified-site, published-offer, and approval checks. It uses the creative's
+destination, falling back to the offer landing URL and then the site homepage.
+`creativePayload()` requires a link issued for that creative. Its tracking URL
+is the public network `/go/{slug}` URL; the backing link adds network
+attribution at redirect. Banner/image embeds require an asset. Manual HTML
+and email templates may use `{{tracking_url}}`; other types produce a text
+link. Treat manual template HTML as trusted operator-authored content.
+
+> **warning**
+> Breaking catalog contract: deploy merchant and network version 2 together.
+> Existing migrations define `external_creative_id`, `destination_url`, and
+> `creatives_checksum`; there are no compatibility paths or backfills.
+> Merchant files must remain publicly reachable because imports store URLs,
+> not copies of file bytes.

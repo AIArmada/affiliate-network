@@ -8,6 +8,7 @@ use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
 use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
 use AIArmada\AffiliateNetwork\Enums\LegStatus;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
+use AIArmada\AffiliateNetwork\Models\AffiliateOfferCreative;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
@@ -15,12 +16,10 @@ use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
 use AIArmada\AffiliateNetwork\Support\QueryParameters;
 use AIArmada\CommerceSupport\Support\MoneyFormatter;
 use AIArmada\CommerceSupport\Support\OwnerContext;
-use AIArmada\Links\Actions\CreateLink;
-use AIArmada\Links\Actions\GenerateLinkUrl;
-use AIArmada\Links\Contracts\SlugGeneratorInterface;
+use AIArmada\Links\Actions\CreatePublicLink;
 use AIArmada\Links\Models\Link;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Validator;
 use RuntimeException;
 
 /**
@@ -28,7 +27,7 @@ use RuntimeException;
  *
  * BOUNDARY: This service owns attribution records for affiliate/offer pairs:
  * minting links for approved offers, resolving them by slug, and recording
- * conversions. Redirect mechanics (slugs, signed URLs, click capture) live in
+ * conversions. Redirect mechanics (slugs, URL generation, click capture) live in
  * aiarmada/links; each offer link rides on one backing tracked link.
  *
  * @see OfferManagementService for offer lifecycle operations.
@@ -38,7 +37,6 @@ final class OfferLinkService
     public function __construct(
         private readonly RecordNetworkConversion $recordNetworkConversionAction,
         private readonly OfferManagementService $offerManagementService,
-        private readonly SlugGeneratorInterface $slugs,
         private readonly ?AffiliateIdentityResolver $identities = null,
     ) {}
 
@@ -94,6 +92,54 @@ final class OfferLinkService
     }
 
     /**
+     * @param  array<string, mixed>  $options
+     */
+    public function createCreativeLink(AffiliateOfferCreative $creative, string $affiliateId, array $options = []): AffiliateOfferLink
+    {
+        $creative = AffiliateOfferCreative::query()->whereKey($creative->getKey())->firstOrFail();
+
+        if (! $creative->is_active) {
+            throw new RuntimeException('Links can only be created for active creatives.');
+        }
+
+        $options['target_url'] = $creative->destination_url ?? $creative->offer->landing_url
+            ?? "https://{$creative->offer->site->domain}/";
+        $options['metadata'] = array_merge($options['metadata'] ?? [], ['creative_id' => $creative->id]);
+
+        return $this->createLink($creative->offer, $affiliateId, $options);
+    }
+
+    /**
+     * Presentation data for a previously issued creative link. Hosts may
+     * expose this from their storefront/API without merchant attribution HTML.
+     *
+     * @return array{id: string, type: string, name: string, description: string|null, asset_url: string|null, tracking_url: string, embed_code: string|null, width: int|null, height: int|null}
+     */
+    public function creativePayload(AffiliateOfferCreative $creative, AffiliateOfferLink $link): array
+    {
+        $creative = AffiliateOfferCreative::query()->whereKey($creative->getKey())->firstOrFail();
+
+        if (! $creative->is_active || $link->offer_id !== $creative->offer_id
+            || ($link->metadata['creative_id'] ?? null) !== $creative->id) {
+            throw new RuntimeException('The link must belong to this active creative.');
+        }
+
+        $trackingUrl = $this->generateTrackingUrl($link);
+
+        return [
+            'id' => $creative->id,
+            'type' => $creative->type,
+            'name' => $creative->name,
+            'description' => $creative->description,
+            'asset_url' => $creative->getAssetUrl(),
+            'tracking_url' => $trackingUrl,
+            'embed_code' => $creative->getEmbedCode($trackingUrl),
+            'width' => $creative->width,
+            'height' => $creative->height,
+        ];
+    }
+
+    /**
      * Generate a tracking URL for a link.
      */
     public function generateTrackingUrl(AffiliateOfferLink $link): string
@@ -104,7 +150,7 @@ final class OfferLinkService
             throw new RuntimeException('Offer link has no tracked link.');
         }
 
-        return GenerateLinkUrl::run($tracked);
+        return $tracked->cloakedUrl();
     }
 
     /**
@@ -175,42 +221,35 @@ final class OfferLinkService
      */
     private function createTrackedLink(AffiliateOfferLink $offerLink, AffiliateOffer $offer, string $affiliateId, string $targetUrl, array $options): Link
     {
-        $param = config('affiliate-network.links.parameter', 'anl');
+        Validator::make($options, [
+            'link_style' => ['sometimes', 'string', 'in:short,branded'],
+            'link_label' => ['nullable', 'string', 'max:60'],
+        ])->validate();
 
-        for ($attempt = 0; $attempt < 3; $attempt++) {
-            $slug = $this->slugs->generate(16);
+        $style = $options['link_style'] ?? config('affiliate-network.links.default_style', 'short');
+        $identity = $style === 'branded' ? $this->identities?->findAccessible($affiliateId) : null;
+        $parameters = array_merge(
+            QueryParameters::parse($options['custom_parameters'] ?? null),
+            array_filter([
+                'sub1' => $offerLink->sub_id,
+                'sub2' => $offerLink->sub_id_2,
+                'sub3' => $offerLink->sub_id_3,
+            ]),
+        );
+        $link = CreatePublicLink::run([
+            'name' => mb_substr(sprintf('%s / %s', $offer->name, mb_substr($affiliateId, 0, 8)), 0, 255),
+            'destination_url' => $targetUrl,
+            'parameters' => $parameters,
+            'subject_type' => $offerLink->getMorphClass(),
+            'subject_id' => (string) $offerLink->getKey(),
+            'expires_at' => $options['expires_at'] ?? null,
+        ], $style, $identity?->handle, $options['link_label'] ?? $offer->name, false);
 
-            $parameters = array_merge(
-                QueryParameters::parse($options['custom_parameters'] ?? null),
-                [$param => $slug],
-                array_filter([
-                    'sub1' => $offerLink->sub_id,
-                    'sub2' => $offerLink->sub_id_2,
-                    'sub3' => $offerLink->sub_id_3,
-                ]),
-            );
+        $link->update(['parameters' => array_merge($parameters, [
+            config('affiliate-network.links.parameter', 'anl') => $link->slug,
+        ])]);
 
-            try {
-                // Merchants may still serve plain http, so the network opts its
-                // own links out of the links default https requirement.
-                return CreateLink::run([
-                    'name' => mb_substr(sprintf('%s / %s', $offer->name, mb_substr($affiliateId, 0, 8)), 0, 255),
-                    'slug' => $slug,
-                    'destination_url' => $targetUrl,
-                    'parameters' => $parameters,
-                    'require_signature' => true,
-                    'subject_type' => $offerLink->getMorphClass(),
-                    'subject_id' => (string) $offerLink->getKey(),
-                    'expires_at' => $options['expires_at'] ?? null,
-                ], false);
-            } catch (ValidationException $exception) {
-                if (! isset($exception->errors()['slug'])) {
-                    throw $exception;
-                }
-            }
-        }
-
-        throw new RuntimeException('Unable to mint a unique tracked slug.');
+        return $link;
     }
 
     private static function isHttpUrl(mixed $url): bool

@@ -114,20 +114,7 @@ $link->link->expires_at;  // Check if past
 $link->isExpired();        // Should return true
 ```
 
-2. Extend the signed-URL TTL in the links config:
-```php
-// config/links.php
-'routing' => [
-    'signature_ttl_minutes' => 129600, // 90 days
-],
-```
-
-3. Create links without expiration:
-```php
-$linkService->createLink($offer, $affiliateId, [
-    'expires_at' => null,
-]);
-```
+2. If an expiration is intentional, extend it deliberately through `UpdateLink`; for a new permanent link omit `expires_at`.
 
 ### Links Return 410 (Offer Inactive)
 

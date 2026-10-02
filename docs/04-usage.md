@@ -254,17 +254,21 @@ $link = $linkService->createLink($offer, $affiliateId, [
     'sub_id_2' => 'sidebar-banner',
 ]);
 
-// Get tracking URL (signed, TTL from links config)
+// Get a clean tracking URL by default
 $trackingUrl = $linkService->generateTrackingUrl($link);
-// https://yoursite.com/go/aB3dE9fHjKlmN0p?signature=xxx&expires=xxx
+// https://yoursite.com/go/aB3dE9fHjKlmN0p
 ```
 
-Every offer link rides on a signed tracked link (`aiarmada/links`): the
+Every offer link rides on a tracked link (`aiarmada/links`): the
 redirect appends `anl=<slug>` plus sub IDs to the destination, captures a raw
 click event, and increments the link counter through a `LinkClicked`
 listener. Unknown slugs return `404`; deactivated, expired, or
 policy-blocked links (inactive offer, unverified site, missing approval)
 return `410`.
+
+Offer links always use unsigned public URLs. A copied URL has no signature TTL and remains usable until row expiry, deactivation, click limits, or network policy blocks it. Set `expires_at` only when the link should expire deliberately.
+
+> **warning**: Breaking change: affiliate offer links are unsigned. There is no signature option, compatibility path, or backfill.
 
 ### Track Conversions
 
@@ -359,22 +363,39 @@ $banner = AffiliateOfferCreative::create([
     'offer_id' => $offer->id,
     'type' => AffiliateOfferCreative::TYPE_BANNER,
     'name' => '728x90 Leaderboard',
-    'url' => 'https://cdn.mystore.com/banners/summer-728x90.jpg',
     'width' => 728,
     'height' => 90,
     'is_active' => true,
     'sort_order' => 1,
 ]);
 
+$banner->addMedia(storage_path('app/banners/summer-728x90.jpg'))
+    ->toMediaCollection('creative_asset');
+
 $textLink = AffiliateOfferCreative::create([
     'offer_id' => $offer->id,
     'type' => AffiliateOfferCreative::TYPE_TEXT,
     'name' => 'Summer Sale Text Link',
-    'html_code' => '<a href="{tracking_url}">Shop Summer Sale - 20% Off!</a>',
+    'destination_url' => 'https://mystore.com/summer-sale',
     'is_active' => true,
     'sort_order' => 2,
 ]);
 ```
+
+Manual assets live exclusively in Spatie Media Library's single-file
+`creative_asset` collection on the `public` disk. `getAssetUrl()` returns the
+absolute media URL, or null when no file is attached. Replacing an asset
+removes the previous media; deleting its creative or offer removes the media.
+Filament offers an upload field with the same storage contract.
+
+Merchant imports store their public origin in `source_asset_url`, paired with
+`external_creative_id`. This is mirror provenance, not a manual upload URL.
+Use `getAssetUrl()` for display for either source.
+
+> **warning**
+> Breaking change: the generic `url` column is removed. Manual creatives
+> require Media Library attachments. The existing migration defines the
+> schema; there are no URL aliases, compatibility paths, or backfills.
 
 ### Creative Types
 
@@ -385,6 +406,8 @@ $textLink = AffiliateOfferCreative::create([
 | `email` | `TYPE_EMAIL` | Email templates |
 | `html` | `TYPE_HTML` | HTML widgets |
 | `video` | `TYPE_VIDEO` | Video content |
+| `image` | `TYPE_IMAGE` | Promotional images |
+| `document` | `TYPE_DOCUMENT` | PDFs and downloadable material |
 
 ## Checkout Integration
 
@@ -427,3 +450,23 @@ The conversion recording automatically captures:
 - Link reference
 - Sub IDs (from the original tracking link)
 - Order ID (stored in conversion metadata for audit)
+
+
+## Branded offer links
+
+```php
+use AIArmada\AffiliateNetwork\Services\OfferLinkService;
+use AIArmada\Links\Actions\GenerateLinkUrl;
+
+$link = app(OfferLinkService::class)->createLink($offer, $affiliateId, [
+    'link_style' => 'branded',
+    'link_label' => 'summer',
+]);
+$url = GenerateLinkUrl::run($link->link); // /go/{handle}/summer-{token}
+```
+
+Short links remain the default. The branded handle is a snapshot from the
+resolved identity. Renaming a creator never changes an issued link or its
+stored affiliate ID. Both URL segments must match the saved tracking link.
+There are no username aliases, compatibility routes, or backfills. Host-provided
+identity DTOs must include `handle` under the new contract.

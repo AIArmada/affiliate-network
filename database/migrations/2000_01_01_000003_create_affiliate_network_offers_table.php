@@ -44,6 +44,7 @@ return new class extends Migration
             $table->string('subject_key')->nullable();
             $table->string('source_url')->nullable();
             $table->string('source_checksum', 64)->nullable();
+            $table->string('creatives_checksum', 64)->nullable();
             $table->timestampTz('last_synced_at')->nullable();
             // manual: hand-written offer. mirrored: imported from a merchant
             // catalog; sync refreshes the rate block wholesale, and an

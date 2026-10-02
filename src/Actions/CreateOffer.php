@@ -56,6 +56,7 @@ final class CreateOffer
             'subject_type' => ['nullable', 'string', 'max:255'],
             'subject_key' => ['nullable', 'string', 'max:255'],
             'source_checksum' => ['nullable', 'string', 'max:64'],
+            'creatives_checksum' => ['nullable', 'string', 'max:64'],
             'last_synced_at' => ['nullable', 'date'],
         ])->validate();
 
@@ -112,8 +113,8 @@ final class CreateOffer
 
         // Sync internals are deliberately not fillable; only this action and
         // UpdateOffer may persist them via explicit forceFill.
-        $offer = new AffiliateOffer(Arr::except($validated, ['source_checksum', 'last_synced_at']));
-        $offer->forceFill(Arr::only($validated, ['source_checksum', 'last_synced_at']));
+        $offer = new AffiliateOffer(Arr::except($validated, ['source_checksum', 'creatives_checksum', 'last_synced_at']));
+        $offer->forceFill(Arr::only($validated, ['source_checksum', 'creatives_checksum', 'last_synced_at']));
         $offer->save();
 
         event(new OfferCreated($offer));
