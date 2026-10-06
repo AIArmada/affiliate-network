@@ -16,6 +16,7 @@ use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
 use AIArmada\AffiliateNetwork\Support\QueryParameters;
 use AIArmada\CommerceSupport\Support\MoneyFormatter;
 use AIArmada\CommerceSupport\Support\OwnerContext;
+use AIArmada\CommerceSupport\Support\OwnerScope;
 use AIArmada\Links\Actions\CreatePublicLink;
 use AIArmada\Links\Models\Link;
 use Illuminate\Support\Facades\DB;
@@ -168,9 +169,9 @@ final class OfferLinkService
             ->where('is_active', true)
             ->whereHas('link', fn ($query) => $query->withoutOwnerScope()->where('slug', $slug))
             ->with([
-                'link' => fn ($query) => $query->withoutOwnerScope(),
+                'link' => fn ($query) => $query->withoutGlobalScope(OwnerScope::class),
                 'offer' => fn ($query) => $query->withoutGlobalScope(ScopesByBelongsToOwner::class),
-                'site' => fn ($query) => $query->withoutOwnerScope(),
+                'site' => fn ($query) => $query->withoutGlobalScope(OwnerScope::class),
             ])
             ->first());
     }
