@@ -14,6 +14,7 @@ use AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
+use AIArmada\AffiliateNetwork\Support\AffiliateProfileGuard;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -24,10 +25,13 @@ final class ApplyToOffer
 {
     public function __construct(
         private readonly AffiliateIdentityResolver $identities,
+        private readonly AffiliateProfileGuard $affiliateProfileGuard,
     ) {}
 
     public function execute(AffiliateOffer $offer, string $affiliateId, ?string $reason = null): AffiliateOfferApplication
     {
+        $this->affiliateProfileGuard->assertCanWriteFor($affiliateId);
+
         // Public application lookup is intentionally global; all application writes
         // re-enter the affiliate owner's context immediately below.
         $offer = OwnerContext::withOwner(null, function () use ($offer): AffiliateOffer {

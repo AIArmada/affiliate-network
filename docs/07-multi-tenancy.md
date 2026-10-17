@@ -36,6 +36,22 @@ When enabled, these models are automatically scoped:
 | `AffiliateOfferLink` | Via affiliate (`ScopesByBelongsToOwner`, `affiliate`) |
 | `NetworkConversionLeg` | Via affiliate (`ScopesByBelongsToOwner`, `affiliate`) |
 
+## Affiliate Profiles in Combined Installs
+
+When the Affiliates identity adapter is bound and either
+`affiliate-network.owner.enabled` or `affiliates.owner.enabled` is true,
+actors must complete merchant affiliate registration before creating network
+records. `ApplyToOffer`, `OfferLinkService::createLink()`,
+`OfferLinkService::createCreativeLink()`, and conversion-leg posting require an
+existing merchant `Affiliate` row. Otherwise they throw
+`AffiliateProfileRequired` before relationship-based owner validation runs.
+
+The identity adapter still falls back to the host user for display and
+reporting reads. Standalone installs keep `UserKeyAffiliateIdentityResolver`,
+and combined installs with both owner settings disabled keep the existing user
+fallback writes. The verified-email bridge used during payout resolution is
+unchanged.
+
 ## Direct Owner Scoping
 
 Models with `HasOwner` trait have `owner_type` and `owner_id` columns:

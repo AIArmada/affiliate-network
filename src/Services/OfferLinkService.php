@@ -13,6 +13,7 @@ use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
+use AIArmada\AffiliateNetwork\Support\AffiliateProfileGuard;
 use AIArmada\AffiliateNetwork\Support\QueryParameters;
 use AIArmada\CommerceSupport\Support\MoneyFormatter;
 use AIArmada\CommerceSupport\Support\OwnerContext;
@@ -38,6 +39,7 @@ final class OfferLinkService
     public function __construct(
         private readonly RecordNetworkConversion $recordNetworkConversionAction,
         private readonly OfferManagementService $offerManagementService,
+        private readonly AffiliateProfileGuard $affiliateProfileGuard,
         private readonly ?AffiliateIdentityResolver $identities = null,
     ) {}
 
@@ -51,6 +53,8 @@ final class OfferLinkService
         string $affiliateId,
         array $options = []
     ): AffiliateOfferLink {
+        $this->affiliateProfileGuard->assertCanWriteFor($affiliateId);
+
         if (! $offer->isActive()) {
             throw new RuntimeException('Links can only be created for active offers.');
         }
@@ -97,6 +101,8 @@ final class OfferLinkService
      */
     public function createCreativeLink(AffiliateOfferCreative $creative, string $affiliateId, array $options = []): AffiliateOfferLink
     {
+        $this->affiliateProfileGuard->assertCanWriteFor($affiliateId);
+
         $creative = AffiliateOfferCreative::query()->whereKey($creative->getKey())->firstOrFail();
 
         if (! $creative->is_active) {
@@ -185,9 +191,10 @@ final class OfferLinkService
         ?string $currency = null,
         ?string $externalReference = null,
         LegStatus $status = LegStatus::Posted,
+        array $metadata = [],
     ): ?NetworkConversionLeg {
-        return $this->withLinkOwnerContext($link, function () use ($link, $revenueMinor, $currency, $externalReference, $status): ?NetworkConversionLeg {
-            return $this->recordNetworkConversionAction->execute($link, $revenueMinor, $currency, $externalReference, $status);
+        return $this->withLinkOwnerContext($link, function () use ($link, $revenueMinor, $currency, $externalReference, $status, $metadata): ?NetworkConversionLeg {
+            return $this->recordNetworkConversionAction->execute($link, $revenueMinor, $currency, $externalReference, $status, $metadata);
         });
     }
 

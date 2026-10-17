@@ -22,8 +22,8 @@ return [
             'offer_creatives' => 'affiliate_network_offer_creatives',
             'offer_applications' => 'affiliate_network_offer_applications',
             'offer_links' => 'affiliate_network_offer_links',
+            'conversion_legs' => 'affiliate_network_conversion_legs',
         ],
-        'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', 'jsonb'),
     ],
 
     'models' => [

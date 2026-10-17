@@ -25,8 +25,8 @@ $result = app(OfferImportService::class)->sync($site, $programId);
 - Upserts by `(site_id, external_program_id, subject_key)`; unchanged
   checksums skip; manual offers (`external_program_id` null) are never touched.
 - Imported rates are the fully-resolved **base** (product/category/program
-  rules folded); volume/promotions ride along in `volume_tiers` /
-  `active_promotions` columns.
+rules folded); volume/promotions ride along in `volume_tiers` /
+`active_promotions` columns.
 - **Rate lock:** editing any rate-block field on an offer (`rate_base_bp`, `rate_fixed_minor`, `currency`, `cookie_days`, `volume_tiers`, `active_promotions`) flips `source` to
   `manual`, and sync holds those rates back (reported as `locked`) instead
   of silently reverting them. Non-rate fields still mirror. Flip
@@ -39,8 +39,12 @@ The importer has one `resolveField(source, local, remote)` precedence helper:
 local syncs prefer the local value and remote syncs prefer the remote value,
 with null fallback. Imported local offers retain the core program ID in
 `external_program_id` for reference, but enrollment for every offer —
-mirrored or hand-written — is a network application; joining never
-requires, resolves, or creates a merchant-side account.
+mirrored or hand-written — is a network application and never touches merchant
+program memberships. In a combined install, when the Affiliates identity
+adapter is bound and either `affiliate-network.owner.enabled` or
+`affiliates.owner.enabled` is true, the actor must have a merchant `Affiliate`
+row to apply or create network links; see
+[Multi-tenancy](07-multi-tenancy.md#affiliate-profiles-in-combined-installs).
 
 Catalog reads are scoped to the synced site's owner: local syncs only see
 that owner's programs, never whatever ambient context the caller runs in.
@@ -82,6 +86,14 @@ app(UpdateOffer::class)->execute($offer, [
 
 ### Apply to Offer & Approve
 
+When the Affiliates identity adapter is bound and either
+`affiliate-network.owner.enabled` or `affiliates.owner.enabled` is true, the
+supplied ID must resolve to a merchant `Affiliate` row. A plain host user can
+still resolve for reads and display, but network write actions throw
+`AffiliateProfileRequired` until that user completes affiliate registration.
+Standalone installs and combined installs with both owner settings disabled
+keep their user-key fallback behavior.
+
 ```php
 use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
 use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
@@ -105,15 +117,19 @@ $leg = app(RecordNetworkConversion::class)->execute($link, 5999, 'USD', 'ORDER-1
 ```
 
 Pass the conversion currency whenever it is known. When it differs from the
-link currency, the conversion is counted but revenue is skipped (and logged)
-so totals never mix currencies silently.
+link currency, the conversion is counted but link revenue is skipped (and
+logged). Its network leg preserves the reported revenue for audit while
+posting zero commission, fee, and payout so an unconverted amount cannot earn
+a commission priced in another currency.
 
 Pass an external reference (usually the order number) to post a money leg:
 commission follows the offer terms (fixed amount, volume tier, or basis
-points of revenue), the network fee is carved out, and the posted leg is
-handed to fulfillment exactly once. Replays of the same reference reuse the
-existing leg instead of double-counting. Without a reference only the link
-counters move and no leg posts. Use
+points of revenue), and the network fee is carved out. Engine fulfillment
+attempts the merchant posting automatically; standalone hosts explicitly
+record their payout run. Replays of the same reference reuse the existing leg
+instead of double-counting counters or conversion events. Without a reference,
+each call updates the link counters and emits the counter-only event, but no
+leg posts. Use
 `NetworkLedgerReconciliationService::reconcileLink()` / `reconcileOffer()`
 to prove counters, legs, and the merchant ledger agree.
 
@@ -137,9 +153,11 @@ and reconciliation all derive from them:
   payouts per currency at read time — no balance rows to drift.
 - **Fulfillment:** posted legs go to exactly one payer. With
   `aiarmada/affiliates` installed the engine fulfills merchant payouts;
-  standalone installs record runs on the host
-  (`HostManualFulfillment`). The provider enforces mutual exclusion, so
-  two payers can never both be active.
+  standalone installs require the host to explicitly record a run with a
+  non-empty payout reference through `HostManualFulfillment`. Recording a
+  standalone conversion never marks it fulfilled automatically. Engine
+  fulfillment validates merchant posting status, commission, and currency; a
+  mismatch marks the leg for reconciliation.
 
 ## Managing Merchant Sites
 
@@ -291,12 +309,14 @@ $stats = $linkService->getStats($link);
 
 ### Tracking Model Notes
 
-`OfferLinkService::recordConversion()` updates the package's own `AffiliateOfferLink` counters and revenue totals, and — when an external reference is passed — posts a `NetworkConversionLeg` through `NetworkBooks` and hands it to fulfillment. Merchant-ledger posting (engine `AffiliateConversion` rows with `origin: marketplace`, linked back via `source_ref`) happens in the fulfillment step when `aiarmada/affiliates` is installed, never inline in the counter update.
+`OfferLinkService::recordConversion()` updates the package's own `AffiliateOfferLink` counters and revenue totals, and — when an external reference is passed — posts a `NetworkConversionLeg` through `NetworkBooks`. Engine fulfillment then posts merchant rows (`origin: marketplace`, linked back via `source_ref`); standalone fulfillment remains explicit. Merchant-ledger posting never happens inline in the counter update.
 
 Links inherit the offer currency at creation. When a conversion arrives in a
-different currency, the conversion is counted but its revenue is skipped (and
-logged as `affiliate-network.conversion.currency_mismatch`) so link and
-network totals never mix currencies.
+different link or offer pricing currency, the conversion is counted but its
+revenue is skipped from link totals (and logged as
+`affiliate-network.conversion.currency_mismatch`).
+The leg retains reported revenue and currency for audit, with zero commission,
+fee, and payout.
 
 ## Artisan Commands
 
@@ -422,14 +442,18 @@ To enable the integration, set the following environment variable or update your
 AFFILIATE_NETWORK_CHECKOUT_ENABLED=true
 ```
 
-When a network-attributed order converts, the listener stores network attribution details under `order.metadata.network_attribution` and increments the related `AffiliateOfferLink` conversion metrics.
+When a visitor lands with a valid network link, the middleware validates the
+link and stores a compact snapshot in the current cart metadata. Checkout
+copies that snapshot to `order.metadata.network_attribution`; the order
+listener reads the snapshot before falling back to request cookies, so payment
+retries can create and finalize a provisional leg without cookies.
 
 ### How it Works
 
-1. **Tracking**: When a user visits your site with a network link parameter (default: `anl`), the `TrackNetworkLinkCookie` middleware captures the link identifier and stores it in an encrypted cookie.
+1. **Tracking**: When a user visits your site with a network link parameter (default: `anl`), `TrackNetworkLinkCookie` validates the link, stores it in an encrypted cookie, and writes a compact snapshot to cart metadata when Cart is installed.
 2. **Attribution**: The cookie persists based on the configured lifetime (default: 30 days).
 3. **Conversion**: When order fulfillment is required (paid and free orders alike), the orders side triggers a `CommissionAttributionRequired` event.
-4. **Provisional leg**: `RecordProvisionalNetworkConversion` reads the attribution cookie and posts a `provisional` leg — money sketched, nothing payable yet.
+4. **Provisional leg**: `RecordProvisionalNetworkConversion` reads the order snapshot (or, when absent, the attribution cookie) and posts a `provisional` leg — money sketched, nothing payable yet.
 5. **Last-touch decider**: `FinalizeNetworkAttribution` compares the engine touch against the network touch. An engine win supersedes the provisional leg; a network win confirms and fulfills it. When the engine abstains — or isn't installed — the network wins by default. Every decision is recorded, so exactly one side ever pays.
 
 ### Configuration Options

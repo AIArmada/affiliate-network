@@ -223,6 +223,9 @@ $link = $service->createLink(
 // Throws unless the offer is active (published + within its window) and,
 // when the offer requires approval, the affiliate is approved. target_url
 // must be an http(s) URL. The link inherits the offer currency.
+// With the Affiliates identity adapter bound and either
+// affiliate-network.owner.enabled or affiliates.owner.enabled set to true,
+// affiliateId must identify a merchant Affiliate row or AffiliateProfileRequired is thrown.
 
 // Note: metadata is the extension point if your application wants to carry
 // subject-specific context that may later be bridged into core affiliates flows.
@@ -240,9 +243,13 @@ $leg = $service->recordConversion(
     ?string $currency = null,
     ?string $externalReference = null,
     LegStatus $status = LegStatus::Posted,
+    array $metadata = [],
 ): ?NetworkConversionLeg;
 // Returns null when no external reference is supplied. On a currency mismatch
 // the conversion is counted but revenue is skipped (and logged).
+// New legs cannot use LegStatus::Reversed; use NetworkBooks::reverse() to
+// create a reversal. An initial reversed post throws InvalidArgumentException;
+// a replay for an existing (link, reference) returns that existing leg.
 
 // Get statistics
 $stats = $service->getStats(AffiliateOfferLink $link): array;
@@ -310,6 +317,12 @@ ApplicationApproved::class;      // (AffiliateOfferApplication $application)
 NetworkConversionRecorded::class; // (AffiliateOfferLink $link, int $revenueMinor, ?string $currency, ?NetworkConversionLeg $leg)
 ```
 
+`revenueMinor` is the link-counter revenue. It is zero when the reported
+currency differs from the link's pricing currency, while the leg retains the
+reported revenue and currency for audit.
+Recorded does not mean payable: check the leg's `status` and `paysOut()` before
+treating a `NetworkConversionRecorded` event as payable.
+
 
 ### Approval event contract
 
@@ -334,6 +347,16 @@ side effects idempotent; this event does not guarantee exactly-once delivery.
 ---
 
 ## Exceptions
+
+### Affiliate profile required
+
+When the Affiliates identity adapter is bound and either
+`affiliate-network.owner.enabled` or `affiliates.owner.enabled` is true,
+affiliate-facing writes require a merchant `Affiliate` row. Applying to an
+offer, creating direct or creative links, and posting conversion legs throw
+`AIArmada\AffiliateNetwork\Exceptions\AffiliateProfileRequired` before
+relationship-based owner validation can fail. Reads retain the adapter's
+host-user identity fallback; see [Multi-tenancy](07-multi-tenancy.md).
 
 ### Cross-tenant owner violations
 

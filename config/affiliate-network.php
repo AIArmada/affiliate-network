@@ -10,6 +10,7 @@ $tables = [
     'offer_creatives' => $tablePrefix . 'offer_creatives',
     'offer_applications' => $tablePrefix . 'offer_applications',
     'offer_links' => $tablePrefix . 'offer_links',
+    'conversion_legs' => $tablePrefix . 'conversion_legs',
 ];
 
 return [

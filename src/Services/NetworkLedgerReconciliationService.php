@@ -17,7 +17,7 @@ use Illuminate\Support\Collection;
  * 1. Counters vs legs: cached link counters match derived leg totals.
  * 2. Fee legs: every leg splits cleanly (commission == payout + fee).
  * 3. Books vs merchant postings (ledger bound): posted payout legs
- *    match fulfilled merchant rows per currency.
+ *    match active merchant rows per currency.
  * 4. Collisions (ledger bound): no external reference paid by two
  *    origins or two source refs (dual-reporting flag).
  */
@@ -112,7 +112,8 @@ final class NetworkLedgerReconciliationService
             );
         }
 
-        $linkCurrency = $link->currency !== null ? mb_strtoupper($link->currency) : null;
+        $pricingCurrency = $link->currency ?? $link->offer?->currency;
+        $linkCurrency = $pricingCurrency !== null ? mb_strtoupper($pricingCurrency) : null;
         $expected = 0;
 
         foreach ($counted as $leg) {
@@ -184,7 +185,14 @@ final class NetworkLedgerReconciliationService
             $payoutByCurrency[$currency]['commission_minor'] += (int) $leg->payout_minor;
         }
 
-        foreach ($payoutByCurrency as $currency => $expected) {
+        $currencies = array_values(array_unique([
+            ...array_keys($byCurrency),
+            ...array_keys($payoutByCurrency),
+        ]));
+        sort($currencies);
+
+        foreach ($currencies as $currency) {
+            $expected = $payoutByCurrency[$currency] ?? ['conversions' => 0, 'commission_minor' => 0];
             $actual = $byCurrency[$currency] ?? ['conversions' => 0, 'commission_minor' => 0];
 
             if ($actual['conversions'] !== $expected['conversions']

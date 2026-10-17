@@ -9,8 +9,11 @@ use AIArmada\AffiliateNetwork\Enums\LegStatus;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
 use AIArmada\AffiliateNetwork\Models\NetworkConversionLeg;
+use AIArmada\AffiliateNetwork\Support\AffiliateProfileGuard;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * Network books: the marketplace system of record for money.
@@ -23,12 +26,17 @@ use Illuminate\Support\Facades\DB;
  */
 final class NetworkBooks
 {
+    public function __construct(
+        private readonly AffiliateProfileGuard $affiliateProfileGuard,
+    ) {}
+
     public function post(
         AffiliateOfferLink $link,
         int $revenueMinor,
         ?string $currency,
         string $externalReference,
         LegStatus $status = LegStatus::Posted,
+        array $metadata = [],
     ): NetworkConversionLeg {
         $existing = NetworkConversionLeg::query()
             ->where('link_id', $link->getKey())
@@ -36,23 +44,36 @@ final class NetworkBooks
             ->first();
 
         if ($existing instanceof NetworkConversionLeg) {
+            $existing->wasRecentlyCreated = false;
+
             return $existing;
         }
+
+        if ($status === LegStatus::Reversed) {
+            throw new InvalidArgumentException('Create reversal legs with NetworkBooks::reverse().');
+        }
+
+        $this->affiliateProfileGuard->assertCanWriteFor((string) $link->affiliate_id);
 
         $offer = $link->relationLoaded('offer') ? $link->offer : $link->offer()->first();
 
         $resolvedCurrency = mb_strtoupper((string) ($currency
             ?? ($link->currency ?? null)
-            ?? ($offer->currency ?? null)
+            ?? ($offer?->currency ?? null)
             ?? config('affiliate-network.currency.default', 'MYR')));
 
-        [$commission, $tierRateBp, $tierMinVolume] = $this->commissionFor($link, $offer, max(0, $revenueMinor), $resolvedCurrency);
+        $pricingCurrency = $link->currency ?? $offer?->currency;
+        $currencyMismatch = self::isCurrencyMismatch($pricingCurrency, $resolvedCurrency);
+
+        [$commission, $tierRateBp, $tierMinVolume] = $currencyMismatch
+            ? [0, null, null]
+            : $this->commissionFor($link, $offer, max(0, $revenueMinor), $resolvedCurrency);
 
         $feeBp = $offer->network_fee_bp ?? config('affiliate-network.fees.default_bp', 0);
         $feeBp = max(0, (int) $feeBp);
         $fee = min($commission, (int) round($commission * $feeBp / 10000));
 
-        return NetworkConversionLeg::create([
+        $attributes = [
             'link_id' => $link->getKey(),
             'offer_id' => $link->offer_id,
             'site_id' => $link->site_id,
@@ -69,30 +90,81 @@ final class NetworkBooks
             'tier_min_volume_minor' => $tierMinVolume,
             'external_reference' => $externalReference,
             'status' => $status,
+            'metadata' => $metadata === [] ? null : $metadata,
             'occurred_at' => CarbonImmutable::now(),
-        ]);
-    }
+        ];
 
-    public function confirm(NetworkConversionLeg $leg): NetworkConversionLeg
-    {
-        if ($leg->status !== LegStatus::Provisional) {
-            return $leg;
+        try {
+            $leg = DB::transaction(fn (): NetworkConversionLeg => NetworkConversionLeg::create($attributes), attempts: 1);
+        } catch (QueryException $exception) {
+            if (! self::isUniqueViolation($exception)) {
+                throw $exception;
+            }
+
+            $existing = NetworkConversionLeg::query()
+                ->where('link_id', $link->getKey())
+                ->where('external_reference', $externalReference)
+                ->first();
+
+            if (! $existing instanceof NetworkConversionLeg) {
+                throw $exception;
+            }
+
+            $existing->wasRecentlyCreated = false;
+
+            return $existing;
         }
 
-        $leg->update(['status' => LegStatus::Posted]);
+        $leg->wasRecentlyCreated = true;
 
-        return $leg->refresh();
+        return $leg;
     }
 
-    public function supersede(NetworkConversionLeg $leg, string $reason): NetworkConversionLeg
+    public function counterRevenue(AffiliateOfferLink $link, int $revenueMinor, ?string $currency): int
+    {
+        $pricingCurrency = $link->currency ?? $link->offer?->currency;
+
+        return $revenueMinor !== 0 && self::isCurrencyMismatch($pricingCurrency, $currency)
+            ? 0
+            : $revenueMinor;
+    }
+
+    /**
+     * @param  array{attribution_winner?: string, attribution_decision_reason?: string}  $decisionMetadata
+     */
+    public function confirm(NetworkConversionLeg $leg, array $decisionMetadata = []): NetworkConversionLeg
     {
         if ($leg->status !== LegStatus::Provisional) {
             return $leg;
         }
 
         $leg->update([
+            'status' => LegStatus::Posted,
+            'metadata' => array_merge($leg->metadata ?? [], $decisionMetadata),
+        ]);
+
+        return $leg->refresh();
+    }
+
+    /**
+     * @param  array{attribution_winner?: string, attribution_decision_reason?: string}  $decisionMetadata
+     */
+    public function supersede(
+        NetworkConversionLeg $leg,
+        string $reason,
+        array $decisionMetadata = [],
+    ): NetworkConversionLeg {
+        if ($leg->status !== LegStatus::Provisional) {
+            return $leg;
+        }
+
+        $leg->update([
             'status' => LegStatus::Superseded,
-            'metadata' => array_merge($leg->metadata ?? [], ['superseded_reason' => $reason]),
+            'metadata' => array_merge(
+                $leg->metadata ?? [],
+                ['superseded_reason' => $reason],
+                $decisionMetadata,
+            ),
         ]);
 
         return $leg->refresh();
@@ -113,7 +185,8 @@ final class NetworkBooks
 
         $conversions = 0;
         $revenue = 0;
-        $linkCurrency = $link->currency !== null ? mb_strtoupper($link->currency) : null;
+        $pricingCurrency = $link->currency ?? $link->offer?->currency;
+        $linkCurrency = $pricingCurrency !== null ? mb_strtoupper($pricingCurrency) : null;
 
         foreach ($legs as $leg) {
             if (is_array($leg->metadata) && isset($leg->metadata['reverses_id'])) {
@@ -150,22 +223,7 @@ final class NetworkBooks
             }
 
             if ($locked->status === LegStatus::Reversed) {
-                $existing = $this->findCompanionLeg($locked);
-
-                if ($existing !== null) {
-                    // The merchant void is idempotent: re-run it so a
-                    // retry also settles postings a previous
-                    // implementation left payable behind its companion.
-                    $this->voidPostedConversion($locked, $reason);
-
-                    return $existing;
-                }
-
-                // A companionless reversed leg is legacy damage (a
-                // previous non-transactional implementation could leave
-                // it behind): repair it idempotently instead of silently
-                // returning the leg with no reversal leg and no void.
-                return $this->createCompanionLeg($locked, $reason);
+                return $this->findCompanionLeg($locked);
             }
 
             $locked->update(['status' => LegStatus::Reversed]);
@@ -220,11 +278,11 @@ final class NetworkBooks
         return mb_substr($original, 0, max(0, 120 - mb_strlen($suffix))) . $suffix;
     }
 
-    private function findCompanionLeg(NetworkConversionLeg $leg): ?NetworkConversionLeg
+    private function findCompanionLeg(NetworkConversionLeg $leg): NetworkConversionLeg
     {
         return NetworkConversionLeg::query()
             ->where('metadata->reverses_id', (string) $leg->getKey())
-            ->first();
+            ->firstOrFail();
     }
 
     private function voidPostedConversion(NetworkConversionLeg $leg, string $reason): void
@@ -238,6 +296,20 @@ final class NetworkBooks
             (string) $leg->external_reference,
             $reason,
         );
+    }
+
+    private static function isUniqueViolation(QueryException $exception): bool
+    {
+        return in_array((string) ($exception->errorInfo[0] ?? $exception->getCode()), ['23000', '23505'], true);
+    }
+
+    private static function isCurrencyMismatch(?string $pricingCurrency, ?string $conversionCurrency): bool
+    {
+        if ($pricingCurrency === null || $conversionCurrency === null) {
+            return false;
+        }
+
+        return mb_strtoupper($pricingCurrency) !== mb_strtoupper($conversionCurrency);
     }
 
     /**

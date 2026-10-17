@@ -33,7 +33,7 @@ interface NetworkLedger
     public function rowsForLink(string $linkId): array;
 
     /**
-     * Merchant postings sharing one external reference, all origins.
+     * Active merchant postings sharing one external reference, all origins.
      *
      * @return array<int, array{origin: string|null, source_ref: string|null, commission_currency: string|null, commission_minor: int}>
      */

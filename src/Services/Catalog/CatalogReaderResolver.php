@@ -11,8 +11,8 @@ use AIArmada\AffiliateNetwork\Models\AffiliateSite;
  * Pick the catalog reader for a site: remote HTTP when the site owner
  * configured catalog_url, otherwise the local shared-DB reader.
  *
- * The local reader is bound by the affiliates package under a string key
- * so this module never references its class.
+ * The network provider binds the affiliates adapter under a string key
+ * when the engine is installed, so this module never references its class.
  */
 final class CatalogReaderResolver
 {

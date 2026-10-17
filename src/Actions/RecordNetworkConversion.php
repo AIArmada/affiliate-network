@@ -15,10 +15,10 @@ use Illuminate\Support\Facades\Log;
 /**
  * Record one network conversion: cached counters, a book leg, fulfillment.
  *
- * Counters increment on every call (reporting caches). The book leg needs
- * an external reference for idempotency — calls without one keep
- * counters only. Fulfillment runs only for final (posted) legs;
- * provisional legs fulfill when the attribution finalizer confirms them.
+ * Counter-only calls increment on every call. Booked calls increment only
+ * when the reference creates a new leg; replays reuse the existing leg.
+ * Fulfillment runs only for final (posted) legs and for adapters configured
+ * to fulfill automatically.
  */
 final class RecordNetworkConversion
 {
@@ -33,17 +33,20 @@ final class RecordNetworkConversion
         ?string $currency = null,
         ?string $externalReference = null,
         LegStatus $status = LegStatus::Posted,
+        array $metadata = [],
     ): ?NetworkConversionLeg {
-        $counterRevenue = $revenueMinor;
+        $counterRevenue = $this->books->counterRevenue($link, $revenueMinor, $currency);
 
-        if ($revenueMinor !== 0 && self::isCurrencyMismatch($link->currency, $currency)) {
+        $pricingCurrency = $link->currency ?? $link->offer?->currency;
+
+        if ($counterRevenue !== $revenueMinor) {
             // A conversion happened, but its money is not in the link
             // currency: count it and skip revenue so totals never mix
             // currencies silently.
             Log::warning('affiliate-network.conversion.currency_mismatch', [
                 'link_id' => $link->getKey(),
                 'offer_id' => $link->offer_id,
-                'link_currency' => $link->currency,
+                'pricing_currency' => $pricingCurrency,
                 'conversion_currency' => $currency,
                 'revenue_minor' => $revenueMinor,
             ]);
@@ -51,31 +54,24 @@ final class RecordNetworkConversion
             $counterRevenue = 0;
         }
 
-        $link->recordConversion($counterRevenue);
-
         if ($externalReference === null || $externalReference === '') {
+            $link->recordConversion($counterRevenue);
             event(new NetworkConversionRecorded($link, $counterRevenue, $currency));
 
             return null;
         }
 
-        $leg = $this->books->post($link, $revenueMinor, $currency, $externalReference, $status);
+        $leg = $this->books->post($link, $revenueMinor, $currency, $externalReference, $status, $metadata);
 
-        event(new NetworkConversionRecorded($link, $counterRevenue, $currency, $leg));
+        if ($leg->wasRecentlyCreated) {
+            $link->recordConversion($counterRevenue);
+            event(new NetworkConversionRecorded($link, $counterRevenue, $currency, $leg));
+        }
 
-        if ($leg->status === LegStatus::Posted) {
+        if ($leg->status === LegStatus::Posted && $this->fulfillment->fulfillsAutomatically()) {
             $this->fulfillment->fulfill($leg);
         }
 
         return $leg;
-    }
-
-    private static function isCurrencyMismatch(?string $linkCurrency, ?string $conversionCurrency): bool
-    {
-        if ($linkCurrency === null || $conversionCurrency === null) {
-            return false;
-        }
-
-        return mb_strtoupper($linkCurrency) !== mb_strtoupper($conversionCurrency);
     }
 }

@@ -26,7 +26,12 @@ final class EnginePayoutFulfillment implements Fulfillment
         private readonly NetworkLedger $ledger,
     ) {}
 
-    public function fulfill(NetworkConversionLeg $leg, ?string $reference = null): FulfillmentReceipt
+    public function fulfillsAutomatically(): bool
+    {
+        return true;
+    }
+
+    public function fulfill(NetworkConversionLeg $leg, ?string $reference = null): ?FulfillmentReceipt
     {
         if ($leg->status !== LegStatus::Posted) {
             throw new RuntimeException('Only posted legs can be fulfilled.');
@@ -62,17 +67,19 @@ final class EnginePayoutFulfillment implements Fulfillment
         ));
 
         if ($posted === null) {
-            $leg->update(['metadata' => array_merge($leg->metadata ?? [], [
-                'unfulfillable' => true,
-                'last_attempt_at' => CarbonImmutable::now()->toIso8601String(),
-            ])]);
+            return $this->markUnfulfillable($leg, 'merchant_not_found');
+        }
 
-            return new FulfillmentReceipt(
-                legId: (string) $leg->getKey(),
-                adapter: 'engine-payouts',
-                reference: $reference,
-                fulfilledAt: CarbonImmutable::now(),
-            );
+        if (self::isRejected($posted->status)) {
+            return $this->markUnfulfillable($leg, 'merchant_rejected');
+        }
+
+        if ($posted->commissionMinor !== (int) $leg->payout_minor) {
+            return $this->markUnfulfillable($leg, 'commission_mismatch');
+        }
+
+        if (mb_strtoupper($posted->commissionCurrency) !== mb_strtoupper((string) $leg->commission_currency)) {
+            return $this->markUnfulfillable($leg, 'currency_mismatch');
         }
 
         $receipt = new FulfillmentReceipt(
@@ -82,11 +89,33 @@ final class EnginePayoutFulfillment implements Fulfillment
             fulfilledAt: CarbonImmutable::now(),
         );
 
-        $leg->update(['metadata' => array_merge($leg->metadata ?? [], [
+        $metadata = $leg->metadata ?? [];
+        unset($metadata['unfulfillable_reason'], $metadata['last_attempt_at']);
+        $leg->update(['metadata' => array_merge($metadata, [
             'fulfilled' => $receipt->toArray(),
             'unfulfillable' => false,
+            'reconciliation_required' => false,
         ])]);
 
         return $receipt;
+    }
+
+    private function markUnfulfillable(NetworkConversionLeg $leg, string $reason): null
+    {
+        $leg->update(['metadata' => array_merge($leg->metadata ?? [], [
+            'unfulfillable' => true,
+            'reconciliation_required' => true,
+            'unfulfillable_reason' => $reason,
+            'last_attempt_at' => CarbonImmutable::now()->toIso8601String(),
+        ])]);
+
+        return null;
+    }
+
+    private static function isRejected(string $status): bool
+    {
+        $normalized = mb_strtolower(basename(str_replace('\\', '/', $status)));
+
+        return in_array($normalized, ['rejected', 'rejectedconversion'], true);
     }
 }

@@ -12,10 +12,11 @@ use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
- * Tracks network affiliate link codes in cookies for conversion attribution.
+ * Tracks network affiliate link codes in cookies and cart snapshots.
  *
  * When a visitor arrives via an affiliate network link redirect, this middleware
- * persists the link code in a cookie for later conversion attribution.
+ * persists the link code in a cookie and the current cart for later
+ * conversion attribution, including payment or checkout replay requests.
  */
 final class TrackNetworkLinkCookie
 {
@@ -33,27 +34,36 @@ final class TrackNetworkLinkCookie
             return $next($request);
         }
 
-        /** @var Response $response */
-        $response = $next($request);
-
         $cookieName = config('affiliate-network.cookies.name', 'affiliate_network_link');
         $existingCookie = $request->cookie($cookieName);
         $linkCode = $this->resolveLinkCode($request);
+        $cookieValue = null;
+        $attribution = null;
 
-        // If no new link code and no existing cookie, nothing to do
-        if ($linkCode === null && $existingCookie === null) {
-            return $response;
-        }
-
-        // New link code takes priority (allows attribution to most recent click)
         if ($linkCode !== null) {
             $link = $this->linkService->resolveLink($linkCode);
             $slug = $link?->trackedSlug();
 
             if ($link !== null && $slug !== null && ! $link->isExpired() && $link->offer->isActive()) {
-                $cookieValue = $this->buildCookieValue($slug, $link->affiliate_id, $link->offer_id);
-                $this->setCookie($response, $cookieName, $cookieValue);
+                $clickedAt = CarbonImmutable::now()->toIso8601String();
+                $cookieValue = $this->buildCookieValue($slug, (string) $link->affiliate_id, (string) $link->offer_id, $clickedAt);
+                $attribution = $this->snapshot($slug, (string) $link->affiliate_id, (string) $link->offer_id, $clickedAt);
             }
+        }
+
+        if ($attribution === null && is_string($existingCookie)) {
+            $attribution = $this->resolveCookieSnapshot($existingCookie);
+        }
+
+        if ($attribution !== null) {
+            $this->persistAttributionSnapshot($attribution, $cookieValue !== null);
+        }
+
+        /** @var Response $response */
+        $response = $next($request);
+
+        if ($cookieValue !== null) {
+            $this->setCookie($response, $cookieName, $cookieValue);
         }
 
         return $response;
@@ -88,14 +98,92 @@ final class TrackNetworkLinkCookie
      *
      * @return string Encrypted JSON-encoded attribution data
      */
-    private function buildCookieValue(string $linkCode, string $affiliateId, string $offerId): string
+    private function buildCookieValue(string $linkCode, string $affiliateId, string $offerId, string $clickedAt): string
     {
         return encrypt(json_encode([
             'code' => $linkCode,
             'affiliate_id' => $affiliateId,
             'offer_id' => $offerId,
-            'clicked_at' => CarbonImmutable::now()->toIso8601String(),
+            'clicked_at' => $clickedAt,
         ], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @return array{link_code: string, affiliate_id: string, offer_id: string, clicked_at: string, signature: string}|null
+     */
+    private function resolveCookieSnapshot(string $cookieValue): ?array
+    {
+        $cookie = self::parseCookie($cookieValue);
+
+        if (
+            ! is_array($cookie)
+            || ! is_string($cookie['code'] ?? null)
+            || ! is_string($cookie['affiliate_id'] ?? null)
+            || ! is_string($cookie['offer_id'] ?? null)
+            || ! is_string($cookie['clicked_at'] ?? null)
+        ) {
+            return null;
+        }
+
+        $link = $this->linkService->resolveLink($cookie['code']);
+
+        if (
+            $link === null
+            || $link->trackedSlug() !== $cookie['code']
+            || (string) $link->affiliate_id !== $cookie['affiliate_id']
+            || (string) $link->offer_id !== $cookie['offer_id']
+            || $link->isExpired()
+            || ! $link->offer->isActive()
+        ) {
+            return null;
+        }
+
+        return self::snapshot(
+            $cookie['code'],
+            $cookie['affiliate_id'],
+            $cookie['offer_id'],
+            $cookie['clicked_at'],
+        );
+    }
+
+    /**
+     * @return array{link_code: string, affiliate_id: string, offer_id: string, clicked_at: string, signature: string}
+     */
+    private static function snapshot(string $linkCode, string $affiliateId, string $offerId, string $clickedAt): array
+    {
+        return [
+            'link_code' => $linkCode,
+            'affiliate_id' => $affiliateId,
+            'offer_id' => $offerId,
+            'clicked_at' => $clickedAt,
+            'signature' => hash_hmac(
+                'sha256',
+                implode('|', [$linkCode, $affiliateId, $offerId, $clickedAt]),
+                (string) config('app.key'),
+            ),
+        ];
+    }
+
+    /**
+     * @param  array{link_code: string, affiliate_id: string, offer_id: string, clicked_at: string, signature: string}  $attribution
+     */
+    private function persistAttributionSnapshot(array $attribution, bool $isNewReferral): void
+    {
+        $cartManagerContract = 'AIArmada\\Cart\\Contracts\\CartManagerInterface';
+
+        if (! interface_exists($cartManagerContract) || ! app()->bound($cartManagerContract)) {
+            return;
+        }
+
+        $cart = app($cartManagerContract)->getCurrentCart();
+
+        if (! $isNewReferral) {
+            if (! $cart->exists() || $cart->getMetadata('network_attribution') === $attribution) {
+                return;
+            }
+        }
+
+        $cart->setMetadata('network_attribution', $attribution);
     }
 
     /**

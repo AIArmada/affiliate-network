@@ -107,11 +107,15 @@ $instructions = $verificationService->getInstructions($site, 'file');
 Manages offers and affiliate applications.
 
 This is the discovery-side API. Every offer — local import or remote
-mirror — enrolls through the network application flow; joining never
-requires, resolves, or creates a merchant-side account. Commission
-writes land as network legs (`NetworkBooks`); the merchant ledger only
-receives postings through the fulfillment step when `aiarmada/affiliates`
-is installed.
+mirror — enrolls through the network application flow, which never touches
+merchant program memberships. When the Affiliates identity adapter is bound
+and either `affiliate-network.owner.enabled` or
+`affiliates.owner.enabled` is enabled, the actor must have a merchant
+`Affiliate` row before applying or creating links.
+Standalone installs and combined installs with both owner settings disabled
+retain user-key fallback writes. Commission writes land as network legs
+(`NetworkBooks`); the merchant ledger only receives postings through the
+fulfillment step when `aiarmada/affiliates` is installed.
 
 ### Dependency Injection
 
@@ -159,6 +163,9 @@ $application = $offerService->applyForOffer(
 ```
 
 - Creates a new application or returns the existing one
+- When the Affiliates identity adapter is bound and either
+  `affiliate-network.owner.enabled` or `affiliates.owner.enabled` is true,
+  requires a merchant `Affiliate` row or throws `AffiliateProfileRequired`
 - Re-application after a rejection throws
   `AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException`
   until `affiliate-network.applications.cooldown_days` has elapsed, then
@@ -295,10 +302,13 @@ Record a conversion with revenue.
 //                   ?string $currency = null, ?string $externalReference = null,
 //                   LegStatus $status = LegStatus::Posted): ?NetworkConversionLeg
 $leg = $linkService->recordConversion($link, 5999, 'USD', 'ORDER-123'); // 5999 minor units
-// Increments $link->conversions and adds to $link->revenue. On a currency
-// mismatch the conversion is counted but revenue is skipped (and logged).
-// With a reference, also posts a NetworkConversionLeg and fulfills it, and
-// returns it. Returns null when no reference is supplied.
+// A new reference increments counters once and posts a NetworkConversionLeg.
+// Replays reuse the existing leg without another counter update or event.
+// A currency mismatch preserves leg revenue for audit but sets commission,
+// fee, and payout to zero; cached link revenue and the event's revenueMinor
+// skip the mismatched amount.
+// Without a reference, every call updates counters and emits the counter-only
+// event, but posts no leg. Returns null when no reference is supplied.
 ```
 
 #### getStats
@@ -335,12 +345,18 @@ $books = app(NetworkBooks::class);
 
 $leg = $books->post($link, 89900, 'MYR', 'ORDER-1001');
 // Idempotent on (link, reference): replays return the existing leg.
+// New legs cannot use LegStatus::Reversed; use reverse() to create a reversal.
+// An initial reversed post throws InvalidArgumentException.
 
 $books->confirm($leg);              // provisional -> posted (caller fulfills)
 $books->supersede($leg, $reason);   // provisional -> superseded (lost the decider)
 $books->reverse($leg, 'refund');    // posted -> reversed + negated companion leg
 $books->recountLinkCounters($link); // rebuild counters/revenue from posted legs
 ```
+
+`confirm()` and `supersede()` accept optional decision metadata. Local checkout
+finalization records `attribution_winner` and `attribution_decision_reason` on
+the leg so a duplicate postback returns the original decision.
 
 Commission resolution per post: fixed rate wins, else the volume tier
 matching cumulative affiliate+offer revenue (including this conversion),
@@ -373,7 +389,15 @@ Posted legs go to exactly one payer through the `Fulfillment` contract:
 - Engine installed: `EnginePayoutFulfillment` fulfills merchant payouts
   (and posts the merchant ledger row) via the affiliates seam.
 - Standalone: `HostManualFulfillment` records the run on the host; the
-  operator pays out of band.
+  operator pays out of band. It does not run automatically when a conversion
+  is recorded. Call `fulfill($leg, $reference)` explicitly with a non-empty
+  payout reference; only posted legs can be fulfilled.
+
+The engine adapter only reports success when the merchant posting is not
+rejected and its commission amount and currency match the network leg. A
+missing or altered merchant posting leaves `unfulfillable` and
+`reconciliation_required` metadata on the leg, and no success receipt is
+returned.
 
 The service provider binds exactly one implementation — mutual exclusion
 is structural, so a leg can never be paid twice by two payers.

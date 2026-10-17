@@ -8,6 +8,7 @@ use AIArmada\AffiliateNetwork\Adapters\Affiliates\AffiliatesCatalogReader;
 use AIArmada\AffiliateNetwork\Adapters\Affiliates\AffiliatesIdentityReader;
 use AIArmada\AffiliateNetwork\Adapters\Affiliates\AffiliatesLedgerPoster;
 use AIArmada\AffiliateNetwork\Adapters\Affiliates\EnginePayoutFulfillment;
+use AIArmada\AffiliateNetwork\Adapters\Affiliates\ReverseNetworkConversion;
 use AIArmada\AffiliateNetwork\Console\Commands\ArchiveExpiredOffersCommand;
 use AIArmada\AffiliateNetwork\Console\Commands\ReconcileNetworkLedgerCommand;
 use AIArmada\AffiliateNetwork\Console\Commands\SyncSiteOffersCommand;
@@ -95,6 +96,12 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
 
         if ($this->engineInstalled()) {
             $this->bindEngineAdapters();
+
+            $reversalEventClass = 'AIArmada\\Affiliates\\Events\\AffiliateConversionReversed';
+
+            if (class_exists($reversalEventClass)) {
+                Event::listen($reversalEventClass, ReverseNetworkConversion::class);
+            }
         }
 
         $this->registerAffiliateModel();
@@ -182,8 +189,8 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
      *
      * Provisional (network touch + leg), then the engine listener when
      * installed (touch + winner decision), then the finalizer (confirm
-     * or supersede + fulfill). The engine self-registers only when this
-     * package is absent, so shared installs record exactly once.
+     * or supersede + fulfill). The engine self-registers when this
+     * listener chain is inactive, so shared installs record exactly once.
      */
     private function registerOrderListeners(): void
     {
@@ -199,7 +206,11 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
 
         Event::listen($eventClass, RecordProvisionalNetworkConversion::class);
 
-        if ($this->engineInstalled()) {
+        if (
+            $this->engineInstalled()
+            && config('affiliates.features.commission_tracking.enabled', true)
+            && class_exists('AIArmada\\Cart\\CartManager')
+        ) {
             Event::listen($eventClass, 'AIArmada\Affiliates\Listeners\RecordCommissionForOrder');
         }
 

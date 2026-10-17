@@ -27,7 +27,13 @@ final class NotifyNetworkConversion
 
         $leg = $event->leg;
 
-        if ($leg === null || ! $leg->paysOut() || (int) $leg->payout_minor <= 0) {
+        if (
+            $leg === null
+            || ! $leg->paysOut()
+            || (int) $leg->payout_minor <= 0
+            || ($leg->metadata['unfulfillable'] ?? false) === true
+            || ($leg->metadata['reconciliation_required'] ?? false) === true
+        ) {
             return;
         }
 

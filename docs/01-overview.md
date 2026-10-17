@@ -21,7 +21,7 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 ## What this package does not own
 
 - Core affiliate attribution, commissions, payouts, or fraud models; those stay in `aiarmada/affiliates`
-- Merchant-local commission execution; enrollment for every offer — mirrored or hand-written — is a network application. Joining never requires, resolves, or creates a merchant-side account
+- Merchant-local commission execution; enrollment for every offer — mirrored or hand-written — is a network application and never touches merchant program memberships
 - Filament marketplace/admin surfaces; those belong to `aiarmada/filament-affiliate-network`
 - General checkout, cart, or order persistence beyond its integration hooks
 
@@ -39,7 +39,7 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 - **Contracts** — `SiteVerificationStrategyInterface` (DNS, meta tag, file verification strategies); the network seam `AffiliateIdentityResolver`, `NetworkLedger` plus `CatalogReaderInterface`
 - **Services** — site verification, offer management, and offer link generation/tracking
 - **Events** — `OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`
-- **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `SiteVerificationFailedException`, `AffiliatesNotInstalled` (seam feature used without an adapter)
+- **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `SiteVerificationFailedException`, `AffiliateProfileRequired`, `AffiliatesNotInstalled` (seam feature used without an adapter)
 - **Routes and middleware** — merchant postbacks and cookie-tracking flows; redirects ride on `aiarmada/links`
 
 ## Owner scoping and security notes
@@ -48,6 +48,7 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 - `ScopesByBelongsToOwner` delegates owner predicates, explicit-global handling, and write semantics to commerce-support's `OwnerScope`; it is the only relationship-based scope trait in this package
 - Tracking metrics remain inside the affiliate-network boundary and should not be assumed to match core affiliates conversion schemas without an explicit application bridge
 - Offer, site, and application identifiers should still be resolved inside the current owner or relationship scope on write paths
+- When the Affiliates identity adapter is bound and either `affiliate-network.owner.enabled` or `affiliates.owner.enabled` is true, the actor needs a merchant `Affiliate` row before creating applications, links, creative links, or conversion legs; identity fallback to the host user remains available for reads and display
 
 ## Discovery, enrollment, and conversion boundaries
 
@@ -260,7 +261,7 @@ Instead, it keeps its own offer-level tracking boundary:
 
 - `AffiliateOfferLink` stores clicks, conversions, and aggregated revenue for marketplace/offer links
 - checkout integration stores `network_attribution` in order metadata
-- posting into core `aiarmada/affiliates` conversions goes through the `NetworkLedger` seam, bound automatically when that package is installed; without it, conversions keep counters only
+- Conversions with a non-empty external reference create a network book leg; reference-less counter-only calls update link counters without creating a leg. When core `aiarmada/affiliates` is installed, the `NetworkLedger` seam also posts merchant commission rows. Standalone installs keep referenced network legs and counters, and hosts explicitly record payout runs through `HostManualFulfillment`.
 
 ## Requirements
 

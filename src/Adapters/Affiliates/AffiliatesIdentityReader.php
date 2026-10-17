@@ -18,8 +18,8 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
  * Network identity with merchant recognition.
  *
  * Merchant affiliate rows resolve first (for reporting and linkage),
- * ids without one fall back to the host user. Nothing is required or
- * provisioned on the merchant side — network identity stays sufficient.
+ * ids without one fall back to the host user for reads. Owner-scoped
+ * writes enforce a merchant profile through AffiliateProfileGuard.
  */
 final class AffiliatesIdentityReader implements AffiliateIdentityResolver
 {
@@ -37,6 +37,11 @@ final class AffiliatesIdentityReader implements AffiliateIdentityResolver
         }
 
         return $this->users->find($affiliateId);
+    }
+
+    public function hasMerchantProfile(string $affiliateId): bool
+    {
+        return $this->merchants->find($affiliateId) !== null;
     }
 
     public function findAccessible(string $affiliateId): ?NetworkAffiliate
