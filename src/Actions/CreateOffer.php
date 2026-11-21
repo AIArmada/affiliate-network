@@ -11,6 +11,7 @@ use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferCategory;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\CommerceSupport\Support\OwnerWriteGuard;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -98,6 +99,17 @@ final class CreateOffer
 
         if (empty($validated['status'])) {
             $validated['status'] = OfferStatus::Draft;
+        }
+
+        $status = $validated['status'] instanceof OfferStatus
+            ? $validated['status']
+            : OfferStatus::from($validated['status']);
+
+        if ($status === OfferStatus::Published) {
+            $validated['published_at'] ??= CarbonImmutable::now();
+            $validated['archived_at'] = null;
+        } elseif ($status === OfferStatus::Archived) {
+            $validated['archived_at'] ??= CarbonImmutable::now();
         }
 
         if (! empty($validated['currency'])) {

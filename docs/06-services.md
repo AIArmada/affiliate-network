@@ -11,20 +11,42 @@ The canonical orchestration surface for affiliate-network is the `Actions` tree.
 | Action | Purpose |
 |--------|---------|
 | `app(RegisterSite::class)->execute($owner, $data)` | Create a merchant site |
+| `app(CreateSite::class)->execute($data)` | Create a site from an operator form |
+| `app(UpdateSite::class)->execute($site, $data)` | Update site details and catalog token |
+| `app(VerifySite::class)->execute($site)` | Pending site -> verified |
+| `app(RejectSite::class)->execute($site)` | Pending site -> rejected |
+| `app(SuspendSite::class)->execute($site)` | Verified site -> suspended |
+| `app(ReinstateSite::class)->execute($site)` | Suspended site -> verified |
 | `app(CreateOffer::class)->execute($site, $data)` | Create a new offer |
 | `app(UpdateOffer::class)->execute($offer, $data)` | Update an existing offer |
+| `app(PublishOffer::class)->execute($offer)` | Publish an offer and stamp `published_at` |
+| `app(ArchiveOffer::class)->execute($offer)` | Archive an offer and stamp `archived_at` |
 | `app(SubmitOffer::class)->execute($site, $data)` | Merchant-submitted offer (always `draft`) |
 | `app(ApplyToOffer::class)->execute($offer, $affiliateId, $reason)` | Apply to an offer |
-| `app(ApproveApplication::class)->execute($application, $reviewedBy)` | Approve an application |
+| `app(ApproveApplication::class)->execute($application, $reviewedBy)` | Approve a pending application |
+| `app(RejectApplication::class)->execute($application, $reason, $reviewedBy)` | Reject a pending application |
+| `app(RevokeApplication::class)->execute($application, $reason, $reviewedBy)` | Revoke an approved application |
+| `app(CreateCreative::class)->execute($offer, $data)` | Create a manual creative |
+| `app(UpdateCreative::class)->execute($creative, $data)` | Update a creative (imported rows accept operator fields only) |
+| `app(DeleteCreative::class)->execute($creative)` | Delete a manual creative |
+| `app(SyncSiteOffers::class)->execute($site, $programId)` | Operator catalog sync (privileged owner-context entry) |
+| `app(SyncOfferCreatives::class)->execute($offer, $creatives)` | Reconcile imported creatives |
 | `app(RecordNetworkConversion::class)->execute($link, $revenueMinor, $currency, $externalReference, $status)` | Record a conversion (posts a leg when `$externalReference` is set) |
 
 `ApplyToOffer` takes an affiliate **id string**, not a model, and the third
 argument is `$reason`. None of these actions use `AsAction` — call them through
 the container with `execute()`.
 
-Events are automatically dispatched by each Action (`OfferCreated`,
-`OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`,
-`NetworkConversionRecorded`).
+Offer and application actions dispatch events (`OfferCreated`, `OfferUpdated`,
+`ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`).
+Site lifecycle and creative actions do not emit domain events.
+
+> **warning**
+> Breaking change: `AffiliateIdentityResolver` now declares
+> `requiresMerchantProfile()` and `hasMerchantProfile()`. Custom identity
+> adapters must implement both. Return `false` from `requiresMerchantProfile()`
+> for user-key identity and delegate `hasMerchantProfile()` to your merchant
+> lookup. The profile guard no longer checks for a concrete adapter class.
 
 ---
 
@@ -102,6 +124,58 @@ $instructions = $verificationService->getInstructions($site, 'file');
 
 ---
 
+## Site lifecycle
+
+Operator transitions live in the core package as explicit actions and validate
+the current status before writing. A suspended site retains its verification
+timestamp for reinstatement.
+
+```php
+use AIArmada\AffiliateNetwork\Actions\RejectSite;
+use AIArmada\AffiliateNetwork\Actions\ReinstateSite;
+use AIArmada\AffiliateNetwork\Actions\SuspendSite;
+use AIArmada\AffiliateNetwork\Actions\VerifySite;
+
+app(VerifySite::class)->execute($site);     // pending -> verified
+app(SuspendSite::class)->execute($site);    // verified -> suspended
+app(ReinstateSite::class)->execute($site);  // suspended -> verified
+
+app(RejectSite::class)->execute($anotherPendingSite);
+```
+
+`CreateSite` and `UpdateSite` own operator form writes, including domain
+normalization, the `verified_at` invariant, and catalog-token encryption.
+`AffiliateSite::matchesCatalogToken()` is the single constant-time token check
+used by both merchant postback endpoints.
+
+Admin and console surfaces are responsible for entering the site owner context
+before calling these actions; the actions themselves stay inside the ambient
+owner scope and never widen it.
+
+---
+
+## Creatives
+
+Manual creatives are written through core actions, never through the Filament
+adapter:
+
+```php
+use AIArmada\AffiliateNetwork\Actions\CreateCreative;
+use AIArmada\AffiliateNetwork\Actions\DeleteCreative;
+use AIArmada\AffiliateNetwork\Actions\UpdateCreative;
+
+$creative = app(CreateCreative::class)->execute($offer, $data);
+app(UpdateCreative::class)->execute($creative, $data);
+app(DeleteCreative::class)->execute($creative);
+```
+
+`CreateCreative` always clears `external_creative_id` and `source_asset_url`, so
+a caller cannot forge merchant provenance. Imported creatives accept only
+`is_active` and `sort_order` on update and cannot be deleted; catalog sync owns
+them through `SyncOfferCreatives`.
+
+---
+
 ## OfferManagementService
 
 Manages offers and affiliate applications.
@@ -142,13 +216,6 @@ $offer = $offerService->createOffer($site, [
 ```
 
 Auto-generates slug if not provided. New offers always land as `draft`; publishing stays an explicit operator decision.
-
-> **warning:**
-> `affiliate-network.offers.require_approval` is defined in the shipped config
-> but never read by any code path. `createOffer()` does not consult it. Approval
-> is decided per offer by the `requires_approval` column, which
-> `ApplyToOffer` reads (together with the live
-> `affiliate-network.applications.auto_approve` flag).
 
 #### applyForOffer
 

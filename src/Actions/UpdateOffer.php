@@ -10,6 +10,7 @@ use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Models\AffiliateOfferCategory;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\CommerceSupport\Support\OwnerWriteGuard;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 
@@ -83,6 +84,17 @@ final class UpdateOffer
 
         $this->guardRelocation($offer, $data);
         $this->guardPublishedSite($offer, $data);
+
+        if (array_key_exists('status', $data)) {
+            $status = $data['status'] instanceof OfferStatus ? $data['status'] : OfferStatus::from($data['status']);
+
+            if ($status === OfferStatus::Published) {
+                $data['published_at'] ??= ($offer->status === $status ? $offer->published_at : null) ?? CarbonImmutable::now();
+                $data['archived_at'] = null;
+            } elseif ($status === OfferStatus::Archived) {
+                $data['archived_at'] ??= ($offer->status === $status ? $offer->archived_at : null) ?? CarbonImmutable::now();
+            }
+        }
 
         // Sync internals are deliberately not fillable; persist them via an
         // explicit forceFill so mass assignment can never touch them.

@@ -20,7 +20,6 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
-use Throwable;
 
 /**
  * Merchant conversion voiding.
@@ -49,7 +48,7 @@ final class VoidNetworkConversionController extends Controller
             ->orWhere('domain', $validated['site'])
             ->first());
 
-        if (! $site instanceof AffiliateSite || ! $this->tokenMatches($site, (string) $request->bearerToken())) {
+        if (! $site instanceof AffiliateSite || ! $site->matchesCatalogToken($request->bearerToken())) {
             return response()->json(['message' => 'Invalid site credentials.'], 401);
         }
 
@@ -137,20 +136,5 @@ final class VoidNetworkConversionController extends Controller
         } catch (InvalidArgumentException | ModelNotFoundException) {
             return null;
         }
-    }
-
-    private function tokenMatches(AffiliateSite $site, string $bearerToken): bool
-    {
-        if ($bearerToken === '' || empty($site->catalog_token_encrypted)) {
-            return false;
-        }
-
-        try {
-            $expected = decrypt($site->catalog_token_encrypted);
-        } catch (Throwable) {
-            return false;
-        }
-
-        return is_string($expected) && $expected !== '' && hash_equals($expected, $bearerToken);
     }
 }

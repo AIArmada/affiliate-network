@@ -28,6 +28,25 @@ $site->isVerified(): bool   // status === 'verified' && verified_at !== null
 $site->isPending(): bool    // status === 'pending'
 $site->offers(): HasMany    // Related AffiliateOffer models
 $site->owner(): MorphTo     // Owner relationship (multi-tenancy)
+$site->matchesCatalogToken(?string $token): bool // constant-time, fail-closed
+```
+
+Operator lifecycle actions:
+
+```php
+use AIArmada\AffiliateNetwork\Actions\CreateSite;
+use AIArmada\AffiliateNetwork\Actions\ReinstateSite;
+use AIArmada\AffiliateNetwork\Actions\RejectSite;
+use AIArmada\AffiliateNetwork\Actions\SuspendSite;
+use AIArmada\AffiliateNetwork\Actions\UpdateSite;
+use AIArmada\AffiliateNetwork\Actions\VerifySite;
+
+$site = app(CreateSite::class)->execute($data);
+$site = app(UpdateSite::class)->execute($site, $data);
+$site = app(VerifySite::class)->execute($site);     // pending -> verified
+$site = app(RejectSite::class)->execute($site);     // pending -> rejected
+$site = app(SuspendSite::class)->execute($site);    // verified -> suspended
+$site = app(ReinstateSite::class)->execute($site);  // suspended -> verified
 ```
 
 ---
@@ -64,6 +83,16 @@ $offer->creatives(): HasMany    // AffiliateOfferCreative models
 $offer->applications(): HasMany // AffiliateOfferApplication models
 $offer->links(): HasMany        // AffiliateOfferLink models
 $offer->legs(): HasMany         // NetworkConversionLeg models
+```
+
+Operator lifecycle actions:
+
+```php
+use AIArmada\AffiliateNetwork\Actions\ArchiveOffer;
+use AIArmada\AffiliateNetwork\Actions\PublishOffer;
+
+$offer = app(PublishOffer::class)->execute($offer); // published + published_at
+$offer = app(ArchiveOffer::class)->execute($offer); // archived + archived_at
 ```
 
 ---

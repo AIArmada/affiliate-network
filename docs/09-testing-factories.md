@@ -373,6 +373,7 @@ it('marks site as verified on successful verification', function () {
 ### Testing Offer Applications
 
 ```php
+use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Services\OfferManagementService;
 use Illuminate\Support\Str;
@@ -386,7 +387,7 @@ it('creates application for offer', function () {
 
     expect($application->offer_id)->toBe($offer->id);
     expect($application->affiliate_id)->toBe($affiliateId);
-    expect($application->status)->toBe('pending');
+    expect($application->status)->toBe(ApplicationStatus::Pending);
     expect($application->reason)->toBe('I want to promote this');
 });
 
@@ -397,7 +398,7 @@ it('auto-approves when offer does not require approval', function () {
 
     $application = $service->applyForOffer($offer, $affiliateId);
 
-    expect($application->status)->toBe('approved');
+    expect($application->status)->toBe(ApplicationStatus::Approved);
 });
 
 it('prevents reapplication during cooldown period', function () {

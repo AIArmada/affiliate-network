@@ -27,7 +27,7 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 
 ## Related packages
 
-- [`aiarmada/affiliates`](../../affiliates/docs/01-overview.md) — optional: binds the local identity, ledger, program, and catalog adapters behind the network seam
+- [`aiarmada/affiliates`](../../affiliates/docs/01-overview.md) — optional: provides the merchant identity, ledger, program, and catalog services behind the network seam
 - [`aiarmada/filament-affiliate-network`](../../filament-affiliate-network/docs/01-overview.md) — Filament marketplace and merchant admin surfaces
 - [`aiarmada/filament-affiliates`](../../filament-affiliates/docs/01-overview.md) — complementary affiliate admin and portal UI
 - [`aiarmada/checkout`](../../checkout/docs/01-overview.md) — optional conversion recording bridge for sites using the Commerce checkout stack
@@ -35,11 +35,11 @@ The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliat
 ## Main models services or surfaces
 
 - **Models** — `AffiliateSite`, `AffiliateOffer`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferApplication`, `AffiliateOfferLink`
-- **Actions** — `CreateOffer`, `UpdateOffer`, `ApplyToOffer`, `ApproveApplication`, `RecordNetworkConversion`
-- **Contracts** — `SiteVerificationStrategyInterface` (DNS, meta tag, file verification strategies); the network seam `AffiliateIdentityResolver`, `NetworkLedger` plus `CatalogReaderInterface`
+- **Actions** — `CreateSite`, `UpdateSite`, `VerifySite`, `RejectSite`, `SuspendSite`, `ReinstateSite`, `CreateOffer`, `UpdateOffer`, `PublishOffer`, `ArchiveOffer`, `ApplyToOffer`, `ApproveApplication`, `RejectApplication`, `RevokeApplication`, `CreateCreative`, `UpdateCreative`, `DeleteCreative`, `SyncSiteOffers`, `SyncOfferCreatives`, `RecordNetworkConversion`
+- **Contracts** — `SiteVerificationStrategyInterface` (DNS, meta tag, file verification strategies); the network seam `AffiliateIdentityResolver`, `NetworkLedger`, `Fulfillment` plus `CatalogReaderInterface`
 - **Services** — site verification, offer management, and offer link generation/tracking
 - **Events** — `OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`
-- **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `SiteVerificationFailedException`, `AffiliateProfileRequired`, `AffiliatesNotInstalled` (seam feature used without an adapter)
+- **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `AffiliateProfileRequired`, `AffiliatesNotInstalled` (seam feature used without an adapter)
 - **Routes and middleware** — merchant postbacks and cookie-tracking flows; redirects ride on `aiarmada/links`
 
 ## Owner scoping and security notes
@@ -163,13 +163,28 @@ affiliate-network/
 │   └── api.php                      # Merchant postback route
 └── src/
     ├── Actions/
-    │   ├── ApplyToOffer.php              # Apply to an offer
-    │   ├── ApproveApplication.php        # Approve/reject applications
-    │   ├── CreateOffer.php               # Create a new offer
-    │   ├── RecordNetworkConversion.php   # Record a conversion
-    │   ├── RegisterSite.php              # Register a merchant site
-    │   ├── SubmitOffer.php               # Submit an offer for approval
-    │   └── UpdateOffer.php               # Update an existing offer
+    │   ├── ArchiveOffer.php                 # Archive and stamp archived_at
+    │   ├── ApplyToOffer.php                 # Apply to an offer
+    │   ├── ApproveApplication.php           # Approve pending applications
+    │   ├── CreateCreative.php               # Create a manual creative
+    │   ├── CreateOffer.php                  # Create a new offer
+    │   ├── CreateSite.php                   # Operator site creation
+    │   ├── DeleteCreative.php               # Delete a manual creative
+    │   ├── PublishOffer.php                 # Publish and stamp published_at
+    │   ├── RecordNetworkConversion.php      # Record a conversion
+    │   ├── RegisterSite.php                 # Register a merchant site
+    │   ├── ReinstateSite.php                # Suspended -> verified
+    │   ├── RejectApplication.php            # Reject pending applications
+    │   ├── RejectSite.php                   # Pending -> rejected
+    │   ├── RevokeApplication.php            # Revoke approved applications
+    │   ├── SubmitOffer.php                  # Submit an offer for approval
+    │   ├── SuspendSite.php                  # Verified -> suspended
+    │   ├── SyncOfferCreatives.php           # Reconcile imported creatives
+    │   ├── SyncSiteOffers.php               # Operator catalog sync
+    │   ├── UpdateCreative.php               # Update a creative
+    │   ├── UpdateOffer.php                  # Update an existing offer
+    │   ├── UpdateSite.php                   # Update site details and token
+    │   └── VerifySite.php                   # Pending -> verified
     ├── Adapters/Affiliates/         # Local engine adapters (identity, ledger, catalog, fulfillment)
     ├── Console/Commands/
     │   ├── ArchiveExpiredOffersCommand.php # Batch archive expired offers
@@ -177,7 +192,6 @@ affiliate-network/
     │   └── SyncSiteOffersCommand.php
     ├── Contracts/
     │   ├── AffiliateIdentityResolver.php
-    │   ├── CatalogReaderInterface.php
     │   ├── Fulfillment.php
     │   ├── NetworkLedger.php
     │   └── SiteVerificationStrategyInterface.php
@@ -189,12 +203,13 @@ affiliate-network/
     │   └── OfferUpdated.php
     ├── Exceptions/
     │   ├── AffiliatesNotInstalled.php
+    │   ├── AffiliateProfileRequired.php
     │   ├── ApplicationAlreadySubmittedException.php
-    │   ├── OfferNotFoundException.php
-    │   └── SiteVerificationFailedException.php
+    │   └── OfferNotFoundException.php
     ├── Http/
     │   ├── Controllers/
-    │   │   └── ReportNetworkConversionController.php
+    │   │   ├── ReportNetworkConversionController.php
+    │   │   └── VoidNetworkConversionController.php
     │   └── Middleware/
     │       └── TrackNetworkLinkCookie.php
     ├── Listeners/
@@ -213,6 +228,7 @@ affiliate-network/
     │   ├── AffiliateOfferLink.php
     │   ├── NetworkConversionLeg.php
     │   └── Concerns/
+    │       ├── ResolvesAffiliateModel.php
     │       └── ScopesByBelongsToOwner.php
     ├── Services/
     │   ├── Catalog/                     # Local + remote catalog readers
@@ -247,7 +263,7 @@ affiliate-network/
 
 ## Integration with Affiliates Package
 
-This package does **not** require the core `aiarmada/affiliates` package. Integration happens through the network seam (`AffiliateIdentityResolver`, `NetworkLedger`, `CatalogReaderInterface`), which the affiliates package implements when both are installed:
+This package does **not** require the core `aiarmada/affiliates` package. Integration happens through the network seam (`AffiliateIdentityResolver`, `NetworkLedger`, `Fulfillment`, `CatalogReaderInterface`); the network package ships the adapters and binds them only when the affiliates engine provider is active:
 
 - `AffiliateOfferApplication` and `AffiliateOfferLink` hold opaque `affiliate_id` UUIDs; the `affiliate()` relations resolve the model bound at `affiliate-network.models.affiliate`
 - Owner scoping respects affiliate ownership through relationship-based scoping
@@ -268,7 +284,7 @@ Instead, it keeps its own offer-level tracking boundary:
 - PHP 8.5+
 - Laravel 13+
 - `aiarmada/commerce-support` package (for owner traits)
-- `aiarmada/affiliates` package (optional; enables local identity, ledger, program, and catalog adapters)
+- `aiarmada/affiliates` package (optional; enables local identity, ledger, program, and catalog features through the network seam)
 
 ## Read next
 

@@ -6,7 +6,7 @@ namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\NetworkConversionLegFactory;
 use AIArmada\AffiliateNetwork\Enums\LegStatus;
-use AIArmada\AffiliateNetwork\Exceptions\AffiliatesNotInstalled;
+use AIArmada\AffiliateNetwork\Models\Concerns\ResolvesAffiliateModel;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -45,6 +45,7 @@ class NetworkConversionLeg extends Model
 {
     use HasFactory;
     use HasUuids;
+    use ResolvesAffiliateModel;
     use ScopesByBelongsToOwner;
 
     protected static function ownerViaRelation(): string
@@ -130,20 +131,6 @@ class NetworkConversionLeg extends Model
     public function affiliate(): BelongsTo
     {
         return $this->belongsTo(self::affiliateModel(), 'affiliate_id');
-    }
-
-    /**
-     * @return class-string<Model>
-     */
-    public static function affiliateModel(): string
-    {
-        $model = config('affiliate-network.models.affiliate');
-
-        if (! is_string($model) || ! class_exists($model)) {
-            throw AffiliatesNotInstalled::forFeature('affiliate relations');
-        }
-
-        return $model;
     }
 
     public function paysOut(): bool

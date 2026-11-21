@@ -9,8 +9,6 @@ use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
 use AIArmada\CommerceSupport\Traits\HasOwner;
 use AIArmada\CommerceSupport\Traits\HasOwnerScopeConfig;
-use AIArmada\Contacting\Concerns\HasContactMethods;
-use AIArmada\Contacting\Concerns\HasSocialProfiles;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -20,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Str;
 use OwenIt\Auditing\Contracts\Auditable;
+use Throwable;
 
 /**
  * @property string $id
@@ -42,11 +41,9 @@ use OwenIt\Auditing\Contracts\Auditable;
 class AffiliateSite extends Model implements Auditable
 {
     use HasCommerceAudit;
-    use HasContactMethods;
     use HasFactory;
     use HasOwner;
     use HasOwnerScopeConfig;
-    use HasSocialProfiles;
     use HasUuids;
     use LogsCommerceActivity;
 
@@ -59,6 +56,13 @@ class AffiliateSite extends Model implements Auditable
     public const STATUS_SUSPENDED = 'suspended';
 
     public const STATUS_REJECTED = 'rejected';
+
+    public const STATUSES = [
+        self::STATUS_PENDING,
+        self::STATUS_VERIFIED,
+        self::STATUS_SUSPENDED,
+        self::STATUS_REJECTED,
+    ];
 
     protected $fillable = [
         'owner_type',
@@ -197,5 +201,20 @@ class AffiliateSite extends Model implements Auditable
     public function hasCatalogToken(): bool
     {
         return ! empty($this->catalog_token_encrypted);
+    }
+
+    public function matchesCatalogToken(?string $token): bool
+    {
+        if ($token === null || $token === '' || empty($this->catalog_token_encrypted)) {
+            return false;
+        }
+
+        try {
+            $expected = decrypt($this->catalog_token_encrypted);
+        } catch (Throwable) {
+            return false;
+        }
+
+        return is_string($expected) && $expected !== '' && hash_equals($expected, $token);
     }
 }

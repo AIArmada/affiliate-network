@@ -148,7 +148,7 @@ AFFILIATE_NETWORK_APPLICATIONS_COOLDOWN_DAYS=0  # Disable cooldown
 
 Check when reapplication is allowed:
 ```php
-$application->updated_at->addDays(7)->isPast(); // Must be true
+($application->rejected_at ?? $application->updated_at)->addDays(7)->isPast(); // Must be true
 ```
 
 ### Auto-Approve Not Working

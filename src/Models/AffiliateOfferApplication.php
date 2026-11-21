@@ -6,7 +6,7 @@ namespace AIArmada\AffiliateNetwork\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferApplicationFactory;
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
-use AIArmada\AffiliateNetwork\Exceptions\AffiliatesNotInstalled;
+use AIArmada\AffiliateNetwork\Models\Concerns\ResolvesAffiliateModel;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
@@ -41,6 +41,7 @@ class AffiliateOfferApplication extends Model implements Auditable
     use HasFactory;
     use HasUuids;
     use LogsCommerceActivity;
+    use ResolvesAffiliateModel;
     use ScopesByBelongsToOwner;
 
     protected static function ownerViaRelation(): string
@@ -89,20 +90,6 @@ class AffiliateOfferApplication extends Model implements Auditable
     public function affiliate(): BelongsTo
     {
         return $this->belongsTo(self::affiliateModel(), 'affiliate_id');
-    }
-
-    /**
-     * @return class-string<Model>
-     */
-    public static function affiliateModel(): string
-    {
-        $model = config('affiliate-network.models.affiliate');
-
-        if (! is_string($model) || ! class_exists($model)) {
-            throw AffiliatesNotInstalled::forFeature('affiliate relations');
-        }
-
-        return $model;
     }
 
     protected static function newFactory(): AffiliateOfferApplicationFactory

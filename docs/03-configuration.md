@@ -47,10 +47,6 @@ return [
         'enabled' => env('AFFILIATE_NETWORK_NOTIFICATIONS_ENABLED', true),
     ],
 
-    'offers' => [
-        'require_approval' => env('AFFILIATE_NETWORK_OFFERS_REQUIRE_APPROVAL', true),
-    ],
-
     'applications' => [
         'auto_approve' => env('AFFILIATE_NETWORK_APPLICATIONS_AUTO_APPROVE', false),
         'cooldown_days' => env('AFFILIATE_NETWORK_APPLICATIONS_COOLDOWN_DAYS', 7),
@@ -143,19 +139,6 @@ return [
 | Key | Description | Default |
 |-----|-------------|---------|
 | `enabled` | Managed notifications via `aiarmada/communications` (silent when absent) | `true` |
-
-### Offers
-
-| Key | Description | Default |
-|-----|-------------|---------|
-| `require_approval` | Reserved offer-approval default | `true` |
-
-> [!NOTE]
-> `offers.require_approval` is currently informational: `CreateOffer` always lands new offers as `draft` and publishing stays an explicit operator decision regardless of this flag.
-
-> **warning**: `offers.require_approval` is defined in the shipped config but never read by the
-> package. Approval is enforced per offer through the fillable `requires_approval` column and
-> `AffiliateOfferApplication`, not through this key.
 
 ### Applications
 

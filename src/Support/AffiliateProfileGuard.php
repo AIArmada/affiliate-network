@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Support;
 
-use AIArmada\AffiliateNetwork\Adapters\Affiliates\AffiliatesIdentityReader;
 use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
 use AIArmada\AffiliateNetwork\Exceptions\AffiliateProfileRequired;
 
@@ -19,7 +18,7 @@ final readonly class AffiliateProfileGuard
         if (
             (! config('affiliate-network.owner.enabled', false)
                 && ! config('affiliates.owner.enabled', false))
-            || ! $this->identities instanceof AffiliatesIdentityReader
+            || ! $this->identities->requiresMerchantProfile()
             || $this->identities->hasMerchantProfile($affiliateId)
         ) {
             return;

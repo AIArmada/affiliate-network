@@ -27,4 +27,14 @@ interface AffiliateIdentityResolver
      * matches on identity, it does not verify ownership.
      */
     public function findIdForVerifiedEmail(string $email): ?string;
+
+    /**
+     * Whether this resolver distinguishes merchant profiles from host users.
+     */
+    public function requiresMerchantProfile(): bool;
+
+    /**
+     * Whether the id resolves to a merchant profile in this adapter.
+     */
+    public function hasMerchantProfile(string $affiliateId): bool;
 }

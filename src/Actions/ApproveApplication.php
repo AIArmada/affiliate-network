@@ -27,6 +27,10 @@ final class ApproveApplication
                 return $application;
             }
 
+            if (! $application->isPending()) {
+                throw new RuntimeException('Only pending applications can be approved.');
+            }
+
             // Verification is a network fact, not tenant data: resolve the offer
             // unscoped so cross-owner approvals are judged on the site's real
             // status instead of the ambient scope. Ownership was already

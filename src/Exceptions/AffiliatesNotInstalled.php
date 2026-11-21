@@ -11,8 +11,9 @@ use RuntimeException;
  *
  * The network package never requires aiarmada/affiliates; features that
  * need affiliate identity, the conversion ledger, or core programs resolve
- * them through the network seam (see Contracts/) with adapters provided
- * by the affiliates package. This exception means no adapter is bound.
+ * them through the network seam (see Contracts/) with adapters that the
+ * network package binds when the engine is present. This exception means
+ * no adapter is bound.
  */
 final class AffiliatesNotInstalled extends RuntimeException
 {

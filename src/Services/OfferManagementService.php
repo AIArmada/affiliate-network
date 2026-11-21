@@ -7,6 +7,8 @@ namespace AIArmada\AffiliateNetwork\Services;
 use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
 use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
 use AIArmada\AffiliateNetwork\Actions\CreateOffer;
+use AIArmada\AffiliateNetwork\Actions\RejectApplication;
+use AIArmada\AffiliateNetwork\Actions\RevokeApplication;
 use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferStatus;
 use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
@@ -15,7 +17,6 @@ use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Models\Concerns\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Support\OwnerContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
@@ -35,6 +36,8 @@ final class OfferManagementService
         private readonly CreateOffer $createOfferAction,
         private readonly ApplyToOffer $applyToOfferAction,
         private readonly ApproveApplication $approveApplicationAction,
+        private readonly RejectApplication $rejectApplicationAction,
+        private readonly RevokeApplication $revokeApplicationAction,
     ) {}
 
     /**
@@ -122,19 +125,7 @@ final class OfferManagementService
      */
     public function rejectApplication(AffiliateOfferApplication $application, string $reason, ?string $reviewedBy = null): AffiliateOfferApplication
     {
-        $application = AffiliateOfferApplication::query()
-            ->whereKey($application->getKey())
-            ->firstOrFail();
-
-        $application->update([
-            'status' => ApplicationStatus::Rejected,
-            'rejection_reason' => $reason,
-            'reviewed_by' => $reviewedBy,
-            'reviewed_at' => CarbonImmutable::now(),
-            'rejected_at' => CarbonImmutable::now(),
-        ]);
-
-        return $application->fresh() ?? $application;
+        return $this->rejectApplicationAction->execute($application, $reason, $reviewedBy);
     }
 
     /**
@@ -142,19 +133,7 @@ final class OfferManagementService
      */
     public function revokeApplication(AffiliateOfferApplication $application, string $reason, ?string $reviewedBy = null): AffiliateOfferApplication
     {
-        $application = AffiliateOfferApplication::query()
-            ->whereKey($application->getKey())
-            ->firstOrFail();
-
-        $application->update([
-            'status' => ApplicationStatus::Revoked,
-            'rejection_reason' => $reason,
-            'reviewed_by' => $reviewedBy,
-            'reviewed_at' => CarbonImmutable::now(),
-            'revoked_at' => CarbonImmutable::now(),
-        ]);
-
-        return $application->fresh() ?? $application;
+        return $this->revokeApplicationAction->execute($application, $reason, $reviewedBy);
     }
 
     /**

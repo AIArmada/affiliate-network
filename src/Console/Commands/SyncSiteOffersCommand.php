@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Console\Commands;
 
+use AIArmada\AffiliateNetwork\Actions\SyncSiteOffers;
 use AIArmada\AffiliateNetwork\Models\AffiliateSite;
-use AIArmada\AffiliateNetwork\Services\OfferImportService;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -19,7 +19,7 @@ final class SyncSiteOffersCommand extends Command
 
     protected $description = 'Sync merchant program catalog as network offers (local shared-DB or remote HTTP)';
 
-    public function handle(OfferImportService $importer): int
+    public function handle(SyncSiteOffers $syncSiteOffers): int
     {
         if (! (bool) config('affiliate-network.sync.enabled', true)) {
             $this->error('Catalog sync is disabled (affiliate-network.sync.enabled).');
@@ -41,7 +41,7 @@ final class SyncSiteOffersCommand extends Command
 
         try {
             if ($programId !== '') {
-                $result = OwnerContext::withOwner($site->owner, fn (): array => $importer->sync($site, $programId));
+                $result = $syncSiteOffers->execute($site, $programId);
                 $this->info("Offers synced: {$result['created']} created, {$result['updated']} updated, {$result['skipped']} skipped, {$result['locked']} locked, {$result['failed']} failed.");
 
                 if ($result['failed'] > 0) {
@@ -50,7 +50,7 @@ final class SyncSiteOffersCommand extends Command
                     return self::FAILURE;
                 }
             } else {
-                $result = OwnerContext::withOwner($site->owner, fn (): array => $importer->syncAll($site));
+                $result = $syncSiteOffers->execute($site);
                 $this->info("Programs synced: {$result['programs']}; offers: {$result['created']} created, {$result['updated']} updated, {$result['skipped']} skipped, {$result['locked']} locked, {$result['failed']} failed.");
 
                 if ($result['failed'] > 0) {

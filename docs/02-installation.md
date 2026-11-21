@@ -4,6 +4,13 @@ title: Installation
 
 # Installation
 
+> **warning**
+> Affiliate sites and offers no longer provide the Contacting package's contact
+> method and social profile relationships. Before upgrading, move any attached
+> records to the merchant's contactable and socialable models using Contacting.
+> Update callers to use those models. Deleting a site or offer after upgrading
+> will leave any legacy attachments in place.
+
 ## Requirements
 
 - PHP 8.5+
@@ -44,6 +51,7 @@ This creates the following tables (with configurable prefix):
 - `affiliate_network_offer_creatives` - Banners, text links, etc.
 - `affiliate_network_offer_applications` - Affiliate applications
 - `affiliate_network_offer_links` - Tracking links
+- `affiliate_network_conversion_legs` - Append-only money legs per conversion
 
 Manual creative files use the `public` disk. `commerce-support` loads the
 Media Library table migration when no published copy exists, with UUID morph
@@ -59,9 +67,6 @@ AFFILIATE_NETWORK_JSON_COLUMN_TYPE=json
 # Multi-tenancy
 AFFILIATE_NETWORK_OWNER_ENABLED=false
 AFFILIATE_NETWORK_OWNER_INCLUDE_GLOBAL=false
-
-# Offers
-AFFILIATE_NETWORK_OFFERS_REQUIRE_APPROVAL=true
 
 # Applications
 AFFILIATE_NETWORK_APPLICATIONS_AUTO_APPROVE=false

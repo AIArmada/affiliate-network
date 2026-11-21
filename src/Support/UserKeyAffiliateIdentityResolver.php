@@ -67,6 +67,16 @@ final class UserKeyAffiliateIdentityResolver implements AffiliateIdentityResolve
         return $key === null ? null : (string) $key;
     }
 
+    public function requiresMerchantProfile(): bool
+    {
+        return false;
+    }
+
+    public function hasMerchantProfile(string $affiliateId): bool
+    {
+        return false;
+    }
+
     private function userByKey(string $affiliateId): ?Model
     {
         $model = $this->userModelClass();

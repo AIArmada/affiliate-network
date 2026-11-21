@@ -45,6 +45,7 @@ $site->isPending();           // bool
 $site->issueCatalogToken();   // string (plaintext, shown once)
 $site->rotateCatalogToken();  // string (previous token dies immediately)
 $site->hasCatalogToken();     // bool
+$site->matchesCatalogToken($token); // bool (constant-time, fail-closed)
 ```
 
 ### Traits

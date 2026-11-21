@@ -44,6 +44,11 @@ final class AffiliatesIdentityReader implements AffiliateIdentityResolver
         return $this->merchants->find($affiliateId) !== null;
     }
 
+    public function requiresMerchantProfile(): bool
+    {
+        return true;
+    }
+
     public function findAccessible(string $affiliateId): ?NetworkAffiliate
     {
         if (! config('affiliates.owner.enabled', false)) {

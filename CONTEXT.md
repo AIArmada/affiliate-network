@@ -43,8 +43,8 @@ keywords:
 
 ## Key surfaces
 - Models: `AffiliateOffer`, `AffiliateOfferApplication`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferLink`, `AffiliateSite`, `NetworkConversionLeg`
-- Actions/Services: `Actions/ApplyToOffer`, `Actions/ApproveApplication`, `Actions/CreateOffer`, `Actions/RecordNetworkConversion`, `Actions/UpdateOffer`, `Services/NetworkBooks`, `Services/CreatorBalances`, `Services/OfferLinkService`, `Services/OfferManagementService`, `Services/OfferImportService`, `Services/Catalog/*`, `Services/SiteVerificationService`, `Contracts/Fulfillment`
-- Config `affiliate-network.php`: `database.table_prefix`, `database.tables`, `database.json_column_type`, `models`, `owner`, `currency`, `fees`, `notifications`, `offers`, `applications`, `links`, `cookies`, `checkout`, `sync`, `postbacks`, `http`
+- Actions/Services: `Actions/ApplyToOffer`, `Actions/ApproveApplication`, `Actions/ArchiveOffer`, `Actions/CreateCreative`, `Actions/CreateOffer`, `Actions/CreateSite`, `Actions/DeleteCreative`, `Actions/PublishOffer`, `Actions/RecordNetworkConversion`, `Actions/ReinstateSite`, `Actions/RejectApplication`, `Actions/RejectSite`, `Actions/RevokeApplication`, `Actions/SuspendSite`, `Actions/SyncSiteOffers`, `Actions/UpdateCreative`, `Actions/UpdateOffer`, `Actions/UpdateSite`, `Actions/VerifySite`, `Services/NetworkBooks`, `Services/CreatorBalances`, `Services/OfferLinkService`, `Services/OfferManagementService`, `Services/OfferImportService`, `Services/Catalog/*`, `Services/SiteVerificationService`, `Contracts/Fulfillment`
+- Config `affiliate-network.php`: `database.table_prefix`, `database.tables`, `database.json_column_type`, `models`, `owner`, `currency`, `fees`, `notifications`, `applications`, `links`, `cookies`, `checkout`, `sync`, `postbacks`, `http`
 
 ## Docs map
 - Start: `01-overview` → `03-configuration` → `04-usage` → `99-troubleshooting`
