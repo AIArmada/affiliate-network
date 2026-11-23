@@ -4,19 +4,22 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Events;
 
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
-use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-final class ApplicationApproved implements ShouldDispatchAfterCommit
+final readonly class ApplicationApproved
 {
     use Dispatchable;
-    use InteractsWithSockets;
     use SerializesModels;
 
     public function __construct(
-        public AffiliateOfferApplication $application,
+        public string $applicationId,
+        public string $offerId,
+        public string $offerName,
+        public string $siteId,
+        public string $affiliateId,
+        public string $status,
+        public ?string $ownerType = null,
+        public string | int | null $ownerId = null,
     ) {}
 }

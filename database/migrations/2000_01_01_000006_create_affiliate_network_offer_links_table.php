@@ -11,13 +11,14 @@ return new class extends Migration
     public function up(): void
     {
         $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
+        $tableName = config('affiliate-network.database.tables.offer_links', $tablePrefix . 'offer_links');
         $jsonType = commerce_json_column_type('affiliate-network', 'jsonb');
 
-        Schema::create($tablePrefix . 'offer_links', function (Blueprint $table) use ($jsonType): void {
+        Schema::create($tableName, function (Blueprint $table) use ($jsonType): void {
             $table->uuid('id')->primary();
             $table->foreignUuid('link_id')->nullable();
             $table->foreignUuid('offer_id');
-            $table->foreignUuid('affiliate_id');
+            $table->string('affiliate_id');
             $table->foreignUuid('site_id')->nullable();
 
             $table->string('sub_id')->nullable();

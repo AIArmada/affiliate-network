@@ -6,285 +6,165 @@ title: Overview
 
 ## Purpose
 
-The `aiarmada/affiliate-network` package is a standalone multi-merchant affiliate marketplace with sites, offers, applications, creatives, and tracking links. It never requires `aiarmada/affiliates`; when that package is installed it binds local adapters for affiliate identity, the conversion ledger, core programs, and catalog sync.
+`aiarmada/affiliate-network` is a standalone multi-merchant affiliate
+marketplace: merchant sites, offers, creator enrollment, tracking links, an
+append-only conversion ledger, merchant settlement statements, and outbound
+creator postbacks. It never requires `aiarmada/affiliates`; when that package
+is installed it binds local adapters for identity, the merchant ledger,
+fulfillment, and catalog mirroring through the network seams.
 
 > **warning**
-> Breaking change: the network seam. Public APIs take affiliate IDs (`string`) instead of `Affiliate` models (`applyForOffer()`, `createLink()`, `isApprovedForOffer()`, `getApprovedOffers()`, and friends), and factories use `forAffiliateId()`. Every offer — mirrored or hand-written — uses the network application flow: the program-membership bridge (`LinkedProgramBridge`, `membershipsForPrograms()`, `enrollInLinkedProgram()`, `isLocalProgramOffer()`) is removed. Migration: pass `(string) $affiliate->getKey()` at call sites and read application state through the network rows. No data migration: `affiliate_id` columns are unchanged.
+> Breaking change: the network seam. Public APIs take affiliate IDs (`string`)
+> instead of `Affiliate` models (`ApplyToOffer`, `CreateOfferLink`,
+> `isApprovedForOffer`, and friends), and factories use `forAffiliateId()`.
+> Every offer — mirrored or hand-written — enrolls through the network
+> application flow, which never touches merchant program memberships.
+> Migration: pass `(string) $affiliate->getKey()` at call sites and read
+> enrollment state through network rows. There is no data migration —
+> `affiliate_id` columns are unchanged.
+
+> **warning**
+> The package was reorganized from a flat `src/{Actions,Models,Services,...}`
+> layout into a Modular Dune architecture. Every legacy namespace
+> (`AIArmada\AffiliateNetwork\{Actions,Adapters,Console,Enums,Http,Listeners,Models,Services,Strategies,Support}\*`)
+> is gone. Import from `Features\<Feature>\{Actions,Models,Api,Queries,Extensions,EntryPoints}`
+> or the package-wide `Contracts`, `Data`, `Drivers`, `Events`, `Exceptions`,
+> and `Notifications` namespaces instead.
 
 ## What this package owns
 
-- Merchant sites and site verification workflows
-- Affiliate offers, categories, creatives, applications, and network tracking links
-- Marketplace discovery flows and merchant/offer management services
-- Network-specific checkout attribution boundary and offer-level aggregated metrics
+- Merchant sites, domain verification, catalog tokens, and settlement settings
+- Offers, categories, creatives, invitations, custom deals, coupons, and tracking links
+- Applications and enrollment state
+- The append-only network conversion ledger (legs, caps, adjustments, reversals, locking)
+- Merchant statements and receivables
+- Outbound creator S2S postback delivery
+- Marketplace discovery and per-offer metrics
 
 ## What this package does not own
 
-- Core affiliate attribution, commissions, payouts, or fraud models; those stay in `aiarmada/affiliates`
-- Merchant-local commission execution; enrollment for every offer — mirrored or hand-written — is a network application and never touches merchant program memberships
-- Filament marketplace/admin surfaces; those belong to `aiarmada/filament-affiliate-network`
-- General checkout, cart, or order persistence beyond its integration hooks
+- Core merchant attribution, commissions, payouts, or fraud models — those stay in `aiarmada/affiliates`
+- Public redirect routing — served by `aiarmada/links` (`GET /go/{slug}`)
+- Filament marketplace/admin surfaces — owned by `aiarmada/filament-affiliate-network`
+- Checkout, cart, or order persistence beyond its integration hooks
 
 ## Related packages
 
-- [`aiarmada/affiliates`](../../affiliates/docs/01-overview.md) — optional: provides the merchant identity, ledger, program, and catalog services behind the network seam
-- [`aiarmada/filament-affiliate-network`](../../filament-affiliate-network/docs/01-overview.md) — Filament marketplace and merchant admin surfaces
-- [`aiarmada/filament-affiliates`](../../filament-affiliates/docs/01-overview.md) — complementary affiliate admin and portal UI
-- [`aiarmada/checkout`](../../checkout/docs/01-overview.md) — optional conversion recording bridge for sites using the Commerce checkout stack
+- [`aiarmada/affiliates`](../../affiliates/docs/01-overview.md) — optional: identity, merchant ledger, fulfillment, catalog snapshots
+- [`aiarmada/filament-affiliate-network`](../../filament-affiliate-network/docs/01-overview.md) — Filament admin adapter
+- [`aiarmada/links`](../../links/docs/01-overview.md) — tracked public redirects
+- [`aiarmada/checkout`](../../checkout/docs/01-overview.md) — optional conversion recording bridge
+- [`aiarmada/commerce-support`](../../commerce-support/docs/01-overview.md) — owner scoping, money helpers, HTTP guards
 
-## Main models services or surfaces
-
-- **Models** — `AffiliateSite`, `AffiliateOffer`, `AffiliateOfferCategory`, `AffiliateOfferCreative`, `AffiliateOfferApplication`, `AffiliateOfferLink`
-- **Actions** — `CreateSite`, `UpdateSite`, `VerifySite`, `RejectSite`, `SuspendSite`, `ReinstateSite`, `CreateOffer`, `UpdateOffer`, `PublishOffer`, `ArchiveOffer`, `ApplyToOffer`, `ApproveApplication`, `RejectApplication`, `RevokeApplication`, `CreateCreative`, `UpdateCreative`, `DeleteCreative`, `SyncSiteOffers`, `SyncOfferCreatives`, `RecordNetworkConversion`
-- **Contracts** — `SiteVerificationStrategyInterface` (DNS, meta tag, file verification strategies); the network seam `AffiliateIdentityResolver`, `NetworkLedger`, `Fulfillment` plus `CatalogReaderInterface`
-- **Services** — site verification, offer management, and offer link generation/tracking
-- **Events** — `OfferCreated`, `OfferUpdated`, `ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`
-- **Exceptions** — `OfferNotFoundException`, `ApplicationAlreadySubmittedException`, `AffiliateProfileRequired`, `AffiliatesNotInstalled` (seam feature used without an adapter)
-- **Routes and middleware** — merchant postbacks and cookie-tracking flows; redirects ride on `aiarmada/links`
-
-## Owner scoping and security notes
-
-- Site and category records are owner-aware, while offers and creatives inherit through `site` and `offer.site`; applications and links inherit through `affiliate`
-- `ScopesByBelongsToOwner` delegates owner predicates, explicit-global handling, and write semantics to commerce-support's `OwnerScope`; it is the only relationship-based scope trait in this package
-- Tracking metrics remain inside the affiliate-network boundary and should not be assumed to match core affiliates conversion schemas without an explicit application bridge
-- Offer, site, and application identifiers should still be resolved inside the current owner or relationship scope on write paths
-- When the Affiliates identity adapter is bound and either `affiliate-network.owner.enabled` or `affiliates.owner.enabled` is true, the actor needs a merchant `Affiliate` row before creating applications, links, creative links, or conversion legs; identity fallback to the host user remains available for reads and display
-
-## Discovery, enrollment, and conversion boundaries
-
-`affiliate-network` owns discovery: merchant sites, marketplace offers, redirect policy, clicks, and network-level applications for remote catalogs. `affiliates` owns merchant-local execution: `AffiliateProgram`, memberships, attribution, commissions, payouts, and fraud decisions. The network never writes commission or payout records.
-
-Local catalog synchronization calls the read-only `ProgramCatalogService::snapshot()` path through the affiliates-provided local reader. A local imported offer keeps the core program ID in `external_program_id` for reference, but enrollment for every offer is a network application — remote mirrors are marked with `metadata.catalog_source = remote`, and neither path touches merchant program memberships.
-
-Conversion precedence is intentionally split: the network side records discovery attribution (link clicks/conversions and `network_attribution` order metadata), while core `affiliates` records commission and payout state. Keep the guards separate when both paths observe one order: the network integration must reject an already-attributed order/link before recording a second network conversion, and core conversion calls must carry a stable `external_reference`, which `RecordAffiliateConversion` turns into its idempotency key. Core commission data is authoritative for commission and payout execution; network click/conversion counters remain discovery reporting. The `orders` listener is an integration boundary and is not replaced or modified by this package.
-
-Public redirects are served by `aiarmada/links` (`GET /go/{slug}`): unsigned public slug URLs without signature expiry, a network policy gate over link, offer, site, and approval state, and throttling through `links.routing.middleware`. Outbound catalog and verification HTTP uses the shared public-URL guard (HTTP/HTTPS only, public DNS/IPs, no credentials/fragments), pinned transport with redirects disabled, configured timeouts/retries, and a one-megabyte response cap.
-
-The `aiarmada/affiliate-network` package provides a complete multi-merchant affiliate network and marketplace system for Laravel. It runs standalone so merchants can publish offers and affiliates can discover and promote them; install `aiarmada/affiliates` alongside it to enable local identity, ledger, program, and catalog features.
-
-## Key Features
-
-- **Site Management** - Merchants register and verify their domains via DNS, meta tag, or file verification
-- **Offer Publishing** - Create affiliate offers with flexible commission structures (percentage or fixed)
-- **Offer Categories** - Hierarchical category organization with configurable depth
-- **Offer Applications** - Affiliates apply to promote offers with approval workflows
-- **Tracking Links** - Public deep link generation with click/conversion tracking and sub-ID support
-- **Creative Assets** - Banners, text links, email templates, HTML widgets, and video content
-- **Checkout Integration** - Native tracking and conversion recording for sites using the commerce checkout package
-- **Multi-Tenancy** - Full owner scoping with relationship-based inheritance
-- **Marketplace** - Public offer discovery with featured listings and search
-
-## Use Cases
-
-### Affiliate Marketplace
-
-Build an affiliate marketplace where merchants list offers and affiliates browse/apply:
-
-```php
-use AIArmada\AffiliateNetwork\Enums\OfferStatus;
-use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
-use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
-
-// Get published public offers for marketplace display
-$offers = AffiliateOffer::query()
-    ->where('status', OfferStatus::Published)
-    ->where('visibility', OfferVisibility::Public)
-    ->orderByDesc('is_featured')
-    ->orderByDesc('created_at')
-    ->with(['site', 'category', 'creatives'])
-    ->get();
-```
-
-### Private Affiliate Network
-
-Run a private network with invite-only offers:
-
-```php
-use AIArmada\AffiliateNetwork\Enums\OfferStatus;
-use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
-use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
-
-// Private offers requiring manual approval
-$offers = AffiliateOffer::query()
-    ->where('requires_approval', true)
-    ->where('visibility', OfferVisibility::Private)
-    ->where('status', OfferStatus::Published)
-    ->get();
-```
-
-### Multi-Merchant Platform
-
-Host multiple merchants, each managing their own sites and offers:
-
-```php
-use AIArmada\AffiliateNetwork\Models\AffiliateSite;
-
-// Sites are automatically scoped to current owner when enabled
-$merchantSites = AffiliateSite::query()
-    ->where('status', AffiliateSite::STATUS_VERIFIED)
-    ->withCount('offers')
-    ->get();
-
-// Or explicitly query for a specific owner
-$sites = AffiliateSite::forOwner($merchant)->get();
-```
-
-### Deep Link Tracking
-
-Generate clean tracking URLs with full attribution:
-
-```php
-use AIArmada\AffiliateNetwork\Services\OfferLinkService;
-
-$linkService = app(OfferLinkService::class);
-
-$link = $linkService->createLink($offer, (string) $affiliate->getKey(), [
-    'sub_id' => 'blog-post-1',
-    'sub_id_2' => 'sidebar',
-    'sub_id_3' => 'banner-728x90',
-]);
-
-$trackingUrl = $linkService->generateTrackingUrl($link);
-// https://yoursite.com/go/aB3dE9fHjKlmN0p
-```
-
-Redirects are served by `aiarmada/links`; the network contributes redirect policy (link, offer, site, and approval state) through a link gate.
-
-## Architecture
+## Architecture (Modular Laravel Dune)
 
 ```
 affiliate-network/
-├── config/
-│   └── affiliate-network.php        # Package configuration
-├── database/
-│   ├── factories/                   # 7 model factories
-│   ├── migrations/                  # 7 migration files
-├── routes/
-│   └── api.php                      # Merchant postback route
+├── config/affiliate-network.php
+├── database/{factories,migrations}/
+├── resources/boost/{guidelines,skills}/     # downstream Laravel Boost assets
+├── tools/{package-check.php,package-phpstan.neon,architecture.json,Architecture/}
 └── src/
-    ├── Actions/
-    │   ├── ArchiveOffer.php                 # Archive and stamp archived_at
-    │   ├── ApplyToOffer.php                 # Apply to an offer
-    │   ├── ApproveApplication.php           # Approve pending applications
-    │   ├── CreateCreative.php               # Create a manual creative
-    │   ├── CreateOffer.php                  # Create a new offer
-    │   ├── CreateSite.php                   # Operator site creation
-    │   ├── DeleteCreative.php               # Delete a manual creative
-    │   ├── PublishOffer.php                 # Publish and stamp published_at
-    │   ├── RecordNetworkConversion.php      # Record a conversion
-    │   ├── RegisterSite.php                 # Register a merchant site
-    │   ├── ReinstateSite.php                # Suspended -> verified
-    │   ├── RejectApplication.php            # Reject pending applications
-    │   ├── RejectSite.php                   # Pending -> rejected
-    │   ├── RevokeApplication.php            # Revoke approved applications
-    │   ├── SubmitOffer.php                  # Submit an offer for approval
-    │   ├── SuspendSite.php                  # Verified -> suspended
-    │   ├── SyncOfferCreatives.php           # Reconcile imported creatives
-    │   ├── SyncSiteOffers.php               # Operator catalog sync
-    │   ├── UpdateCreative.php               # Update a creative
-    │   ├── UpdateOffer.php                  # Update an existing offer
-    │   ├── UpdateSite.php                   # Update site details and token
-    │   └── VerifySite.php                   # Pending -> verified
-    ├── Adapters/Affiliates/         # Local engine adapters (identity, ledger, catalog, fulfillment)
-    ├── Console/Commands/
-    │   ├── ArchiveExpiredOffersCommand.php # Batch archive expired offers
-    │   ├── ReconcileNetworkLedgerCommand.php
-    │   └── SyncSiteOffersCommand.php
-    ├── Contracts/
-    │   ├── AffiliateIdentityResolver.php
-    │   ├── Fulfillment.php
-    │   ├── NetworkLedger.php
-    │   └── SiteVerificationStrategyInterface.php
-    ├── Events/
-    │   ├── ApplicationApproved.php
-    │   ├── ApplicationSubmitted.php
-    │   ├── NetworkConversionRecorded.php
-    │   ├── OfferCreated.php
-    │   └── OfferUpdated.php
-    ├── Exceptions/
-    │   ├── AffiliatesNotInstalled.php
-    │   ├── AffiliateProfileRequired.php
-    │   ├── ApplicationAlreadySubmittedException.php
-    │   └── OfferNotFoundException.php
-    ├── Http/
-    │   ├── Controllers/
-    │   │   ├── ReportNetworkConversionController.php
-    │   │   └── VoidNetworkConversionController.php
-    │   └── Middleware/
-    │       └── TrackNetworkLinkCookie.php
-    ├── Listeners/
-    │   ├── FinalizeNetworkAttribution.php
-    │   ├── IncrementNetworkLinkClicks.php
-    │   ├── NotifyApplicationApproved.php
-    │   ├── NotifyApplicationSubmitted.php
-    │   ├── NotifyNetworkConversion.php
-    │   └── RecordProvisionalNetworkConversion.php
-    ├── Models/
-    │   ├── AffiliateSite.php
-    │   ├── AffiliateOffer.php
-    │   ├── AffiliateOfferCategory.php
-    │   ├── AffiliateOfferCreative.php
-    │   ├── AffiliateOfferApplication.php
-    │   ├── AffiliateOfferLink.php
-    │   ├── NetworkConversionLeg.php
-    │   └── Concerns/
-    │       ├── ResolvesAffiliateModel.php
-    │       └── ScopesByBelongsToOwner.php
-    ├── Services/
-    │   ├── Catalog/                     # Local + remote catalog readers
-    │   ├── CreatorBalances.php
-    │   ├── HostManualFulfillment.php
-    │   ├── NetworkBooks.php
-    │   ├── NetworkLedgerReconciliationService.php
-    │   ├── OfferImportService.php
-    │   ├── SiteVerificationService.php
-    │   ├── OfferManagementService.php
-    │   └── OfferLinkService.php
-    ├── Strategies/
-    │   ├── DnsVerificationStrategy.php
-    │   ├── FileVerificationStrategy.php
-    │   └── MetaTagVerificationStrategy.php
-    └── Support/
-        ├── OfferLinkGate.php
-        └── SiteContentFetcher.php
+    ├── AffiliateNetworkServiceProvider.php  # loads feature catalog + extensions
+    ├── Platform/                            # feature catalog, extension registry, owner scoping
+    │   ├── FeatureCatalog.php
+    │   ├── ExtensionRegistry.php
+    │   ├── FeatureModule.php
+    │   ├── ScopesByBelongsToOwner.php
+    │   ├── DomainHostValidator.php
+    │   └── ...
+    ├── Contracts/                           # pure driver/seam interfaces
+    ├── Data/                                # 11 enums + immutable DTOs
+    ├── Drivers/                             # affiliates adapters, HTTP, DNS
+    ├── Events/  Exceptions/  Notifications/
+    └── Features/
+        ├── Sites/        # site lifecycle, verification, tokens, prepaid balance
+        ├── Catalog/      # offers, categories, creatives, catalog sync, discovery
+        ├── Enrollment/   # applications, invitations, deals
+        ├── Attribution/  # links, coupons, click counters
+        ├── Ledger/       # conversion legs, caps, locking, statements, HTTP + listeners
+        └── Postbacks/    # creator endpoint config + delivery
 ```
 
-## Database Schema
+Each feature owns a `feature.json` manifest declaring the tables it writes
+(`table:…`) and the exact writer classes allowed to mutate them. Sibling
+features may only import another feature's `Api/` namespace.
+`tools/package-check.php` and `tools/package-phpstan.neon` enforce those
+boundaries mechanically.
 
-| Table | Description | Key Columns |
-|-------|-------------|-------------|
-| `affiliate_network_sites` | Merchant domains | `owner_type`, `owner_id`, `domain`, `status`, `verification_method` |
-| `affiliate_network_offer_categories` | Hierarchical categories | `owner_type`, `owner_id`, `parent_id`, `name`, `slug` |
-| `affiliate_network_offers` | Affiliate offers | `site_id`, `category_id`, `rate_base_bp`, `rate_fixed_minor`, `status` |
-| `affiliate_network_offer_creatives` | Promotional assets | `offer_id`, `type`, `external_creative_id`, `source_asset_url`, `width`, `height` |
-| `affiliate_network_offer_applications` | Affiliate-to-offer applications | `offer_id`, `affiliate_id`, `status`, `reviewed_at` |
-| `affiliate_network_offer_links` | Tracking links | `link_id`, `offer_id`, `affiliate_id`, `clicks`, `conversions`, `revenue`, `currency` |
-| `affiliate_network_conversion_legs` | Append-only money legs per conversion | `link_id`, `offer_id`, `affiliate_id`, `link_code`, `revenue_minor`, `commission_minor`, `fee_minor`, `fee_bp`, `payout_minor`, `external_reference`, `status`, `occurred_at` |
+### The six features
 
-## Integration with Affiliates Package
+| Feature | Owns | Key surfaces |
+|---|---|---|
+| **Sites** | `affiliate_network_sites` | `CreateSite`, `RegisterSite`, `VerifySiteByStrategy`, `IssueCatalogToken`, `AdjustMerchantPrepaidBalance`, `SitesApi` |
+| **Catalog** | `affiliate_network_{offers,offer_categories,offer_creatives}` | `CreateOffer`, `UpdateOffer`, `PublishOffer`, `SyncSiteOffers`, `OfferDiscoveryQuery`, `OfferMetricsQuery`, `CatalogApi` |
+| **Enrollment** | `affiliate_network_{offer_applications,offer_invitations,offer_deals}` | `ApplyToOffer`, `ApproveApplication`, `InviteAffiliateToOffer`, `UpsertOfferDeal`, `EnrollmentApi` |
+| **Attribution** | `affiliate_network_{offer_links,offer_coupons}` | `CreateOfferLink`, `CreateCreativeLink`, `AssignOfferCoupon`, `AttributionApi` |
+| **Ledger** | `affiliate_network_{conversion_legs,merchant_statements}` | `RecordNetworkConversion`, `PostConversionLeg`, `LockMaturedLegs`, `GenerateMerchantStatement`, `CreatorBalancesQuery`, `LedgerApi` |
+| **Postbacks** | `affiliate_network_{creator_postbacks,postback_deliveries}` | `ConfigureCreatorPostback`, `EnqueueCreatorPostbacks`, `DeliverCreatorPostback`, `PostbacksApi` |
 
-This package does **not** require the core `aiarmada/affiliates` package. Integration happens through the network seam (`AffiliateIdentityResolver`, `NetworkLedger`, `Fulfillment`, `CatalogReaderInterface`); the network package ships the adapters and binds them only when the affiliates engine provider is active:
+### The thirteen models
 
-- `AffiliateOfferApplication` and `AffiliateOfferLink` hold opaque `affiliate_id` UUIDs; the `affiliate()` relations resolve the model bound at `affiliate-network.models.affiliate`
-- Owner scoping respects affiliate ownership through relationship-based scoping
-- Commission structures complement affiliate-level configurations
+`Features\Sites\Models\AffiliateSite` ·
+`Features\Catalog\Models\{AffiliateOffer, AffiliateOfferCategory, AffiliateOfferCreative}` ·
+`Features\Enrollment\Models\{AffiliateOfferApplication, AffiliateOfferInvitation, AffiliateOfferDeal}` ·
+`Features\Attribution\Models\{AffiliateOfferLink, AffiliateOfferCoupon}` ·
+`Features\Ledger\Models\{NetworkConversionLeg, MerchantStatement}` ·
+`Features\Postbacks\Models\{CreatorPostbackEndpoint, CreatorPostbackDelivery}`
 
-### Tracking Boundary
+## The nine marketplace capabilities
 
-`affiliate-network` does **not** depend on the core affiliates package's link or conversion field names such as `external_reference`, `value_minor`, or the subject-aware attribution fields.
+1. **Validation locking window** — `Offer::locking_days`, `Site::default_locking_days`, or `locking.default_days` turn a posted conversion into a pending leg with a `locks_at` deadline; `LockMaturedLegs` matures it.
+2. **Merchant statements & prepaid/spend caps** — period statements (`GenerateMerchantStatement` → `IssueMerchantStatement` → `MarkMerchantStatementPaid`/`VoidMerchantStatement`) plus `Site::prepaid_balance_minor` and `monthly_spend_cap_minor`.
+3. **Private/unlisted invitations & per-affiliate deals** — `InviteAffiliateToOffer` issues tokens; `UpsertOfferDeal` overrides rates/fees per creator.
+4. **Linkless promo coupons** — `AssignOfferCoupon` produces site-unique codes resolved by `AttributionApi::resolveCouponForSite` and attributed through `coupon_code`.
+5. **Outbound creator S2S postbacks & sub IDs** — `ConfigureCreatorPostback` + `EnqueueCreatorPostbacks` deliver signed events with `sub1`/`sub2`/`sub3`.
+6. **Offer caps & smart fallback redirects** — `CheckOfferCaps` enforces daily/monthly/total/per-affiliate/payout caps; the link gate falls back to `offer.fallback_url`, `offer.fallback_offer_id`, or `links.default_fallback_url`.
+7. **Partial refund adjustments & multi-event CPA** — `AdjustConversionLeg` posts proportional companion legs; `event_rates` prices `signup`/`lead`/`purchase` separately.
+8. **Marketplace discovery & metrics** — `OfferDiscoveryQuery` filters/sorts public offers; `OfferMetricsQuery` returns `OfferPerformanceMetrics`.
+9. **Enforced restrictions & active promotions** — `restrictions` (country/channel/device/order) and `active_promotions` evaluated at posting and enforced on redirect.
 
-Instead, it keeps its own offer-level tracking boundary:
+## Database schema
 
-- `AffiliateOfferLink` stores clicks, conversions, and aggregated revenue for marketplace/offer links
-- checkout integration stores `network_attribution` in order metadata
-- Conversions with a non-empty external reference create a network book leg; reference-less counter-only calls update link counters without creating a leg. When core `aiarmada/affiliates` is installed, the `NetworkLedger` seam also posts merchant commission rows. Standalone installs keep referenced network legs and counters, and hosts explicitly record payout runs through `HostManualFulfillment`.
+All tables share the configurable `database.table_prefix` (`affiliate_network_`).
+
+| Table | Owner | Purpose |
+|---|---|---|
+| `affiliate_network_sites` | Sites (direct owner) | Merchant domains, verification, tokens, settlement caps |
+| `affiliate_network_offer_categories` | Catalog (direct owner) | Hierarchical categories |
+| `affiliate_network_offers` | Catalog (`offer.site`) | Offers, rates, caps, promotions, restrictions |
+| `affiliate_network_offer_creatives` | Catalog (`offer.site`) | Banners, text, email, HTML, video, docs |
+| `affiliate_network_offer_applications` | Enrollment (`affiliate`) | Creator applications and review state |
+| `affiliate_network_offer_invitations` | Enrollment (`offer.site`) | Tokenized private/unlisted invitations |
+| `affiliate_network_offer_deals` | Enrollment (`offer.site`) | Per-affiliate rate/fee overrides |
+| `affiliate_network_offer_coupons` | Attribution (`offer.site`) | Affiliate-assigned promo codes |
+| `affiliate_network_offer_links` | Attribution (`affiliate`) | Tracking links + click/conversion counters |
+| `affiliate_network_conversion_legs` | Ledger (`affiliate`, fallback `offer.site`) | Append-only money legs, adjustments, reversals |
+| `affiliate_network_creator_postbacks` | Postbacks | Creator webhook endpoint configuration |
+| `affiliate_network_postback_deliveries` | Postbacks | Per-event delivery attempts |
+| `affiliate_network_merchant_statements` | Ledger (direct owner) | Settlement statements per site/currency/period |
+
+## Discovery, enrollment, and conversion boundaries
+
+`affiliate-network` owns discovery and the network money books.
+`affiliates` owns merchant-local execution. The two books meet only at
+fulfillment: a posted leg goes to exactly one payer.
+
+- Conversion precedence is split: the network records link/coupon attribution
+  and network legs; the engine records merchant commission and payout state.
+- `RecordNetworkConversion` requires a non-empty `externalReference` and is
+  idempotent on `(link|coupon, reference, event_type)`.
+- Catalog sync mirrors offers with `source = mirrored`; operator rate edits flip
+  the offer to `manual` and later syncs hold rates back (`locked`).
 
 ## Requirements
 
 - PHP 8.5+
 - Laravel 13+
-- `aiarmada/commerce-support` package (for owner traits)
-- `aiarmada/affiliates` package (optional; enables local identity, ledger, program, and catalog features through the network seam)
+- `aiarmada/commerce-support` (owner scoping, money, HTTP guards)
+- `aiarmada/links` (public tracked redirects)
+- Spatie Media Library v11 (creative assets)
+- `aiarmada/affiliates` (optional; engine identity/ledger/fulfillment/catalog)
 
 ## Read next
 

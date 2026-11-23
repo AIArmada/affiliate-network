@@ -11,9 +11,10 @@ return new class extends Migration
     public function up(): void
     {
         $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
+        $tableName = config('affiliate-network.database.tables.sites', $tablePrefix . 'sites');
         $jsonType = commerce_json_column_type('affiliate-network', 'jsonb');
 
-        Schema::create($tablePrefix . 'sites', function (Blueprint $table) use ($jsonType): void {
+        Schema::create($tableName, function (Blueprint $table) use ($jsonType): void {
             $table->uuid('id')->primary();
             $table->nullableMorphs('owner');
 
@@ -30,6 +31,12 @@ return new class extends Migration
             $table->timestampTz('catalog_token_issued_at')->nullable();
             $table->string('sync_status', 32)->default('never');
             $table->timestampTz('last_synced_at')->nullable();
+
+            $table->unsignedSmallInteger('default_locking_days')->default(0);
+            $table->bigInteger('prepaid_balance_minor')->nullable();
+            $table->string('budget_currency', 3)->nullable();
+            $table->bigInteger('monthly_spend_cap_minor')->nullable();
+            $table->boolean('require_settled_for_payout')->default(false);
 
             $table->{$jsonType}('settings')->nullable();
             $table->{$jsonType}('metadata')->nullable();

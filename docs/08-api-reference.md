@@ -4,456 +4,282 @@ title: API Reference
 
 # API Reference
 
-Complete reference for all public classes and methods.
+Complete reference for enums, DTOs, models, actions, queries, feature APIs,
+events, and exceptions.
 
-## Models
+## Enums (11)
 
-### AffiliateSite
+All enums live in `AIArmada\AffiliateNetwork\Data` and are backed by `string`.
 
-Represents a merchant's website/domain in the network.
+| Enum | Cases |
+|---|---|
+| `ApplicationStatus` | `Pending='pending'`, `Approved='approved'`, `Rejected='rejected'`, `Revoked='revoked'` |
+| `CreativeType` | `Banner='banner'`, `Text='text'`, `Image='image'`, `Video='video'`, `Document='document'`, `Email='email'`, `Html='html'` |
+| `LegStatus` | `Provisional='provisional'`, `Pending='pending'`, `Posted='posted'`, `Superseded='superseded'`, `Reversed='reversed'` |
+| `OfferSource` | `Mirrored='mirrored'`, `Manual='manual'` |
+| `OfferStatus` | `Draft='draft'`, `Published='published'`, `Archived='archived'` |
+| `OfferVisibility` | `Public='public'`, `Private='private'`, `Unlisted='unlisted'` |
+| `PostbackDeliveryStatus` | `Pending='pending'`, `Delivered='delivered'`, `Failed='failed'` |
+| `PostbackEventType` | `ConversionRecorded='conversion.recorded'`, `ConversionLocked='conversion.locked'`, `ConversionReversed='conversion.reversed'`, `ConversionAdjusted='conversion.adjusted'` |
+| `SettlementStatus` | `Draft='draft'`, `Issued='issued'`, `Paid='paid'`, `Void='void'` |
+| `SiteStatus` | `Pending='pending'`, `Verified='verified'`, `Suspended='suspended'`, `Rejected='rejected'` |
+| `SiteSyncStatus` | `Never='never'`, `Ok='ok'`, `Partial='partial'`, `Failed='failed'` |
 
-#### Constants
+Enum helpers: most enums expose `label(): string` and `color(): string`.
+`LegStatus` also exposes `paysOut(): bool` (`Posted` only) and
+`isPayableOrPending(): bool`. `CreativeType` exposes `label()`/`color()`.
 
-```php
-AffiliateSite::STATUS_PENDING    // 'pending'
-AffiliateSite::STATUS_VERIFIED   // 'verified'
-AffiliateSite::STATUS_SUSPENDED  // 'suspended'
-AffiliateSite::STATUS_REJECTED   // 'rejected'
-```
+> **warning**
+> Models declare **no** `STATUS_*` constants. Read the enum:
+> `$offer->status === OfferStatus::Published`, not a string constant.
 
-#### Methods
+## Key DTOs
 
-```php
-$site->isVerified(): bool   // status === 'verified' && verified_at !== null
-$site->isPending(): bool    // status === 'pending'
-$site->offers(): HasMany    // Related AffiliateOffer models
-$site->owner(): MorphTo     // Owner relationship (multi-tenancy)
-$site->matchesCatalogToken(?string $token): bool // constant-time, fail-closed
-```
-
-Operator lifecycle actions:
-
-```php
-use AIArmada\AffiliateNetwork\Actions\CreateSite;
-use AIArmada\AffiliateNetwork\Actions\ReinstateSite;
-use AIArmada\AffiliateNetwork\Actions\RejectSite;
-use AIArmada\AffiliateNetwork\Actions\SuspendSite;
-use AIArmada\AffiliateNetwork\Actions\UpdateSite;
-use AIArmada\AffiliateNetwork\Actions\VerifySite;
-
-$site = app(CreateSite::class)->execute($data);
-$site = app(UpdateSite::class)->execute($site, $data);
-$site = app(VerifySite::class)->execute($site);     // pending -> verified
-$site = app(RejectSite::class)->execute($site);     // pending -> rejected
-$site = app(SuspendSite::class)->execute($site);    // verified -> suspended
-$site = app(ReinstateSite::class)->execute($site);  // suspended -> verified
-```
-
----
-
-### AffiliateOffer
-
-Represents an affiliate offer/campaign. `status` is the
-`AIArmada\AffiliateNetwork\Enums\OfferStatus` enum.
+All DTOs are `final readonly`.
 
 ```php
-use AIArmada\AffiliateNetwork\Enums\OfferStatus;
+new OfferDiscoveryFilter(
+    categoryId: null, search: null, currency: null, minRateBp: null,
+    requiresApproval: null, featured: null, country: null, channel: null,
+    device: null, sort: 'featured', perPage: 20,
+);
 
-OfferStatus::Draft;     // 'draft'
-OfferStatus::Published; // 'published'
-OfferStatus::Archived;  // 'archived'
+new OfferPerformanceMetrics(
+    offerId: string, clicks: int, conversions: int, reversedConversions: int,
+    revenueMinor: int, payoutMinor: int, conversionRate: float,
+    reversalRate: float, epcMinor: float, avgApprovalHours: ?float,
+    currency: string,
+);
+
+new CreatorBalanceSummary(
+    currency: string, pendingMinor: int, payableMinor: int, paidMinor: int,
+    reversedMinor: int, netPayableMinor: int,
+);
+
+new RestrictionContext(
+    country: ?string = null, channel: ?string = null, device: ?string = null,
+    orderMinor: ?int = null, currency: ?string = null,
+);
+
+new MerchantStatementSummary(
+    id: string, siteId: string, statementNumber: string,
+    status: SettlementStatus, currency: string, legCount: int,
+    grossRevenueMinor: int, commissionMinor: int, feeMinor: int,
+    payoutMinor: int, issuedAt: ?CarbonImmutable = null,
+    dueAt: ?CarbonImmutable = null, paidAt: ?CarbonImmutable = null,
+);
+
+new NetworkAffiliate(
+    id: string, code: string, handle: string, email: ?string = null,
+    ownerType: ?string = null, ownerId: string|int|null = null,
+    userId: ?string = null,
+);
+
+new NetworkLegSnapshot(
+    id: string, linkId: ?string, offerId: string, siteId: ?string,
+    affiliateId: string, linkCode: ?string, revenueMinor: int,
+    revenueCurrency: ?string, commissionMinor: int, commissionCurrency: string,
+    feeMinor: int, feeBp: int, payoutMinor: int, tierRateBp: ?int,
+    tierMinVolumeMinor: ?int, externalReference: string, eventType: string,
+    status: LegStatus, locksAt: ?CarbonImmutable, lockedAt: ?CarbonImmutable,
+    fulfilledAt: ?CarbonImmutable, statementId: ?string, couponCode: ?string,
+    subId: ?string, subId2: ?string, subId3: ?string, metadata: array = [],
+    occurredAt: ?CarbonImmutable = null,
+);
 ```
 
-> **warning:**
-> `AffiliateOffer` declares no `STATUS_*` constants, and there is no `pending`,
-> `active`, `paused`, `expired`, or `rejected` status. The Filament `activate`
-> action publishes (`Published`, stamps `published_at`); `pause` archives
-> (`Archived`, stamps `archived_at`).
+Other DTOs: `NetworkConversionDraft`, `NetworkPostedConversion`,
+`AttributionDecision`, `CreatorPostbackResponse`, `FulfillmentReceipt`,
+`FulfillmentResult`, `NotificationPayload`, `SiteCatalogEndpoint`,
+`SiteVerificationTarget`.
 
-#### Methods
+Feature API records (immutable read models): `SiteRecord`, `OfferRecord`,
+`CategoryRecord`, `CreativeRecord`, `ApplicationRecord`, `InvitationRecord`,
+`DealRateOverride`, `OfferLinkRecord`, `OfferCouponRecord`,
+`CreatorPostbackRecord`.
+
+## Models (13)
 
 ```php
-$offer->isDraft(): bool           // status === Draft
-$offer->isActive(): bool          // status === Published AND within starts_at/ends_at
-$offer->isFixed(): bool           // rate_fixed_minor path
-$offer->formattedRate(): string
-$offer->site(): BelongsTo       // Parent AffiliateSite
-$offer->category(): BelongsTo   // Optional AffiliateOfferCategory
-$offer->creatives(): HasMany    // AffiliateOfferCreative models
-$offer->applications(): HasMany // AffiliateOfferApplication models
-$offer->links(): HasMany        // AffiliateOfferLink models
-$offer->legs(): HasMany         // NetworkConversionLeg models
+AffiliateSite::query()->where('status', SiteStatus::Verified)->get();
+AffiliateOffer::query()->whereSiteVerified()->where('status', OfferStatus::Published)->get();
+AffiliateOfferCategory::query()->whereNull('parent_id')->get();
+AffiliateOfferCreative::query()->where('is_active', true)->get();
+AffiliateOfferApplication::query()->where('status', ApplicationStatus::Pending)->get();
+AffiliateOfferInvitation::query()->whereNull('accepted_at')->get();
+AffiliateOfferDeal::query()->where('is_active', true)->get();
+AffiliateOfferCoupon::query()->where('is_active', true)->get();
+AffiliateOfferLink::query()->where('is_active', true)->get();
+NetworkConversionLeg::query()->where('status', LegStatus::Posted)->get();
+MerchantStatement::query()->where('status', SettlementStatus::Draft)->get();
+CreatorPostbackEndpoint::query()->where('is_active', true)->get();
+CreatorPostbackDelivery::query()->where('status', PostbackDeliveryStatus::Pending)->get();
 ```
 
-Operator lifecycle actions:
+| Model | Key methods |
+|---|---|
+| `AffiliateSite` | `isVerified()`, `isPending()`, `isSuspended()`, `isRejected()`, `hasCatalogToken()`, `matchesCatalogToken(?string)`, `toRecord()` |
+| `AffiliateOffer` | `isDraft()`, `isActive()`, `wasActiveAt(CarbonImmutable)`, `isFixed()`, `formattedRate()`, `toRecord()`, `scopeWhereSiteVerified()`, `normalizeVolumeTiers(?array,?string)`, `rateBlockColumns()` |
+| `AffiliateOfferCategory` | relations `parent()`, `children()`, `offers()`, `owner()`, `toRecord()` |
+| `AffiliateOfferCreative` | `getAssetUrl()`, `registerMediaCollections()`, `toRecord()` |
+| `AffiliateOfferApplication` | `isPending()`, `isApproved()`, `toRecord()` |
+| `AffiliateOfferInvitation` | `isActive()`, `toRecord()` |
+| `AffiliateOfferDeal` | `isActiveAt(CarbonImmutable)`, `toOverride()` |
+| `AffiliateOfferCoupon` | `isActiveAt(CarbonImmutable)`, `toRecord()` |
+| `AffiliateOfferLink` | `isExpired()`, `trackedSlug()`, `toRecord()` |
+| `NetworkConversionLeg` | `paysOut()`, `toSnapshot()` |
+| `MerchantStatement` | `toSummary()` |
+| `CreatorPostbackEndpoint` | `subscribesTo(PostbackEventType)`, `eventTypes()`, `toRecord()` |
+| `CreatorPostbackDelivery` | relation `endpoint()`, casts `status` |
+
+## Action signatures (condensed)
 
 ```php
-use AIArmada\AffiliateNetwork\Actions\ArchiveOffer;
-use AIArmada\AffiliateNetwork\Actions\PublishOffer;
+// Sites
+app(CreateSite::class)->execute(array $data): AffiliateSite
+app(RegisterSite::class)->execute(Model $owner, array $data): AffiliateSite
+app(UpdateSite::class)->execute(AffiliateSite $site, array $data): AffiliateSite
+app(VerifySite::class)->execute(AffiliateSite $site, ?string $method = null): AffiliateSite
+app(VerifySiteByStrategy::class)->execute(AffiliateSite $site, string $method): AffiliateSite
+app(VerifySiteByStrategy::class)->getInstructions(AffiliateSite $site, string $method): array
+app(GenerateVerificationToken::class)->execute(AffiliateSite $site): string
+app(IssueCatalogToken::class)->execute(AffiliateSite $site): string
+app(RotateCatalogToken::class)->execute(AffiliateSite $site): string
+app(RejectSite::class)->execute(AffiliateSite $site): AffiliateSite
+app(SuspendSite::class)->execute(AffiliateSite $site): AffiliateSite
+app(ReinstateSite::class)->execute(AffiliateSite $site): AffiliateSite
+app(AdjustMerchantPrepaidBalance::class)->execute(string $siteId, int $deltaMinor): int
+app(DeleteSite::class)->execute(AffiliateSite $site): bool
 
-$offer = app(PublishOffer::class)->execute($offer); // published + published_at
-$offer = app(ArchiveOffer::class)->execute($offer); // archived + archived_at
+// Catalog
+app(CreateOffer::class)->execute(SiteRecord $site, array $data): AffiliateOffer
+app(SubmitOffer::class)->execute(SiteRecord $site, array $data): AffiliateOffer
+app(UpdateOffer::class)->execute(AffiliateOffer $offer, array $data, bool $fromCatalogSync = false): AffiliateOffer
+app(PublishOffer::class)->execute(AffiliateOffer $offer): AffiliateOffer
+app(ArchiveOffer::class)->execute(AffiliateOffer $offer): AffiliateOffer
+app(ArchiveExpiredOffers::class)->execute(CarbonImmutable $threshold, bool $dryRun = false): int
+app(SyncSiteOffers::class)->execute(SiteRecord $site, ?string $programId = null): array
+app(SyncOfferCreatives::class)->execute(AffiliateOffer $offer, array $creatives): void
+app(CreateCategory::class)->execute(array $data): AffiliateOfferCategory
+app(UpdateCategory::class)->execute(AffiliateOfferCategory $category, array $data): AffiliateOfferCategory
+app(CreateCreative::class)->execute(AffiliateOffer $offer, array $data): AffiliateOfferCreative
+app(UpdateCreative::class)->execute(AffiliateOfferCreative $creative, array $data): AffiliateOfferCreative
+
+// Enrollment
+app(ApplyToOffer::class)->execute(string $offerId, string $affiliateId, ?string $reason = null, ?string $invitationToken = null, ?RestrictionContext $restrictionContext = null): AffiliateOfferApplication
+app(ApproveApplication::class)->execute(AffiliateOfferApplication $application, ?string $reviewedBy = null): AffiliateOfferApplication
+app(RejectApplication::class)->execute(AffiliateOfferApplication $application, string $reason, ?string $reviewedBy = null): AffiliateOfferApplication
+app(RevokeApplication::class)->execute(AffiliateOfferApplication $application, string $reason, ?string $reviewedBy = null): AffiliateOfferApplication
+app(InviteAffiliateToOffer::class)->execute(string $offerId, ?string $affiliateId = null, ?string $invitedBy = null, ?CarbonImmutable $expiresAt = null, bool $autoApprove = true, array $metadata = []): AffiliateOfferInvitation
+app(AcceptOfferInvitation::class)->execute(string $token, string $affiliateId, ?string $reason = null): AffiliateOfferApplication
+app(UpsertOfferDeal::class)->execute(string $offerId, string $affiliateId, array $data): AffiliateOfferDeal
+app(RevokeOfferDeal::class)->execute(AffiliateOfferDeal $deal): AffiliateOfferDeal
+
+// Attribution
+app(CreateOfferLink::class)->execute(string $offerId, string $affiliateId, array $options = []): AffiliateOfferLink
+app(CreateCreativeLink::class)->execute(string $creativeId, string $affiliateId, array $options = []): AffiliateOfferLink
+app(AssignOfferCoupon::class)->execute(string $offerId, string $affiliateId, string $code, ?CarbonImmutable $startsAt = null, ?CarbonImmutable $endsAt = null, ?array $metadata = null): AffiliateOfferCoupon
+app(RevokeOfferCoupon::class)->execute(string $couponId): void
+
+// Ledger
+app(RecordNetworkConversion::class)->execute(string $offerId, string $affiliateId, int $revenueMinor, ?string $currency, string $externalReference, string $eventType = 'purchase', LegStatus $status = LegStatus::Posted, ?string $linkId = null, ?string $couponCode = null, ?string $linkCode = null, ?string $subId = null, ?string $subId2 = null, ?string $subId3 = null, array $metadata = []): NetworkConversionLeg
+app(PostConversionLeg::class)->execute(string $offerId, string $affiliateId, int $revenueMinor, ?string $currency, string $externalReference, string $eventType = 'purchase', LegStatus $status = LegStatus::Posted, ?string $linkId = null, ?string $couponId = null, ?string $couponCode = null, ?string $siteId = null, ?string $linkCode = null, ?string $subId = null, ?string $subId2 = null, ?string $subId3 = null, array $metadata = [], ?CarbonImmutable $occurredAt = null): NetworkConversionLeg
+app(ConfirmConversionLeg::class)->execute(NetworkConversionLeg $leg, array $decisionMetadata = []): NetworkConversionLeg
+app(SupersedeConversionLeg::class)->execute(NetworkConversionLeg $leg, string $reason, array $decisionMetadata = []): NetworkConversionLeg
+app(LockMaturedLegs::class)->execute(?CarbonImmutable $asOf = null): list<string>
+app(ReverseConversionLeg::class)->execute(string $legId, string $reason): NetworkConversionLeg
+app(AdjustConversionLeg::class)->execute(string $legId, string $adjustmentReference, int $deltaRevenueMinor, string $reason): NetworkConversionLeg
+app(FulfillConversionLeg::class)->execute(string $legId, ?string $reference = null): NetworkConversionLeg
+app(GenerateMerchantStatement::class)->execute(string $siteId, string $currency, CarbonImmutable $periodStart, CarbonImmutable $periodEnd): MerchantStatement
+app(IssueMerchantStatement::class)->execute(string $statementId): MerchantStatement
+app(MarkMerchantStatementPaid::class)->execute(string $statementId, ?string $paymentReference = null): MerchantStatement
+app(VoidMerchantStatement::class)->execute(string $statementId): MerchantStatement
+app(ReconcileOfferLedger::class)->execute(string $offerId, bool $repairCounters = false): array
+
+// Postbacks
+app(ConfigureCreatorPostback::class)->execute(string $affiliateId, array $data): CreatorPostbackEndpoint
+app(DeleteCreatorPostback::class)->execute(string $endpointId): void
+app(EnqueueCreatorPostbacks::class)->execute(NetworkLegSnapshot $leg, PostbackEventType $eventType): int
+app(DeliverCreatorPostback::class)->execute(string $deliveryId): CreatorPostbackDelivery
 ```
 
----
-
-### AffiliateOfferCategory
-
-Hierarchical category for organizing offers.
-
-#### Methods
+## Feature APIs
 
 ```php
-$category->parent(): BelongsTo    // Parent category (nullable)
-$category->children(): HasMany    // Child categories
-$category->offers(): HasMany      // Offers in this category
-$category->owner(): MorphTo       // Owner relationship
+app(SitesApi::class)->findByIdOrDomainUnscoped($identifier);        // ?SiteRecord
+app(SitesApi::class)->isVerified($siteId);                          // bool
+app(SitesApi::class)->matchesCatalogToken($siteId, $token);         // bool
+
+app(CatalogApi::class)->findOfferUnscoped($offerId);                // ?OfferRecord
+app(CatalogApi::class)->evaluateRestrictions($offer, $context);     // ?string
+app(CatalogApi::class)->fallbackUrlForOffer($offerId);              // ?string
+
+app(EnrollmentApi::class)->isApprovedForOffer($offerId, $affiliateId);    // bool
+app(EnrollmentApi::class)->approvedOfferIds($affiliateId, 500);           // array
+app(EnrollmentApi::class)->applicationStatusMap($affiliateId, $offerIds); // array
+app(EnrollmentApi::class)->activeDealFor($offerId, $affiliateId);         // ?DealRateOverride
+
+app(AttributionApi::class)->resolveLinkBySlug($slug);               // ?OfferLinkRecord
+app(AttributionApi::class)->resolveCouponForSite($siteId, $code);   // ?OfferCouponRecord
+app(AttributionApi::class)->linkStats($linkId);                     // array
+app(AttributionApi::class)->offerLinkTotals($offerIds);             // array
+
+app(LedgerApi::class)->isOfferCapped($offerId, $affiliateId, $payoutMinor); // ?string
+app(LedgerApi::class)->offerConversionMetrics($offerIds, $since);           // array
+
+app(PostbacksApi::class)->endpointsFor($affiliateId, $offerId, $eventType); // array
+app(PostbacksApi::class)->deliveryStatus($deliveryId);                      // ?array
 ```
-
----
-
-### AffiliateOfferCreative
-
-Promotional asset (banner, text, HTML, etc.).
-
-#### Constants
-
-```php
-AffiliateOfferCreative::TYPE_BANNER  // 'banner'
-AffiliateOfferCreative::TYPE_TEXT    // 'text'
-AffiliateOfferCreative::TYPE_EMAIL   // 'email'
-AffiliateOfferCreative::TYPE_HTML    // 'html'
-AffiliateOfferCreative::TYPE_VIDEO   // 'video'
-AffiliateOfferCreative::TYPE_IMAGE   // 'image'
-AffiliateOfferCreative::TYPE_DOCUMENT // 'document'
-```
-
-#### Methods
-
-```php
-$creative->offer(): BelongsTo  // Parent AffiliateOffer
-```
-
----
-
-### AffiliateOfferApplication
-
-Affiliate's application to promote an offer. `status` is the
-`AIArmada\AffiliateNetwork\Enums\ApplicationStatus` enum.
-
-```php
-use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
-
-ApplicationStatus::Pending;   // 'pending'
-ApplicationStatus::Approved;  // 'approved'
-ApplicationStatus::Rejected;  // 'rejected'
-ApplicationStatus::Revoked;   // 'revoked'
-```
-
-> **warning:**
-> `AffiliateOfferApplication` declares no `STATUS_*` constants. Read the enum.
-
-#### Methods
-
-```php
-$application->isPending(): bool    // status === 'pending'
-$application->isApproved(): bool   // status === 'approved'
-$application->offer(): BelongsTo   // Parent AffiliateOffer
-$application->affiliate(): BelongsTo // Associated Affiliate
-```
-
----
-
-### AffiliateOfferLink
-
-Tracking link for affiliate promotions.
-
-#### Methods
-
-```php
-$link->incrementClicks(): void              // Increment click counter
-$link->recordConversion(int $revenue): void // Record conversion with revenue
-$link->isExpired(): bool                    // Check if the backing link is expired
-$link->link(): BelongsTo                    // Backing tracked Link
-$link->offer(): BelongsTo                   // Parent AffiliateOffer
-$link->affiliate(): BelongsTo               // Associated Affiliate
-$link->site(): BelongsTo                    // Optional AffiliateSite
-```
-
----
-
-## Services
-
-### SiteVerificationService
-
-```php
-use AIArmada\AffiliateNetwork\Services\SiteVerificationService;
-
-$service = app(SiteVerificationService::class);
-
-// Generate verification token
-$token = $service->generateToken(AffiliateSite $site): string;
-
-// Verify site (dns|meta_tag|file)
-$verified = $service->verify(AffiliateSite $site, string $method): bool;
-
-// Get instructions for display
-$instructions = $service->getInstructions(AffiliateSite $site, string $method): array;
-```
-
-### OfferManagementService
-
-```php
-use AIArmada\AffiliateNetwork\Services\OfferManagementService;
-
-$service = app(OfferManagementService::class);
-
-// Create offer
-$offer = $service->createOffer(AffiliateSite $site, array $data): AffiliateOffer;
-
-// Apply for offer
-$application = $service->applyForOffer(
-    AffiliateOffer $offer,
-    string $affiliateId,
-    ?string $reason = null
-): AffiliateOfferApplication;
-
-// Approve/Reject/Revoke
-$service->approveApplication(AffiliateOfferApplication $app, ?string $reviewedBy): AffiliateOfferApplication;
-$service->rejectApplication(AffiliateOfferApplication $app, string $reason, ?string $reviewedBy): AffiliateOfferApplication;
-$service->revokeApplication(AffiliateOfferApplication $app, string $reason, ?string $reviewedBy): AffiliateOfferApplication;
-
-// Check approval status
-$isApproved = $service->isApprovedForOffer(AffiliateOffer $offer, string $affiliateId): bool;
-
-// Get approved offers (approved network applications)
-$offers = $service->getApprovedOffers(string $affiliateId, int $limit = 500): Collection;
-
-// Batch per-offer statuses in a fixed handful of queries
-$map = $service->applicationStatusMap(string $affiliateId, Collection $offers): array;
-```
-
-### OfferLinkService
-
-```php
-use AIArmada\AffiliateNetwork\Services\OfferLinkService;
-
-$service = app(OfferLinkService::class);
-
-// Create link
-$link = $service->createLink(
-    AffiliateOffer $offer,
-    string $affiliateId,
-    array $options = []
-): AffiliateOfferLink;
-
-// Options: target_url, sub_id, sub_id_2, sub_id_3, custom_parameters, expires_at, metadata
-
-// Throws unless the offer is active (published + within its window) and,
-// when the offer requires approval, the affiliate is approved. target_url
-// must be an http(s) URL. The link inherits the offer currency.
-// With the Affiliates identity adapter bound and either
-// affiliate-network.owner.enabled or affiliates.owner.enabled set to true,
-// affiliateId must identify a merchant Affiliate row or AffiliateProfileRequired is thrown.
-
-// Note: metadata is the extension point if your application wants to carry
-// subject-specific context that may later be bridged into core affiliates flows.
-
-// Generate URL
-$trackingUrl = $service->generateTrackingUrl(AffiliateOfferLink $link): string;
-
-// Resolve link
-$link = $service->resolveLink(string $slug): ?AffiliateOfferLink;
-
-// Track events
-$leg = $service->recordConversion(
-    AffiliateOfferLink $link,
-    int $revenueMinor = 0,
-    ?string $currency = null,
-    ?string $externalReference = null,
-    LegStatus $status = LegStatus::Posted,
-    array $metadata = [],
-): ?NetworkConversionLeg;
-// Returns null when no external reference is supplied. On a currency mismatch
-// the conversion is counted but revenue is skipped (and logged).
-// New legs cannot use LegStatus::Reversed; use NetworkBooks::reverse() to
-// create a reversal. An initial reversed post throws InvalidArgumentException;
-// a replay for an existing (link, reference) returns that existing leg.
-
-// Get statistics
-$stats = $service->getStats(AffiliateOfferLink $link): array;
-// Returns: clicks, conversions, revenue, currency, formatted_revenue, conversion_rate, revenue_per_click
-```
-
-### OfferImportService
-
-```php
-use AIArmada\AffiliateNetwork\Services\OfferImportService;
-
-$service = app(OfferImportService::class);
-
-// Sync one program (local shared-DB when the site has no catalog_url,
-// remote HTTP pull otherwise)
-$result = $service->sync($site, $programId);
-// Returns: created, updated, skipped, locked, failed
-
-// Sync every available program; one bad program never aborts the rest
-$result = $service->syncAll($site);
-// Returns: programs, created, updated, skipped, locked, failed
-```
-
-Upserts by `(site_id, external_program_id, subject_key)` with checksum
-skips. Imported offers land as `draft` with `source = mirrored`.
-Operator rate edits flip the lock to `manual`; later syncs hold rates back
-(`locked`) until the operator flips it back. Artisan:
-
-```bash
-php artisan affiliate-network:sync-offers {site} [--program={id}]
-```
-
----
 
 ## Routes
 
-Redirects are served by `aiarmada/links` (`GET /go/{slug}`, unsigned public URLs).
-The network binds an `OfferLinkGate` that blocks the redirect with `410`
-when the link is inactive, the offer is inactive, no site is verified, or a
-required approval is missing; unknown slugs return `404`. Clicks increment
-the link counter through the `IncrementNetworkLinkClicks` listener on
-`LinkClicked`.
+Redirects are served by `aiarmada/links`: `GET /go/{slug}` (unsigned public
+URLs). The network binds an `OfferLinkGate` that returns `404` for unknown slugs
+and `410` for inactive links/offers, unverified sites, or missing approvals,
+falling back to the offer/site fallback URL when one exists.
 
----
+Merchant postback routes register when `postbacks.enabled` is true:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `{prefix}/conversions` | Report a conversion |
+| `POST` | `{prefix}/conversions/void` | Void/refund a conversion |
+| `POST` | `{prefix}/conversions/adjust` | Adjust a conversion |
 
 ## Events
 
-The package ships five events in `AIArmada\AffiliateNetwork\Events`, dispatched
-by the corresponding Action: `OfferCreated`, `OfferUpdated`,
-`ApplicationSubmitted`, `ApplicationApproved`, `NetworkConversionRecorded`.
-
-Model events on `AffiliateOfferApplication` are also available for finer hooks:
-
 ```php
-use AIArmada\AffiliateNetwork\Events\ApplicationApproved;
-use AIArmada\AffiliateNetwork\Events\ApplicationSubmitted;
-use AIArmada\AffiliateNetwork\Events\NetworkConversionRecorded;
-use AIArmada\AffiliateNetwork\Events\OfferCreated;
-use AIArmada\AffiliateNetwork\Events\OfferUpdated;
-
-OfferCreated::class;             // (AffiliateOffer $offer)
-OfferUpdated::class;             // (AffiliateOffer $offer)
-ApplicationSubmitted::class;     // (AffiliateOfferApplication $application)
-ApplicationApproved::class;      // (AffiliateOfferApplication $application)
-NetworkConversionRecorded::class; // (AffiliateOfferLink $link, int $revenueMinor, ?string $currency, ?NetworkConversionLeg $leg)
+OfferCreated(string $offerId, string $siteId, string $name, string $slug, string $status, ?string $ownerType, string|int|null $ownerId)
+OfferUpdated(...)                 // same shape
+OfferInvitationCreated(string $invitationId, string $offerId, ?string $affiliateId, string $token)
+ApplicationSubmitted(string $applicationId, string $offerId, string $offerName, string $siteId, string $affiliateId, string $status, ?string $ownerType, string|int|null $ownerId)
+ApplicationApproved(...)          // same shape
+NetworkConversionRecorded(NetworkLegSnapshot $leg, int $counterRevenueMinor, ?string $currency, ...)
+ConversionLocked(NetworkLegSnapshot $leg)
+ConversionReversed(NetworkLegSnapshot $originalLeg, NetworkLegSnapshot $reversalLeg, string $reason)
+ConversionAdjusted(NetworkLegSnapshot $originalLeg, NetworkLegSnapshot $adjustmentLeg, string $reason)
+MerchantStatementIssued(MerchantStatementSummary $statement)
 ```
 
-`revenueMinor` is the link-counter revenue. It is zero when the reported
-currency differs from the link's pricing currency, while the leg retains the
-reported revenue and currency for audit.
-Recorded does not mean payable: check the leg's `status` and `paysOut()` before
-treating a `NetworkConversionRecorded` event as payable.
-
-
-### Approval event contract
-
-Listen to `ApplicationApproved` for approved-side effects. Both manual approval
-and automatic approval through package actions emit it with the approved
-application. Automatic approval emits `ApplicationSubmitted` first.
-`ApplicationApproved` waits for the enclosing database transaction to commit and
-is discarded on rollback. Pending creation, cooldown reapplication, returning an
-existing application, and repeating approval on an already-approved application
-emit no approval event. Direct model updates do not emit this domain event.
-
-The built-in approval notification listener also runs for automatic approvals.
-Default tracking-link provisioning remains host policy. Hosts should make their
-side effects idempotent; this event does not guarantee exactly-once delivery.
-
-> **warning:**
-> This changes the approval event contract. Hosts should handle approval through
-> `ApplicationApproved` and remove approval side effects from
-> `ApplicationSubmitted` listeners to avoid running them twice. Already-approved
-> records are not replayed or backfilled. No schema change is required.
-
----
+`NetworkConversionRecorded` fires only when the leg is newly created and is not
+`provisional`. It does not mean the leg is payable: check
+`$leg->status->paysOut()`.
 
 ## Exceptions
 
-### Affiliate profile required
+| Exception | Raised when |
+|---|---|
+| `ApplicationAlreadySubmittedException` | Reapplication during cooldown, or after revocation |
+| `AffiliateProfileRequired` | Affiliate write without a merchant `Affiliate` row (combined owner installs) |
+| `AffiliatesNotInstalled` | `affiliate()` relation used without a bound affiliate model |
+| `CapExceededException::forOffer($offerId, $reason)` | Offer/site cap reached |
+| `RestrictionViolatedException::forOffer($offerId, $reason)` | Traffic restriction violated |
+| `OfferNotFoundException` | Offer lookup fails |
+| `RuntimeException` | Cross-owner owner-relation assertion, invalid state transition, or missing prerequisite |
+| `InvalidArgumentException` | Non-empty reference/delta/statement state violations |
 
-When the Affiliates identity adapter is bound and either
-`affiliate-network.owner.enabled` or `affiliates.owner.enabled` is true,
-affiliate-facing writes require a merchant `Affiliate` row. Applying to an
-offer, creating direct or creative links, and posting conversion legs throw
-`AIArmada\AffiliateNetwork\Exceptions\AffiliateProfileRequired` before
-relationship-based owner validation can fail. Reads retain the adapter's
-host-user identity fallback; see [Multi-tenancy](07-multi-tenancy.md).
+## Verification
 
-### Cross-tenant owner violations
-
-Thrown by `ScopesByBelongsToOwner` on create/update when the owner relation is
-missing or owned by someone else. The message is generic and interpolates the
-model class:
-
-```php
-// From ScopesByBelongsToOwner (site, offer.site, and affiliate paths alike)
-"Cannot create or update {ModelClass} for an inaccessible or missing owner relation."
-
-// When ownerViaRelation() does not start with a belongs-to relation
-"{ModelClass}::ownerViaRelation() must begin with a belongs-to relation."
-```
-
-### Reapplication Cooldown
-
-`ApplyToOffer` throws
-`AIArmada\AffiliateNetwork\Exceptions\ApplicationAlreadySubmittedException`
-(a `RuntimeException`) while a rejected application is still inside
-`affiliate-network.applications.cooldown_days`.
-
-## Mirrored and manual creatives
-
-`AffiliateOfferCreative::external_creative_id` identifies merchant-origin
-rows; null identifies manual rows. Imported `source_asset_url` stores the public merchant
-asset URL. Manual assets use only Media Library's single-file `creative_asset`
-collection on the `public` disk; `getAssetUrl()` resolves the relevant asset
-and returns null for file-less creatives. `destination_url` is the click target.
-
-Catalog snapshots must use version `v2` and include `creatives` (even when
-empty). `text_link` maps to `text`; image/document/video/banner/email types
-retain their meaning. Merchant type and tracking code are retained as
-`metadata.merchant_type` and `metadata.merchant_tracking_code`; merchant
-personalized HTML is never imported.
-
-The importer matches `(offer_id, external_creative_id)`, preserves `is_active`
-and `sort_order`, and deletes absent imported rows while keeping manual rows.
-A separate `creatives_checksum` propagates creative-only changes without
-rewriting rates. Each subject's offer and creative reconciliation is atomic;
-failures count toward `failed` and mark the site `partial`.
-
-Hosts can use these services from their storefront or API. Issue a creative
-link once and retain its ID; rendering existing links does not need new links.
-
-```php
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferCreative;
-use AIArmada\AffiliateNetwork\Services\OfferLinkService;
-
-$creative = AffiliateOfferCreative::query()->findOrFail($creativeId);
-$service = app(OfferLinkService::class);
-$link = $service->createCreativeLink($creative, $affiliateId);
-$payload = $service->creativePayload($creative, $link);
-// id, type, name, description, asset_url, tracking_url, embed_code, width, height
-```
-
-`createCreativeLink()` requires an active creative and retains the normal
-verified-site, published-offer, and approval checks. It uses the creative's
-destination, falling back to the offer landing URL and then the site homepage.
-`creativePayload()` requires a link issued for that creative. Its tracking URL
-is the public network `/go/{slug}` URL; the backing link adds network
-attribution at redirect. Banner/image embeds require an asset. Manual HTML
-and email templates may use `{{tracking_url}}`; other types produce a text
-link. Treat manual template HTML as trusted operator-authored content.
-
-> **warning**
-> Breaking catalog contract: deploy merchant and network version 2 together.
-> Existing migrations define `external_creative_id`, `destination_url`, and
-> `creatives_checksum`; there are no compatibility paths or backfills.
-> Merchant files must remain publicly reachable because imports store URLs,
-> not copies of file bytes.
+- `php packages/affiliate-network/tools/package-check.php --root=packages/affiliate-network`
+- `./vendor/bin/phpstan analyse -c packages/affiliate-network/tools/package-phpstan.neon --autoload-file=packages/affiliate-network/tools/Architecture/PackageOwnedWriteRule.php --no-progress`
+- `./vendor/bin/pest --parallel tests/src/AffiliateNetwork`

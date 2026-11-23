@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "name": "Catalog",
+  "owns": {
+    "table:affiliate_network_offer_categories": [
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\CreateCategory",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\UpdateCategory",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\DeleteCategory",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\DeleteCategoryDependents"
+    ],
+    "table:affiliate_network_offers": [
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\CreateOffer",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\UpdateOffer",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\PublishOffer",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\ArchiveOffer",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\SubmitOffer",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\DeleteOffer",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\SyncSiteOffers",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\ArchiveExpiredOffers"
+    ],
+    "table:affiliate_network_offer_creatives": [
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\CreateCreative",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\UpdateCreative",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\DeleteCreative",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\SyncOfferCreatives",
+      "AIArmada\\AffiliateNetwork\\Features\\Catalog\\Actions\\DeleteOfferDependents"
+    ]
+  }
+}

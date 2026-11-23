@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "name": "Enrollment",
+  "owns": {
+    "table:affiliate_network_offer_applications": [
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\ApplyToOffer",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\ApproveApplication",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\RejectApplication",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\RevokeApplication",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\AcceptOfferInvitation",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\DeleteOfferEnrollments"
+    ],
+    "table:affiliate_network_offer_invitations": [
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\InviteAffiliateToOffer",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\AcceptOfferInvitation",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\RevokeOfferInvitation",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\DeleteOfferEnrollments"
+    ],
+    "table:affiliate_network_offer_deals": [
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\UpsertOfferDeal",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\RevokeOfferDeal",
+      "AIArmada\\AffiliateNetwork\\Features\\Enrollment\\Actions\\DeleteOfferEnrollments"
+    ]
+  }
+}

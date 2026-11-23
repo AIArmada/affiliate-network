@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "name": "Sites",
+  "owns": {
+    "table:affiliate_network_sites": [
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\CreateSite",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\RegisterSite",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\UpdateSite",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\VerifySite",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\RejectSite",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\SuspendSite",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\ReinstateSite",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\GenerateVerificationToken",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\IssueCatalogToken",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\RotateCatalogToken",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\RecordSiteSyncStatus",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\AdjustMerchantPrepaidBalance",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Actions\\DeleteSite"
+    ]
+  },
+  "extensions": {
+    "site.verification_strategy": [
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Extensions\\DnsVerificationStrategy",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Extensions\\FileVerificationStrategy",
+      "AIArmada\\AffiliateNetwork\\Features\\Sites\\Extensions\\MetaTagVerificationStrategy"
+    ]
+  }
+}

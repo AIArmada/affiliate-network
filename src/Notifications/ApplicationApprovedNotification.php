@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Notifications;
 
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
+use AIArmada\AffiliateNetwork\Data\NotificationPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -14,7 +14,7 @@ final class ApplicationApprovedNotification extends Notification
     use Queueable;
 
     public function __construct(
-        private readonly AffiliateOfferApplication $application,
+        private readonly NotificationPayload $payload,
     ) {}
 
     /**
@@ -27,10 +27,8 @@ final class ApplicationApprovedNotification extends Notification
 
     public function toMail(mixed $notifiable): MailMessage
     {
-        $offer = $this->application->offer;
-
         return (new MailMessage)
-            ->subject("Approved: promote {$offer->name}")
-            ->line("Your application to {$offer->name} was approved. Grab your tracking link and start earning.");
+            ->subject($this->payload->title)
+            ->line($this->payload->body);
     }
 }

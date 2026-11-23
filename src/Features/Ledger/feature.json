@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "name": "Ledger",
+  "owns": {
+    "table:affiliate_network_conversion_legs": [
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\PostConversionLeg",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\RecordNetworkConversion",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\ConfirmConversionLeg",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\SupersedeConversionLeg",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\LockMaturedLegs",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\ReverseConversionLeg",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\AdjustConversionLeg",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\FulfillConversionLeg",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\GenerateMerchantStatement",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\VoidMerchantStatement",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\ReconcileOfferLedger",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\RecordOrderAttribution"
+    ],
+    "table:affiliate_network_merchant_statements": [
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\GenerateMerchantStatement",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\IssueMerchantStatement",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\MarkMerchantStatementPaid",
+      "AIArmada\\AffiliateNetwork\\Features\\Ledger\\Actions\\VoidMerchantStatement"
+    ]
+  },
+  "extensions": {}
+}

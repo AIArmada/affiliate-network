@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Database\Factories;
 
-use AIArmada\AffiliateNetwork\Models\AffiliateSite;
+use AIArmada\AffiliateNetwork\Data\SiteStatus;
+use AIArmada\AffiliateNetwork\Data\SiteSyncStatus;
+use AIArmada\AffiliateNetwork\Features\Sites\Models\AffiliateSite;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -26,10 +28,20 @@ class AffiliateSiteFactory extends Factory
             'name' => $this->faker->company() . ' Affiliate Network',
             'domain' => $domain,
             'description' => $this->faker->paragraph(),
-            'status' => AffiliateSite::STATUS_PENDING,
+            'status' => SiteStatus::Pending,
             'verification_method' => null,
             'verification_token' => null,
             'verified_at' => null,
+            'catalog_url' => null,
+            'catalog_token_encrypted' => null,
+            'catalog_token_issued_at' => null,
+            'sync_status' => SiteSyncStatus::Never,
+            'last_synced_at' => null,
+            'default_locking_days' => 0,
+            'prepaid_balance_minor' => null,
+            'budget_currency' => null,
+            'monthly_spend_cap_minor' => null,
+            'require_settled_for_payout' => false,
             'settings' => null,
             'metadata' => null,
         ];
@@ -41,7 +53,7 @@ class AffiliateSiteFactory extends Factory
     public function pending(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateSite::STATUS_PENDING,
+            'status' => SiteStatus::Pending,
             'verification_token' => 'affiliatenetwork-verify-' . Str::random(32),
         ]);
     }
@@ -52,7 +64,7 @@ class AffiliateSiteFactory extends Factory
     public function verified(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateSite::STATUS_VERIFIED,
+            'status' => SiteStatus::Verified,
             'verification_method' => 'dns',
             'verification_token' => 'affiliatenetwork-verify-' . Str::random(32),
             'verified_at' => now(),
@@ -65,7 +77,7 @@ class AffiliateSiteFactory extends Factory
     public function suspended(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateSite::STATUS_SUSPENDED,
+            'status' => SiteStatus::Suspended,
             'verified_at' => now()->subDays(30),
         ]);
     }
@@ -76,7 +88,7 @@ class AffiliateSiteFactory extends Factory
     public function rejected(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => AffiliateSite::STATUS_REJECTED,
+            'status' => SiteStatus::Rejected,
         ]);
     }
 

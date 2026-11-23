@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Database\Factories;
 
-use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferCreative;
+use AIArmada\AffiliateNetwork\Data\CreativeType;
+use AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOffer;
+use AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOfferCreative;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -22,9 +23,12 @@ class AffiliateOfferCreativeFactory extends Factory
     {
         return [
             'offer_id' => AffiliateOfferFactory::new(),
-            'type' => AffiliateOfferCreative::TYPE_BANNER,
+            'type' => CreativeType::Banner,
             'name' => $this->faker->words(3, true),
             'description' => $this->faker->sentence(),
+            'external_creative_id' => null,
+            'source_asset_url' => null,
+            'destination_url' => null,
             'width' => 728,
             'height' => 90,
             'html_code' => null,
@@ -40,7 +44,7 @@ class AffiliateOfferCreativeFactory extends Factory
     public function banner(int $width = 728, int $height = 90): static
     {
         return $this->state(fn (array $attributes) => [
-            'type' => AffiliateOfferCreative::TYPE_BANNER,
+            'type' => CreativeType::Banner,
             'width' => $width,
             'height' => $height,
         ]);
@@ -52,7 +56,7 @@ class AffiliateOfferCreativeFactory extends Factory
     public function text(): static
     {
         return $this->state(fn (array $attributes) => [
-            'type' => AffiliateOfferCreative::TYPE_TEXT,
+            'type' => CreativeType::Text,
             'width' => null,
             'height' => null,
         ]);
@@ -64,7 +68,7 @@ class AffiliateOfferCreativeFactory extends Factory
     public function email(): static
     {
         return $this->state(fn (array $attributes) => [
-            'type' => AffiliateOfferCreative::TYPE_EMAIL,
+            'type' => CreativeType::Email,
             'width' => null,
             'height' => null,
             'html_code' => '<html><body><h1>' . $this->faker->sentence() . '</h1></body></html>',
@@ -77,7 +81,7 @@ class AffiliateOfferCreativeFactory extends Factory
     public function html(): static
     {
         return $this->state(fn (array $attributes) => [
-            'type' => AffiliateOfferCreative::TYPE_HTML,
+            'type' => CreativeType::Html,
             'width' => null,
             'height' => null,
             'html_code' => '<div class="affiliate-widget">' . $this->faker->paragraph() . '</div>',
@@ -90,9 +94,47 @@ class AffiliateOfferCreativeFactory extends Factory
     public function video(): static
     {
         return $this->state(fn (array $attributes) => [
-            'type' => AffiliateOfferCreative::TYPE_VIDEO,
+            'type' => CreativeType::Video,
             'width' => 1920,
             'height' => 1080,
+        ]);
+    }
+
+    /**
+     * Image creative.
+     */
+    public function image(int $width = 1200, int $height = 628): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'type' => CreativeType::Image,
+            'width' => $width,
+            'height' => $height,
+        ]);
+    }
+
+    /**
+     * Document creative.
+     */
+    public function document(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'type' => CreativeType::Document,
+            'width' => null,
+            'height' => null,
+        ]);
+    }
+
+    public function withDestination(string $destinationUrl): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'destination_url' => $destinationUrl,
+        ]);
+    }
+
+    public function withAsset(string $assetUrl): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'source_asset_url' => $assetUrl,
         ]);
     }
 

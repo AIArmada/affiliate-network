@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Database\Factories;
 
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferCategory;
+use AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOfferCategory;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 

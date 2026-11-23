@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Database\Factories;
 
-use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferLink;
-use AIArmada\AffiliateNetwork\Models\AffiliateSite;
-use AIArmada\AffiliateNetwork\Support\QueryParameters;
+use AIArmada\AffiliateNetwork\Features\Attribution\Models\AffiliateOfferLink;
+use AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOffer;
+use AIArmada\AffiliateNetwork\Features\Sites\Models\AffiliateSite;
+use AIArmada\AffiliateNetwork\Platform\QueryParameters;
 use AIArmada\Links\Actions\CreateLink;
 use AIArmada\Links\Actions\UpdateLink;
 use AIArmada\Links\Models\Link;

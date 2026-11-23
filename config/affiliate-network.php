@@ -9,8 +9,14 @@ $tables = [
     'offer_categories' => $tablePrefix . 'offer_categories',
     'offer_creatives' => $tablePrefix . 'offer_creatives',
     'offer_applications' => $tablePrefix . 'offer_applications',
+    'offer_invitations' => $tablePrefix . 'offer_invitations',
+    'offer_deals' => $tablePrefix . 'offer_deals',
+    'offer_coupons' => $tablePrefix . 'offer_coupons',
     'offer_links' => $tablePrefix . 'offer_links',
     'conversion_legs' => $tablePrefix . 'conversion_legs',
+    'creator_postbacks' => $tablePrefix . 'creator_postbacks',
+    'postback_deliveries' => $tablePrefix . 'postback_deliveries',
+    'merchant_statements' => $tablePrefix . 'merchant_statements',
 ];
 
 return [
@@ -82,6 +88,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Conversion Locking
+    |--------------------------------------------------------------------------
+    */
+    'locking' => [
+        'default_days' => env('AFFILIATE_NETWORK_LOCKING_DAYS', 0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Merchant Statements
+    |--------------------------------------------------------------------------
+    */
+    'statements' => [
+        'due_days' => env('AFFILIATE_NETWORK_STATEMENT_DUE_DAYS', 30),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Notifications
     |--------------------------------------------------------------------------
     |
@@ -112,6 +136,7 @@ return [
     'links' => [
         'default_style' => 'short',
         'parameter' => env('AFFILIATE_NETWORK_LINK_PARAM', 'anl'),
+        'default_fallback_url' => env('AFFILIATE_NETWORK_DEFAULT_FALLBACK_URL'),
     ],
 
     /*
@@ -185,6 +210,18 @@ return [
         'enabled' => env('AFFILIATE_NETWORK_POSTBACKS_ENABLED', false),
         'prefix' => env('AFFILIATE_NETWORK_POSTBACKS_PREFIX', 'api/affiliate-network'),
         'middleware' => ['api', 'throttle:60,1'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Creator Postbacks
+    |--------------------------------------------------------------------------
+    */
+    'creator_postbacks' => [
+        'enabled' => env('AFFILIATE_NETWORK_CREATOR_POSTBACKS_ENABLED', true),
+        'queue' => env('AFFILIATE_NETWORK_CREATOR_POSTBACKS_QUEUE'),
+        'max_attempts' => 3,
+        'backoff_seconds' => [10, 60, 300],
     ],
 
     /*

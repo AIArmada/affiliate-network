@@ -4,325 +4,290 @@ title: Models
 
 # Models Reference
 
+All thirteen models live under `AIArmada\AffiliateNetwork\Features\<Feature>\Models`.
+Every model uses `HasUuids`, `HasCommerceAudit`, `LogsCommerceActivity`, and a
+config-backed `getTable()` override reading
+`affiliate-network.database.tables.*` (with the configured prefix as fallback).
+There is no literal `$table` property on any model.
+
+## Morph map aliases
+
+The service provider registers short morph aliases:
+
+| Alias | Model |
+|---|---|
+| `affiliate_site` | `AffiliateSite` |
+| `affiliate_offer_category` | `AffiliateOfferCategory` |
+| `affiliate_offer` | `AffiliateOffer` |
+| `affiliate_offer_creative` | `AffiliateOfferCreative` |
+| `affiliate_offer_application` | `AffiliateOfferApplication` |
+| `affiliate_offer_invitation` | `AffiliateOfferInvitation` |
+| `affiliate_offer_deal` | `AffiliateOfferDeal` |
+| `affiliate_offer_link` | `AffiliateOfferLink` |
+| `affiliate_offer_coupon` | `AffiliateOfferCoupon` |
+| `network_conversion_leg` | `NetworkConversionLeg` |
+| `merchant_statement` | `MerchantStatement` |
+| `creator_postback_endpoint` | `CreatorPostbackEndpoint` |
+| `creator_postback_delivery` | `CreatorPostbackDelivery` |
+
+## Owner scoping summary
+
+| Model | Trait | Owner path |
+|---|---|---|
+| `AffiliateSite` | `HasOwner` | direct (`owner_type`/`owner_id`) |
+| `AffiliateOfferCategory` | `HasOwner` | direct |
+| `MerchantStatement` | `HasOwner` | direct |
+| `AffiliateOffer` | `ScopesByBelongsToOwner` | `site` |
+| `AffiliateOfferCreative` | `ScopesByBelongsToOwner` | `offer.site` |
+| `AffiliateOfferInvitation` | `ScopesByBelongsToOwner` | `offer.site` |
+| `AffiliateOfferDeal` | `ScopesByBelongsToOwner` | `offer.site` |
+| `AffiliateOfferCoupon` | `ScopesByBelongsToOwner` | `offer.site` |
+| `AffiliateOfferApplication` | `ScopesByBelongsToOwner` | `offer.site` |
+| `AffiliateOfferLink` | `ScopesByBelongsToOwner` | `affiliate`, fallback `offer.site` |
+| `NetworkConversionLeg` | `ScopesByBelongsToOwner` | `affiliate`, fallback `offer.site` |
+| `CreatorPostbackEndpoint` | none | affiliate-scoped by query, not a global scope |
+| `CreatorPostbackDelivery` | none | reached through its endpoint |
+
+> **note**
+> `AffiliateOfferApplication` scopes through `offer.site` (the merchant owns the
+> offer), not the affiliate. This keeps merchant-side review and creator-side
+> read models consistent.
+
+---
+
 ## AffiliateSite
 
-Represents a merchant's website/domain in the network.
+`AIArmada\AffiliateNetwork\Features\Sites\Models\AffiliateSite`
 
-### Properties
+| Property | Type | Notes |
+|---|---|---|
+| `id` | string | UUID |
+| `owner_type` / `owner_id` | string\|null | Direct owner morph |
+| `name` | string | Display name |
+| `domain` | string | Unique, normalized lowercase hostname |
+| `description` | string\|null | |
+| `status` | `SiteStatus` | `pending`, `verified`, `suspended`, `rejected` |
+| `verification_method` | string\|null | `dns`, `meta_tag`, `file` |
+| `verification_token` | string\|null | |
+| `verified_at` | `CarbonImmutable`\|null | |
+| `catalog_url` | string\|null | Empty = owned/shared-DB site |
+| `catalog_token_encrypted` | string\|null | Encrypted catalog/postback token |
+| `catalog_token_issued_at` | `CarbonImmutable`\|null | |
+| `sync_status` | `SiteSyncStatus` | `never`, `ok`, `partial`, `failed` |
+| `last_synced_at` | `CarbonImmutable`\|null | |
+| `default_locking_days` | int | 0 = no window |
+| `prepaid_balance_minor` | int\|null | null = unlimited prepaid |
+| `budget_currency` | string\|null | |
+| `monthly_spend_cap_minor` | int\|null | |
+| `require_settled_for_payout` | bool | Pay-when-paid gate |
+| `settings` / `metadata` | array\|null | |
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | `string` | UUID primary key |
-| `owner_type` | `string\|null` | Morph type for multi-tenancy |
-| `owner_id` | `string\|null` | Morph ID for multi-tenancy |
-| `name` | `string` | Site display name |
-| `domain` | `string` | Domain (unique) |
-| `description` | `string\|null` | Site description |
-| `status` | `string` | pending, verified, suspended, rejected |
-| `verification_method` | `string\|null` | dns, meta_tag, file |
-| `verification_token` | `string\|null` | Verification token |
-| `verified_at` | `CarbonImmutable\|null` | Verification timestamp |
-| `settings` | `array\|null` | Site settings |
-| `metadata` | `array\|null` | Custom metadata |
-| `catalog_url` | `string\|null` | Merchant catalog base URL (empty = owned site) |
-| `catalog_token_encrypted` | `string\|null` | Encrypted catalog/postback token |
-| `catalog_token_issued_at` | `CarbonImmutable\|null` | Token issuance timestamp |
-| `sync_status` | `string\|null` | Last catalog sync outcome |
-| `last_synced_at` | `CarbonImmutable\|null` | Last catalog sync timestamp |
+Relations: `owner()` (MorphTo), `offers()` (HasMany `AffiliateOffer`).
 
-### Relationships
+Methods: `isVerified()`, `isPending()`, `isSuspended()`, `isRejected()`,
+`hasCatalogToken()`, `matchesCatalogToken(?string $token): bool`
+(constant-time, fail-closed), `toRecord(): SiteRecord`.
 
-```php
-$site->owner;   // MorphTo - Owner model
-$site->offers;  // HasMany - AffiliateOffer
-```
-
-### Scopes & Methods
-
-```php
-$site->isVerified();          // bool
-$site->isPending();           // bool
-$site->issueCatalogToken();   // string (plaintext, shown once)
-$site->rotateCatalogToken();  // string (previous token dies immediately)
-$site->hasCatalogToken();     // bool
-$site->matchesCatalogToken($token); // bool (constant-time, fail-closed)
-```
-
-### Traits
-
-- `HasOwner` - Multi-tenancy owner relationship
-- `HasOwnerScopeConfig` - Config-based owner scoping
-- `HasUuids` - UUID primary keys
+Deleting a site cascades in application code through `DeleteSiteDependents`.
 
 ---
 
 ## AffiliateOffer
 
-Represents an affiliate offer/campaign.
+`AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOffer`
 
-### Properties
+| Group | Properties |
+|---|---|
+| Identity | `id`, `site_id`, `category_id`, `name`, `slug`, `description`, `terms` |
+| Lifecycle | `status` (`OfferStatus`), `visibility` (`OfferVisibility`), `source` (`OfferSource`), `published_at`, `archived_at`, `starts_at`, `ends_at` |
+| Pricing | `rate_base_bp`, `rate_fixed_minor`, `currency`, `cookie_days`, `volume_tiers`, `event_rates`, `active_promotions`, `network_fee_bp` |
+| Marketplace | `is_featured`, `requires_approval`, `landing_url`, `fallback_url`, `fallback_offer_id`, `allow_deep_linking` |
+| Limits | `locking_days`, `daily_conversion_cap`, `monthly_conversion_cap`, `total_conversion_cap`, `per_affiliate_conversion_cap`, `monthly_payout_cap_minor`, `total_payout_cap_minor` |
+| Restrictions | `restrictions`, `metadata` |
+| Catalog provenance | `external_program_id`, `subject_type`, `subject_key`, `source_url`, `source_checksum`, `creatives_checksum`, `last_synced_at` |
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | `string` | UUID primary key |
-| `site_id` | `string` | Foreign key to site |
-| `category_id` | `string\|null` | Foreign key to category |
-| `name` | `string` | Offer name |
-| `slug` | `string` | URL slug (unique per site) |
-| `description` | `string\|null` | Offer description |
-| `terms` | `string\|null` | Terms and conditions |
-| `status` | `OfferStatus` | draft, published, archived |
-| `source` | `string` | `mirrored` (importer owns rates) or `manual` (operator override; sync holds rates back) |
-| `network_fee_bp` | `int\|null` | Marketplace take-rate in bp (null = configured default) |
-| `rate_base_bp` | `int` | Base percentage in basis points (1000 = 10%), null when fixed-only |
-| `rate_fixed_minor` | `int` | Fixed payout in minor units, null when percentage-based |
-| `volume_tiers` | `array` | Volume bonus tiers (`min_volume_minor`, `rate_bp`, `currency?`) |
-| `active_promotions` | `array` | Active promotions (`id`, `name`, `ends_at`) |
-| `currency` | `string\|null` | Currency code (e.g., USD) |
-| `cookie_days` | `int\|null` | Cookie duration |
-| `is_featured` | `bool` | Featured in marketplace |
-| `visibility` | `OfferVisibility` | public, private, unlisted |
-| `requires_approval` | `bool` | Requires affiliate approval |
-| `landing_url` | `string\|null` | Default landing page |
-| `restrictions` | `array\|null` | Traffic restrictions |
-| `metadata` | `array\|null` | Custom metadata |
-| `starts_at` | `CarbonImmutable\|null` | Campaign start |
-| `ends_at` | `CarbonImmutable\|null` | Campaign end |
-| `published_at` | `CarbonImmutable\|null` | Last publish timestamp |
-| `archived_at` | `CarbonImmutable\|null` | Last archive timestamp |
-| `external_program_id` | `string\|null` | Merchant program id (catalog imports) |
-| `subject_type` | `string\|null` | Imported subject type |
-| `subject_key` | `string\|null` | Imported subject key |
+Relations: `site()`, `category()`, `creatives()`, `applications()`, `links()`,
+`legs()`, `invitations()`, `deals()`, `coupons()`.
 
-### Relationships
+Methods: `isDraft()`, `isActive()`, `wasActiveAt(CarbonImmutable $at)`,
+`isFixed()`, `formattedRate()`, `toRecord(): OfferRecord`.
+Statics: `rateBlockColumns(): array`, `normalizeVolumeTiers(?array $tiers, ?string $currency): ?array`.
+Scope: `whereSiteVerified()`.
 
-```php
-$offer->site;         // BelongsTo - AffiliateSite
-$offer->category;     // BelongsTo - AffiliateOfferCategory
-$offer->creatives;    // HasMany - AffiliateOfferCreative
-$offer->applications; // HasMany - AffiliateOfferApplication
-$offer->links;        // HasMany - AffiliateOfferLink
-$offer->legs;         // HasMany - NetworkConversionLeg
-```
-
-### Methods
-
-```php
-$offer->isActive();  // Checks status and date range
-```
-
-### Traits
-
-- `ScopesByBelongsToOwner` - Owner scoping via the `site` relationship
-- `HasUuids` - UUID primary keys
+Deleting an offer cascades through `DeleteOfferDependents`.
 
 ---
 
 ## AffiliateOfferCategory
 
-Hierarchical category for organizing offers.
+`AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOfferCategory`
 
-### Properties
+Properties: `id`, `owner_type`, `owner_id`, `parent_id`, `name`, `slug`,
+`description`, `icon`, `sort_order` (int), `is_active` (bool).
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | `string` | UUID primary key |
-| `owner_type` | `string\|null` | Morph type for multi-tenancy |
-| `owner_id` | `string\|null` | Morph ID for multi-tenancy |
-| `parent_id` | `string\|null` | Parent category ID |
-| `name` | `string` | Category name |
-| `slug` | `string` | URL slug |
-| `description` | `string\|null` | Description |
-| `icon` | `string\|null` | Icon name |
-| `sort_order` | `int` | Display order |
-| `is_active` | `bool` | Active status |
+Relations: `owner()` (MorphTo), `parent()`, `children()`, `offers()`.
 
-### Relationships
+`getTable()` honors a per-instance alias (`$this->table`) so self-join queries
+bind correctly. Unique per `(owner_type, owner_id, slug)`.
 
-```php
-$category->owner;    // MorphTo - Owner model
-$category->parent;   // BelongsTo - Self
-$category->children; // HasMany - Self
-$category->offers;   // HasMany - AffiliateOffer
-```
-
-### Traits
-
-- `HasOwner` - Multi-tenancy owner relationship
-- `HasOwnerScopeConfig` - Config-based owner scoping
-- `HasUuids` - UUID primary keys
+Deleting cascades through `DeleteCategoryDependents`.
 
 ---
 
 ## AffiliateOfferCreative
 
-Banner, text link, or other promotional asset. Implements Spatie Media
-Library's `HasMedia` contract. Manual files live in the single-file
-`creative_asset` collection; `getAssetUrl()` resolves media for manual rows
-and `source_asset_url` for imported rows.
+`AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOfferCreative`
 
-### Properties
+Implements `Spatie\MediaLibrary\HasMedia` via `InteractsWithMedia`.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | `string` | UUID primary key |
-| `offer_id` | `string` | Foreign key to offer |
-| `type` | `string` | banner, text, image, document, email, html, video |
-| `name` | `string` | Creative name |
-| `description` | `string\|null` | Description |
-| `external_creative_id` | `string\|null` | Merchant creative ID for imported rows |
-| `source_asset_url` | `string\|null` | Imported merchant asset URL |
-| `destination_url` | `string\|null` | Click destination |
-| `width` | `int\|null` | Width in pixels |
-| `height` | `int\|null` | Height in pixels |
-| `html_code` | `string\|null` | HTML embed code |
-| `is_active` | `bool` | Active status |
-| `sort_order` | `int` | Display order |
-| `metadata` | `array\|null` | Custom metadata |
+Properties: `id`, `offer_id`, `type` (`CreativeType`), `name`, `description`,
+`external_creative_id`, `source_asset_url`, `destination_url`, `width`,
+`height`, `html_code`, `is_active`, `sort_order`, `metadata`.
 
-### Relationships
+Relations: `offer()`.
 
-```php
-$creative->offer;  // BelongsTo - AffiliateOffer
-```
+Methods: `registerMediaCollections()` (single-file `creative_asset` on the
+`public` disk), `getAssetUrl(): ?string`, `toRecord(): CreativeRecord`.
 
-### Owner scope
-
-`AffiliateOfferCreative` uses `ScopesByBelongsToOwner` through the
-`offer.site` path. No creative owner columns or migration are required.
+`getAssetUrl()` returns `source_asset_url` for imported rows and the media URL
+for manual rows.
 
 ---
 
 ## AffiliateOfferApplication
 
-Affiliate's application to promote an offer.
+`AIArmada\AffiliateNetwork\Features\Enrollment\Models\AffiliateOfferApplication`
 
-### Properties
+Properties: `id`, `offer_id`, `affiliate_id`, `invitation_id`, `status`
+(`ApplicationStatus`), `reason`, `rejection_reason`, `reviewed_by`,
+`reviewed_at`, `approved_at`, `rejected_at`, `revoked_at`, `metadata`.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | `string` | UUID primary key |
-| `offer_id` | `string` | Foreign key to offer |
-| `affiliate_id` | `string` | Foreign key to affiliate |
-| `status` | `ApplicationStatus` | pending, approved, rejected, revoked |
-| `reason` | `string\|null` | Application reason |
-| `rejection_reason` | `string\|null` | Rejection reason |
-| `reviewed_by` | `string\|null` | Reviewer ID |
-| `reviewed_at` | `CarbonImmutable\|null` | Review timestamp |
-| `approved_at` | `CarbonImmutable\|null` | Approval timestamp |
-| `rejected_at` | `CarbonImmutable\|null` | Rejection timestamp (cooldown base) |
-| `revoked_at` | `CarbonImmutable\|null` | Revocation timestamp |
-| `metadata` | `array\|null` | Custom metadata |
+Relations: `offer()`, `affiliate()` (bound at `models.affiliate`).
 
-### Relationships
+Methods: `isPending()`, `isApproved()`, `toRecord(): ApplicationRecord`.
 
-```php
-$application->offer;     // BelongsTo - AffiliateOffer
-$application->affiliate; // BelongsTo - Affiliate
-```
+Unique per `(offer_id, affiliate_id)`.
 
-### Methods
+---
 
-```php
-$application->isPending();   // bool
-$application->isApproved();  // bool
-```
+## AffiliateOfferInvitation
 
-### Traits
+`AIArmada\AffiliateNetwork\Features\Enrollment\Models\AffiliateOfferInvitation`
 
-- `ScopesByBelongsToOwner` - Owner scoping via the `affiliate` relationship
-- `HasUuids` - UUID primary keys
+Properties: `id`, `offer_id`, `affiliate_id`, `token` (unique, 40 chars),
+`invited_by`, `auto_approve` (bool), `expires_at`, `accepted_at`, `revoked_at`,
+`metadata`.
+
+Relations: `offer()`.
+
+Methods: `isActive()`, `toRecord(): InvitationRecord`.
+
+---
+
+## AffiliateOfferDeal
+
+`AIArmada\AffiliateNetwork\Features\Enrollment\Models\AffiliateOfferDeal`
+
+Properties: `id`, `offer_id`, `affiliate_id`, `rate_base_bp`,
+`rate_fixed_minor`, `network_fee_bp`, `currency`, `volume_tiers`, `starts_at`,
+`ends_at`, `is_active`, `notes`.
+
+Relations: `offer()`.
+
+Methods: `isActiveAt(CarbonImmutable $at)`, `toOverride(): DealRateOverride`.
+
+---
+
+## AffiliateOfferCoupon
+
+`AIArmada\AffiliateNetwork\Features\Attribution\Models\AffiliateOfferCoupon`
+
+Properties: `id`, `offer_id`, `site_id`, `affiliate_id`, `code` (uppercase,
+unique per site), `is_active`, `starts_at`, `ends_at`, `metadata`.
+
+Relations: `offer()`.
+
+Methods: `isActiveAt(CarbonImmutable $at)`, `toRecord(): OfferCouponRecord`.
 
 ---
 
 ## AffiliateOfferLink
 
-Tracking link for affiliate promotions.
+`AIArmada\AffiliateNetwork\Features\Attribution\Models\AffiliateOfferLink`
 
-### Properties
+Properties: `id`, `link_id` (backing `AIArmada\Links\Models\Link`), `offer_id`,
+`affiliate_id`, `site_id`, `sub_id`, `sub_id_2`, `sub_id_3`, `clicks`,
+`conversions`, `revenue` (minor), `currency`, `is_active`, `metadata`.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | `string` | UUID primary key |
-| `offer_id` | `string` | Foreign key to offer |
-| `affiliate_id` | `string` | Foreign key to affiliate |
-| `site_id` | `string\|null` | Foreign key to site |
-| `link_id` | `string\|null` | Backing tracked link (`aiarmada/links`) |
-| `sub_id` | `string\|null` | Sub-tracking ID 1 |
-| `sub_id_2` | `string\|null` | Sub-tracking ID 2 |
-| `sub_id_3` | `string\|null` | Sub-tracking ID 3 |
-| `clicks` | `int` | Click count |
-| `conversions` | `int` | Conversion count |
-| `revenue` | `int` | Total revenue (minor units) |
-| `currency` | `string\|null` | Revenue currency (ISO code, inherited from the offer) |
-| `is_active` | `bool` | Active status |
-| `metadata` | `array\|null` | Custom metadata |
+Relations: `link()`, `offer()`, `affiliate()`, `site()`.
 
-### Relationships
+Methods: `isExpired()`, `trackedSlug(): ?string`, `toRecord(): OfferLinkRecord`.
 
-```php
-$link->link;      // BelongsTo - Links Link (backing tracked link)
-$link->offer;     // BelongsTo - AffiliateOffer
-$link->affiliate; // BelongsTo - Affiliate
-$link->site;      // BelongsTo - AffiliateSite
-```
-
-### Methods
-
-```php
-$link->incrementClicks();           // Increment click counter
-$link->recordConversion($revenue);  // Record conversion
-$link->isExpired();                 // Check if the backing link is expired
-$link->trackedSlug();               // Backing link slug (or null)
-```
-
-### Traits
-
-- `ScopesByBelongsToOwner` - Owner scoping via the `affiliate` relationship
-- `HasUuids` - UUID primary keys
+Counters are written only through Attribution feature actions/APIs, never from
+this model directly.
 
 ---
 
 ## NetworkConversionLeg
 
-One posted money leg per network conversion. Append-only: legs are never
-edited except for status finalization and reversal markers. Balances,
-counters, and reconciliation derive from these rows.
+`AIArmada\AffiliateNetwork\Features\Ledger\Models\NetworkConversionLeg`
 
-### Properties
+Append-only money leg.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | `string` | UUID primary key |
-| `link_id` | `string` | Foreign key to offer link |
-| `offer_id` | `string` | Foreign key to offer |
-| `site_id` | `string\|null` | Foreign key to site |
-| `affiliate_id` | `string` | Creator key |
-| `link_code` | `string` | Tracked link code snapshot |
-| `revenue_minor` | `int` | Order revenue (minor units) |
-| `revenue_currency` | `string\|null` | Revenue currency |
-| `commission_minor` | `int` | Commission before fee (minor units) |
-| `commission_currency` | `string` | Commission currency |
-| `fee_minor` | `int` | Network fee carved out (minor units) |
-| `fee_bp` | `int` | Fee rate applied (basis points) |
-| `payout_minor` | `int` | Commission minus fee (minor units) |
-| `tier_rate_bp` | `int\|null` | Volume tier rate applied, if any |
-| `tier_min_volume_minor` | `int\|null` | Tier floor cleared, if any |
-| `external_reference` | `string` | Merchant order reference (idempotency) |
-| `status` | `LegStatus` | provisional, posted, superseded, reversed |
-| `metadata` | `array\|null` | Custom metadata (reversals link here) |
-| `occurred_at` | `CarbonImmutable\|null` | Conversion timestamp |
+| Group | Properties |
+|---|---|
+| Identity | `id`, `link_id`, `offer_id`, `site_id`, `affiliate_id`, `link_code`, `idempotency_key` (unique), `parent_leg_id` |
+| Money | `revenue_minor`, `revenue_currency`, `commission_minor`, `commission_currency`, `fee_minor`, `fee_bp`, `payout_minor`, `tier_rate_bp`, `tier_min_volume_minor` |
+| Attribution | `external_reference`, `event_type`, `coupon_code`, `sub_id`, `sub_id_2`, `sub_id_3`, `metadata` |
+| Lifecycle | `status` (`LegStatus`), `statement_id`, `locks_at`, `locked_at`, `fulfilled_at`, `occurred_at` |
 
-### Relationships
+Relations: `offer()`, `site()`, `affiliate()`.
 
-```php
-$leg->link;      // BelongsTo - AffiliateOfferLink
-$leg->offer;     // BelongsTo - AffiliateOffer
-$leg->site;      // BelongsTo - AffiliateSite
-$leg->affiliate; // BelongsTo - Affiliate (owner boundary)
-```
+Methods: `paysOut(): bool`, `toSnapshot(): NetworkLegSnapshot`.
 
-### Traits
+`parent_leg_id` marks adjustment and reversal companions. Companions never pay;
+`CreatorBalancesQuery` treats a reversal companion of a fulfilled leg as a
+clawback.
 
-- `ScopesByBelongsToOwner` - Owner scoping via the `affiliate` relationship
-- `HasUuids` - UUID primary keys
+---
+
+## MerchantStatement
+
+`AIArmada\AffiliateNetwork\Features\Ledger\Models\MerchantStatement`
+
+Properties: `id`, `owner_type`, `owner_id`, `site_id`, `statement_number`
+(unique), `status` (`SettlementStatus`), `currency`, `period_start`,
+`period_end`, `leg_count`, `gross_revenue_minor`, `commission_minor`,
+`fee_minor`, `payout_minor`, `issued_at`, `due_at`, `paid_at`,
+`payment_reference`, `metadata`.
+
+Relations: `site()`, `legs()` (HasMany `NetworkConversionLeg` via `statement_id`).
+
+Methods: `toSummary(): MerchantStatementSummary`.
+
+---
+
+## CreatorPostbackEndpoint
+
+`AIArmada\AffiliateNetwork\Features\Postbacks\Models\CreatorPostbackEndpoint`
+
+Properties: `id`, `affiliate_id`, `offer_id` (null = all offers),
+`url_template`, `http_method` (`GET`/`POST`), `events` (array of
+`PostbackEventType` values), `signing_secret_encrypted`, `is_active`.
+
+Methods: `subscribesTo(PostbackEventType)`, `eventTypes(): list<PostbackEventType>`,
+`toRecord(): CreatorPostbackRecord`.
+
+---
+
+## CreatorPostbackDelivery
+
+`AIArmada\AffiliateNetwork\Features\Postbacks\Models\CreatorPostbackDelivery`
+
+Properties: `id`, `endpoint_id`, `leg_id`, `event_type`, `resolved_url`,
+`status` (`PostbackDeliveryStatus`), `http_status`, `attempts`, `last_error`,
+`delivered_at`.
+
+Relations: `endpoint()`.
+
+Unique per `(endpoint_id, leg_id, event_type)` so redelivery is idempotent.

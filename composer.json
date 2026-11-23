@@ -29,6 +29,14 @@
   "config": {
     "sort-packages": true
   },
+  "scripts": {
+    "arch:boundaries": "@php tools/package-check.php",
+    "arch:writes": "@php ../../vendor/bin/phpstan analyse -c tools/package-phpstan.neon --autoload-file=tools/Architecture/PackageOwnedWriteRule.php --no-progress",
+    "arch:check": [
+      "@arch:boundaries",
+      "@arch:writes"
+    ]
+  },
   "minimum-stability": "dev",
   "prefer-stable": true,
   "suggest": {

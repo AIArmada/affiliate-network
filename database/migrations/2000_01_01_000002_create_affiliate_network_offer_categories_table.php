@@ -11,8 +11,9 @@ return new class extends Migration
     public function up(): void
     {
         $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
+        $tableName = config('affiliate-network.database.tables.offer_categories', $tablePrefix . 'offer_categories');
 
-        Schema::create($tablePrefix . 'offer_categories', function (Blueprint $table): void {
+        Schema::create($tableName, function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->nullableMorphs('owner');
 

@@ -4,517 +4,720 @@ title: Usage
 
 # Usage
 
-## Catalog sync (merchant program mirror)
+This guide covers every workflow with the exact Modular Dune class names and
+`execute()` signatures. All writes flow through feature `Actions`; reads flow
+through feature APIs and queries.
 
-Mirror a merchant program as offers instead of hand-typing rates:
+## Quick start
 
 ```php
-use AIArmada\AffiliateNetwork\Services\OfferImportService;
+use AIArmada\AffiliateNetwork\Features\Sites\Api\SitesApi;
+use AIArmada\AffiliateNetwork\Features\Catalog\Actions\CreateOffer;
+use AIArmada\AffiliateNetwork\Features\Catalog\Actions\PublishOffer;
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\ApplyToOffer;
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\ApproveApplication;
+use AIArmada\AffiliateNetwork\Features\Attribution\Actions\CreateOfferLink;
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\RecordNetworkConversion;
 
-$result = app(OfferImportService::class)->sync($site, $programId);
-// ['created' => 2, 'updated' => 0, 'skipped' => 5, 'locked' => 0, 'failed' => 0]
+$site = app(SitesApi::class)->findById($siteId);        // ?SiteRecord
+
+$offer = app(CreateOffer::class)->execute($site, [
+    'name' => 'Summer Sale',
+    'rate_base_bp' => 1000,            // 10%
+    'visibility' => 'public',
+    'requires_approval' => true,
+]);
+
+$offer = app(PublishOffer::class)->execute($offer);
+
+$application = app(ApplyToOffer::class)->execute(
+    (string) $offer->getKey(),
+    $affiliateId,
+    'Fashion blog, 100k monthly visitors',
+);
+
+app(ApproveApplication::class)->execute($application, $reviewerId);
+
+$link = app(CreateOfferLink::class)->execute((string) $offer->getKey(), $affiliateId, [
+    'target_url' => 'https://mystore.com/summer-sale',
+    'sub_id' => 'blog-post-1',
+]);
+
+$leg = app(RecordNetworkConversion::class)->execute(
+    (string) $offer->getKey(),
+    $affiliateId,
+    5999,          // $59.99 in minor units
+    'USD',
+    'ORDER-123',
+);
 ```
 
-- Owned site (shared DB): leave `catalog_url` empty — reads `affiliates` directly
-  through its read-only catalog snapshot; no commission or payout rows are
-  written.
-- Unowned site: set `catalog_url` (e.g. `https://merchant.com/api/affiliates`)
-  + `catalog_token_encrypted = encrypt($token)`, then sync with
-  `php artisan affiliate-network:sync-offers {site} --program={id}`,
-  or omit `--program` to sync every available program on the site.
-- Upserts by `(site_id, external_program_id, subject_key)`; unchanged
-  checksums skip; manual offers (`external_program_id` null) are never touched.
-- Imported rates are the fully-resolved **base** (product/category/program
-rules folded); volume/promotions ride along in `volume_tiers` /
-`active_promotions` columns.
-- **Rate lock:** editing any rate-block field on an offer (`rate_base_bp`, `rate_fixed_minor`, `currency`, `cookie_days`, `volume_tiers`, `active_promotions`) flips `source` to
-  `manual`, and sync holds those rates back (reported as `locked`) instead
-  of silently reverting them. Non-rate fields still mirror. Flip
-  `source` back to `mirrored` to re-apply catalog rates on next sync.
-- One bad subject never aborts the run: failures are counted as `failed`
-  and the site is stamped `partial`. Runs are capped by
-  `sync.max_subjects` (per program) and `sync.max_programs` (per `syncAll`).
+---
 
-The importer has one `resolveField(source, local, remote)` precedence helper:
-local syncs prefer the local value and remote syncs prefer the remote value,
-with null fallback. Imported local offers retain the core program ID in
-`external_program_id` for reference, but enrollment for every offer —
-mirrored or hand-written — is a network application and never touches merchant
-program memberships. In a combined install, when the Affiliates identity
-adapter is bound and either `affiliate-network.owner.enabled` or
-`affiliates.owner.enabled` is true, the actor must have a merchant `Affiliate`
-row to apply or create network links; see
-[Multi-tenancy](07-multi-tenancy.md#affiliate-profiles-in-combined-installs).
-
-Catalog reads are scoped to the synced site's owner: local syncs only see
-that owner's programs, never whatever ambient context the caller runs in.
-The `sync-offers` command enters the site owner context itself, so it works
-with owner mode enabled and no ambient owner (plain console).
-
-## Canonical API: Actions
-
-The canonical orchestration surface is the `Actions` tree. Prefer these over direct service calls:
-
-### Site Lifecycle
+## 1. Site lifecycle and verification
 
 ```php
-use AIArmada\AffiliateNetwork\Actions\CreateSite;
-use AIArmada\AffiliateNetwork\Actions\ReinstateSite;
-use AIArmada\AffiliateNetwork\Actions\SuspendSite;
-use AIArmada\AffiliateNetwork\Actions\UpdateSite;
-use AIArmada\AffiliateNetwork\Actions\VerifySite;
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\CreateSite;
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\UpdateSite;
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\GenerateVerificationToken;
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\VerifySiteByStrategy;
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\IssueCatalogToken;
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\RotateCatalogToken;
 
 $site = app(CreateSite::class)->execute([
     'name' => 'My Store',
     'domain' => 'mystore.com',
-    'catalog_token' => $plaintextToken,
+    'default_locking_days' => 30,
+    'prepaid_balance_minor' => 500_000,     // $5,000 prepaid
+    'budget_currency' => 'USD',
+    'monthly_spend_cap_minor' => 200_000,   // $2,000 / month
+    'require_settled_for_payout' => true,
 ]);
 
-$site = app(UpdateSite::class)->execute($site, [
+$token = app(GenerateVerificationToken::class)->execute($site);
+
+// Verification instructions + workflow
+$instructions = app(VerifySiteByStrategy::class)->getInstructions($site, 'dns');
+$site = app(VerifySiteByStrategy::class)->execute($site, 'dns'); // throws on failure
+
+// Catalog/postback token (plaintext shown once; stored encrypted)
+$plain = app(IssueCatalogToken::class)->execute($site);
+$rotated = app(RotateCatalogToken::class)->execute($site); // previous token dies immediately
+```
+
+Supported verification methods are the extension slot
+`site.verification_strategy`: `dns`, `meta_tag`, `file`.
+
+Operator transitions:
+
+```php
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\RejectSite;
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\SuspendSite;
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\ReinstateSite;
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\VerifySite;
+
+app(VerifySite::class)->execute($site, 'dns');   // pending -> verified
+app(SuspendSite::class)->execute($site);          // verified -> suspended
+app(ReinstateSite::class)->execute($site);        // suspended -> verified
+app(RejectSite::class)->execute($site);           // pending -> rejected
+```
+
+Merchant self-registration (owner is the registering user/tenant):
+
+```php
+use AIArmada\AffiliateNetwork\Features\Sites\Actions\RegisterSite;
+
+$site = app(RegisterSite::class)->execute($owner, [
     'name' => 'My Store',
     'domain' => 'mystore.com',
 ]);
-$site = app(VerifySite::class)->execute($site);     // pending -> verified
-$site = app(SuspendSite::class)->execute($site);    // verified -> suspended
-$site = app(ReinstateSite::class)->execute($site);  // suspended -> verified
 ```
 
-### Create an Offer
+> **warning**
+> `RegisterSite` always creates a `pending` site. Re-registering a domain the
+> same owner had `rejected` resubmits it; any other duplicate is refused.
+
+---
+
+## 2. Catalog sync (merchant program mirror)
 
 ```php
-use AIArmada\AffiliateNetwork\Actions\CreateOffer;
-use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
+use AIArmada\AffiliateNetwork\Features\Catalog\Actions\SyncSiteOffers;
+
+$result = app(SyncSiteOffers::class)->execute($site, $programId);
+// ['created' => 2, 'updated' => 0, 'skipped' => 5, 'locked' => 0, 'failed' => 0]
+
+$result = app(SyncSiteOffers::class)->execute($site);       // sync every program
+$result = app(SyncSiteOffers::class)->syncAll($site);       // explicit equivalent
+```
+
+- Owned site (shared DB): leave `catalog_url` empty — reads `affiliates` directly,
+  writes no commission or payout rows.
+- Remote site: set `catalog_url` + `catalog_token_encrypted = encrypt($token)`.
+- Upserts by `(site_id, external_program_id, subject_key)`; unchanged checksums
+  skip; manual offers (`external_program_id` null) are never touched.
+- Imported offers land as `draft`, `source = mirrored`.
+- Editing any rate-block field (`rate_base_bp`, `rate_fixed_minor`, `currency`,
+  `cookie_days`, `volume_tiers`, `active_promotions`) flips `source` to
+  `manual`; later syncs hold those rates back (`locked`).
+- One bad subject never aborts the run; the site is stamped `partial`.
+
+---
+
+## 3. Offers
+
+### Create, update, publish, archive
+
+```php
+use AIArmada\AffiliateNetwork\Features\Catalog\Actions\CreateOffer;
+use AIArmada\AffiliateNetwork\Features\Catalog\Actions\UpdateOffer;
+use AIArmada\AffiliateNetwork\Features\Catalog\Actions\PublishOffer;
+use AIArmada\AffiliateNetwork\Features\Catalog\Actions\ArchiveOffer;
 
 $offer = app(CreateOffer::class)->execute($site, [
-    'name' => 'Summer Sale Campaign',
-    'description' => '20% off summer collection',
-    'rate_base_bp' => 1000, // 10% in basis points
-    'cookie_days' => 30,
-    'landing_url' => 'https://mystore.com/summer-sale',
-    'visibility' => OfferVisibility::Public,
-    'requires_approval' => true,
-]);
-```
-
-### Update an Offer
-
-```php
-use AIArmada\AffiliateNetwork\Actions\UpdateOffer;
-use AIArmada\AffiliateNetwork\Enums\OfferVisibility;
-
-app(UpdateOffer::class)->execute($offer, [
-    'rate_base_bp' => 1500,
-    'visibility' => OfferVisibility::Private,
-]);
-```
-
-### Apply to Offer & Approve
-
-When the Affiliates identity adapter is bound and either
-`affiliate-network.owner.enabled` or `affiliates.owner.enabled` is true, the
-supplied ID must resolve to a merchant `Affiliate` row. A plain host user can
-still resolve for reads and display, but network write actions throw
-`AffiliateProfileRequired` until that user completes affiliate registration.
-Standalone installs and combined installs with both owner settings disabled
-keep their user-key fallback behavior.
-
-```php
-use AIArmada\AffiliateNetwork\Actions\ApplyToOffer;
-use AIArmada\AffiliateNetwork\Actions\ApproveApplication;
-
-// Public APIs take the affiliate ID, not the model
-$application = app(ApplyToOffer::class)->execute(
-    $offer,
-    (string) $affiliate->getKey(),
-    'I have a fashion blog with 100k monthly visitors'
-);
-
-app(ApproveApplication::class)->execute($application, auth()->id());
-```
-
-### Record a Conversion
-
-```php
-use AIArmada\AffiliateNetwork\Actions\RecordNetworkConversion;
-
-$leg = app(RecordNetworkConversion::class)->execute($link, 5999, 'USD', 'ORDER-123'); // $59.99 in cents
-```
-
-Pass the conversion currency whenever it is known. When it differs from the
-link currency, the conversion is counted but link revenue is skipped (and
-logged). Its network leg preserves the reported revenue for audit while
-posting zero commission, fee, and payout so an unconverted amount cannot earn
-a commission priced in another currency.
-
-Pass an external reference (usually the order number) to post a money leg:
-commission follows the offer terms (fixed amount, volume tier, or basis
-points of revenue), and the network fee is carved out. Engine fulfillment
-attempts the merchant posting automatically; standalone hosts explicitly
-record their payout run. Replays of the same reference reuse the existing leg
-instead of double-counting counters or conversion events. Without a reference,
-each call updates the link counters and emits the counter-only event, but no
-leg posts. Use
-`NetworkLedgerReconciliationService::reconcileLink()` / `reconcileOffer()`
-to prove counters, legs, and the merchant ledger agree.
-
-## Money Legs & Fees
-
-Every conversion with an external reference posts one
-`NetworkConversionLeg`: revenue, commission, fee, and payout in minor units,
-plus the tier that priced it. Legs are append-only — balances, counters,
-and reconciliation all derive from them:
-
-- **Fee:** `offer.network_fee_bp` overrides
-  `affiliate-network.fees.default_bp` (default `0`). The fee is basis
-  points on commission; payout is commission minus fee.
-- **Volume tiers:** `offer.volume_tiers` is a list of
-  `{min_volume_minor, rate_bp, currency?}`. The highest tier whose floor
-  the affiliate's cumulative offer revenue clears wins; otherwise the
-  base rate applies.
-- **Reversals:** `app(NetworkBooks::class)->reverse($leg, $reason)` marks the leg
-  reversed and posts a negated companion leg. Reversed legs never pay.
-- **Balances:** `app(CreatorBalances::class)->for($affiliateId)` sums posted-leg
-  payouts per currency at read time — no balance rows to drift.
-- **Fulfillment:** posted legs go to exactly one payer. With
-  `aiarmada/affiliates` installed the engine fulfills merchant payouts;
-  standalone installs require the host to explicitly record a run with a
-  non-empty payout reference through `HostManualFulfillment`. Recording a
-  standalone conversion never marks it fulfilled automatically. Engine
-  fulfillment validates merchant posting status, commission, and currency; a
-  mismatch marks the leg for reconciliation.
-
-## Managing Merchant Sites
-
-### Create a Site
-
-```php
-use AIArmada\AffiliateNetwork\Models\AffiliateSite;
-
-$site = AffiliateSite::create([
-    'name' => 'My Store',
-    'domain' => 'mystore.com',
-    'description' => 'Online fashion retailer',
-    'status' => AffiliateSite::STATUS_PENDING,
-]);
-```
-
-### Verify a Site
-
-```php
-use AIArmada\AffiliateNetwork\Services\SiteVerificationService;
-
-$verificationService = app(SiteVerificationService::class);
-
-// Generate verification token
-$token = $verificationService->generateToken($site);
-
-// Get verification instructions
-$instructions = $verificationService->getInstructions($site, 'dns');
-// Returns: ['title' => 'DNS TXT Record', 'record_value' => 'affiliatenetwork-verify-xxx', ...]
-
-// Verify the site
-$verified = $verificationService->verify($site, 'dns');
-
-if ($verified) {
-    // Site is now STATUS_VERIFIED
-}
-```
-
-### Verification Methods
-
-| Method | Strategy Implementation | Description |
-|--------|------------------------|-------------|
-| `dns` | `DnsVerificationStrategy` | TXT record on domain |
-| `meta_tag` | `MetaTagVerificationStrategy` | Meta tag in HTML head |
-| `file` | `FileVerificationStrategy` | File at `/.well-known/affiliate-network-verify.txt` |
-
-New verification methods can be added by implementing `SiteVerificationStrategyInterface` and registering through the container.
-
-## Offer Statuses
-
-`AffiliateOffer::$status` is an `OfferStatus` enum:
-
-| Status | Value | Description |
-|--------|-------|-------------|
-| `Draft` | `draft` | Not published |
-| `Published` | `published` | Live and accepting traffic |
-| `Archived` | `archived` | Paused or retired |
-
-Submitting an offer always lands as `draft`; publishing stays an explicit
-operator decision. Expired offers are archived by the
-`affiliate-network:archive-expired` command.
-
-### Commission Rates
-
-```php
-// Percentage commission (basis points: 1000 = 10%)
-$offer = AffiliateOffer::create([
-    'rate_base_bp' => 1500, // 15%
-]);
-
-// Fixed commission (minor units: 500 = $5.00)
-$offer = AffiliateOffer::create([
-    'rate_fixed_minor' => 500, // $5.00
+    'name' => 'Summer Sale',
+    'description' => '20% off the summer collection',
+    'rate_base_bp' => 1000,                 // 10%
     'currency' => 'USD',
+    'cookie_days' => 30,
+    'visibility' => 'public',
+    'requires_approval' => true,
+    'landing_url' => 'https://mystore.com/summer-sale',
 ]);
 
-// With volume tiers and promotions (structured, synced from catalog)
-$offer = AffiliateOffer::create([
+$offer = app(UpdateOffer::class)->execute($offer, [
+    'rate_base_bp' => 1500,
+    'visibility' => 'private',
+]);
+
+$offer = app(PublishOffer::class)->execute($offer);   // published + published_at
+$offer = app(ArchiveOffer::class)->execute($offer);   // archived + archived_at
+```
+
+`CreateOffer` auto-generates the slug. New offers land as `draft` unless you
+explicitly pass a status, and publishing requires a verified site.
+
+### Volume tiers and event-based CPA
+
+```php
+$offer = app(CreateOffer::class)->execute($site, [
+    'name' => 'Tiered plan',
     'rate_base_bp' => 1000,
-    'volume_tiers' => [['min_volume_minor' => 100000, 'rate_bp' => 1500, 'currency' => 'USD']],
-    'active_promotions' => [['id' => 'promo-1', 'name' => 'Spring', 'ends_at' => null]],
+    'volume_tiers' => [
+        ['min_volume_minor' => 100_000, 'rate_bp' => 1500, 'currency' => 'USD'],
+        ['min_volume_minor' => 500_000, 'rate_bp' => 2000, 'currency' => 'USD'],
+    ],
+    // Price each event independently (multi-event CPA)
+    'event_rates' => [
+        'signup'   => ['rate_fixed_minor' => 500],
+        'lead'     => ['rate_base_bp' => 300],
+        'purchase' => ['rate_base_bp' => 1000],
+    ],
 ]);
-
-$offer->formattedRate(); // "15.00%" or "$5.00"
 ```
 
-### Check Application Status
+The highest tier whose floor the affiliate's cumulative offer revenue clears
+wins. `event_rates` is keyed by the conversion `event_type` and wins over the
+base rate for that event.
+
+### Caps and fallback redirects
 
 ```php
-use AIArmada\AffiliateNetwork\Services\OfferManagementService;
-
-$offerService = app(OfferManagementService::class);
-
-$isApproved = $offerService->isApprovedForOffer($offer, $affiliateId);
-
-// Get all approved offers for an affiliate (approved network applications)
-$approvedOffers = $offerService->getApprovedOffers($affiliateId);
-```
-
-## Tracking Links
-
-### Generate a Tracking Link
-
-```php
-use AIArmada\AffiliateNetwork\Services\OfferLinkService;
-
-$linkService = app(OfferLinkService::class);
-
-$link = $linkService->createLink($offer, $affiliateId, [
-    'target_url' => 'https://mystore.com/product/123',
-    'sub_id' => 'blog-post-summer',
-    'sub_id_2' => 'sidebar-banner',
+$offer = app(CreateOffer::class)->execute($site, [
+    'name' => 'Capped campaign',
+    'rate_fixed_minor' => 1000,
+    'daily_conversion_cap' => 100,
+    'monthly_conversion_cap' => 1_000,
+    'total_conversion_cap' => 10_000,
+    'per_affiliate_conversion_cap' => 100,
+    'monthly_payout_cap_minor' => 100_000,
+    'total_payout_cap_minor' => 1_000_000,
+    'fallback_url' => 'https://mystore.com/sale',
+    'fallback_offer_id' => $otherOfferId,
 ]);
-
-// Get a clean tracking URL by default
-$trackingUrl = $linkService->generateTrackingUrl($link);
-// https://yoursite.com/go/aB3dE9fHjKlmN0p
 ```
 
-Every offer link rides on a tracked link (`aiarmada/links`): the
-redirect appends `anl=<slug>` plus sub IDs to the destination, captures a raw
-click event, and increments the link counter through a `LinkClicked`
-listener. Unknown slugs return `404`; deactivated, expired, or
-policy-blocked links (inactive offer, unverified site, missing approval)
-return `410`.
+`CheckOfferCaps::check($offerId, $affiliateId, $payoutMinor)` throws
+`CapExceededException` (reason: `daily_conversion_cap`,
+`monthly_conversion_cap`, `total_conversion_cap`,
+`per_affiliate_conversion_cap`, `monthly_payout_cap_minor`,
+`total_payout_cap_minor`, `site_monthly_spend_cap_minor`, or
+`site_prepaid_balance`). Link gates fall back to `offer.fallback_url`, then
+`offer.fallback_offer_id`, then `links.default_fallback_url`.
 
-Offer links always use unsigned public URLs. A copied URL has no signature TTL and remains usable until row expiry, deactivation, click limits, or network policy blocks it. Set `expires_at` only when the link should expire deliberately.
-
-> **warning**: Breaking change: affiliate offer links are unsigned. There is no signature option, compatibility path, or backfill.
-
-### Track Conversions
+### Restrictions and active promotions
 
 ```php
-// Record a conversion with revenue (pass the conversion currency)
-$linkService->recordConversion($link, 5999, 'USD'); // $59.99 in cents
-
-// Get link statistics
-$stats = $linkService->getStats($link);
-// [
-//     'clicks' => 1250,
-//     'conversions' => 45,
-//     'revenue' => 267955, // cents
-//     'currency' => 'USD',
-//     'formatted_revenue' => '$2,679.55',
-//     'conversion_rate' => 3.6,
-//     'revenue_per_click' => 214.36,
-// ]
+$offer = app(CreateOffer::class)->execute($site, [
+    'name' => 'Restricted campaign',
+    'rate_base_bp' => 1200,
+    'restrictions' => [
+        'countries' => ['MY', 'SG'],
+        'channels' => ['web'],
+        'devices' => ['desktop', 'mobile'],
+    ],
+    'active_promotions' => [
+        [
+            'id' => 'spring-boost',
+            'name' => 'Spring boost',
+            'starts_at' => '2026-03-01T00:00:00+00:00',
+            'ends_at' => '2026-03-31T23:59:59+00:00',
+            'bonus_rate_bp' => 500,          // +5%
+            // or: 'override_rate_bp', 'bonus_fixed_minor', 'multiplier'
+        ],
+    ],
+]);
 ```
 
-### Tracking Model Notes
+Restrictions are checked on apply (`RestrictionContext`), on link redirect, and
+on conversion posting; violations throw `RestrictionViolatedException`. Active
+promotions are applied when a leg is priced and the promotion id is recorded in
+leg metadata as `applied_promotion_id`.
 
-`OfferLinkService::recordConversion()` updates the package's own `AffiliateOfferLink` counters and revenue totals, and — when an external reference is passed — posts a `NetworkConversionLeg` through `NetworkBooks`. Engine fulfillment then posts merchant rows (`origin: marketplace`, linked back via `source_ref`); standalone fulfillment remains explicit. Merchant-ledger posting never happens inline in the counter update.
-
-Links inherit the offer currency at creation. When a conversion arrives in a
-different link or offer pricing currency, the conversion is counted but its
-revenue is skipped from link totals (and logged as
-`affiliate-network.conversion.currency_mismatch`).
-The leg retains reported revenue and currency for audit, with zero commission,
-fee, and payout.
-
-## Artisan Commands
-
-```bash
-# Mirror a merchant program as network offers (omit --program to sync all on the site)
-php artisan affiliate-network:sync-offers {site} --program={id}
-php artisan affiliate-network:sync-offers mystore.com
-
-# Archive offers whose end date passed
-php artisan affiliate-network:archive-expired --older-than=90 --dry-run
-
-# Prove network legs, counters, and merchant postings agree
-php artisan affiliate-network:reconcile --offer={offerId} --fail-on-mismatch
-php artisan affiliate-network:reconcile
-```
-
-## Categories
-
-### Create Categories
+### Categories and creatives
 
 ```php
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferCategory;
+use AIArmada\AffiliateNetwork\Features\Catalog\Actions\CreateCategory;
+use AIArmada\AffiliateNetwork\Features\Catalog\Actions\CreateCreative;
+use AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOfferCreative;
 
-$parentCategory = AffiliateOfferCategory::create([
+$category = app(CreateCategory::class)->execute([
     'name' => 'Fashion',
     'slug' => 'fashion',
-    'icon' => 'shirt',
-    'sort_order' => 1,
     'is_active' => true,
 ]);
 
-$childCategory = AffiliateOfferCategory::create([
-    'parent_id' => $parentCategory->id,
-    'name' => 'Women\'s Clothing',
-    'slug' => 'womens-clothing',
-    'sort_order' => 1,
-    'is_active' => true,
-]);
-```
-
-### Query Categories
-
-```php
-// Get root categories
-$rootCategories = AffiliateOfferCategory::whereNull('parent_id')
-    ->where('is_active', true)
-    ->orderBy('sort_order')
-    ->get();
-
-// Get with children
-$categories = AffiliateOfferCategory::with('children')
-    ->whereNull('parent_id')
-    ->get();
-```
-
-## Creative Assets
-
-### Add Creatives to Offers
-
-```php
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferCreative;
-
-$banner = AffiliateOfferCreative::create([
-    'offer_id' => $offer->id,
-    'type' => AffiliateOfferCreative::TYPE_BANNER,
+$creative = app(CreateCreative::class)->execute($offer, [
+    'type' => 'banner',
     'name' => '728x90 Leaderboard',
     'width' => 728,
     'height' => 90,
-    'is_active' => true,
-    'sort_order' => 1,
+    'destination_url' => 'https://mystore.com/summer-sale',
 ]);
 
-$banner->addMedia(storage_path('app/banners/summer-728x90.jpg'))
+$creative->addMedia(storage_path('app/banners/summer.jpg'))
     ->toMediaCollection('creative_asset');
 
-$textLink = AffiliateOfferCreative::create([
-    'offer_id' => $offer->id,
-    'type' => AffiliateOfferCreative::TYPE_TEXT,
-    'name' => 'Summer Sale Text Link',
-    'destination_url' => 'https://mystore.com/summer-sale',
-    'is_active' => true,
-    'sort_order' => 2,
+$creative->getAssetUrl(); // absolute public URL (or imported source URL)
+```
+
+Manual assets live only in the single-file `creative_asset` collection on the
+`public` disk. Imported creatives store `source_asset_url`; both resolve through
+`getAssetUrl()`.
+
+---
+
+## 4. Enrollment: applications, invitations, deals
+
+### Apply, approve, reject, revoke
+
+```php
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\ApplyToOffer;
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\ApproveApplication;
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\RejectApplication;
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\RevokeApplication;
+
+$application = app(ApplyToOffer::class)->execute(
+    $offerId,
+    $affiliateId,
+    'I have a fashion blog',
+    null,                 // optional invitation token
+    null,                 // optional RestrictionContext
+);
+
+$application = app(ApproveApplication::class)->execute($application, $reviewerId);
+$application = app(RejectApplication::class)->execute($application, 'Traffic mismatch', $reviewerId);
+$application = app(RevokeApplication::class)->execute($application, 'ToS violation', $reviewerId);
+```
+
+- Re-application after rejection is blocked by
+  `ApplicationAlreadySubmittedException` until
+  `applications.cooldown_days` has elapsed.
+- Auto-approval happens when `requires_approval` is false, or
+  `applications.auto_approve` is true, or the invitation sets `auto_approve`.
+- `ApplicationSubmitted` is dispatched first; `ApplicationApproved` is
+  dispatched after commit.
+
+Read enrollment state:
+
+```php
+use AIArmada\AffiliateNetwork\Features\Enrollment\Api\EnrollmentApi;
+
+$enrollments = app(EnrollmentApi::class);
+
+$enrollments->isApprovedForOffer($offerId, $affiliateId);   // bool
+$enrollments->approvedOfferIds($affiliateId, limit: 500);   // list<string>
+$enrollments->applicationStatusMap($affiliateId, $offerIds); // array<string, ApplicationStatus>
+$enrollments->activeDealFor($offerId, $affiliateId);        // ?DealRateOverride
+```
+
+### Private/unlisted invitations
+
+```php
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\InviteAffiliateToOffer;
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\AcceptOfferInvitation;
+use Carbon\CarbonImmutable;
+
+$invitation = app(InviteAffiliateToOffer::class)->execute(
+    $offerId,
+    $affiliateId,            // null for a shareable token
+    $invitedBy,
+    CarbonImmutable::now()->addDays(7),
+    autoApprove: true,
+);
+
+$application = app(AcceptOfferInvitation::class)->execute($invitation->token, $affiliateId);
+```
+
+`private` and `unlisted` offers require an active invitation (or a token) to
+apply. Invitations can be revoked with `RevokeOfferInvitation::execute($invitation)`.
+
+### Per-affiliate custom deals
+
+```php
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\UpsertOfferDeal;
+use AIArmada\AffiliateNetwork\Features\Enrollment\Actions\RevokeOfferDeal;
+
+$deal = app(UpsertOfferDeal::class)->execute($offerId, $affiliateId, [
+    'rate_base_bp' => 2000,
+    'rate_fixed_minor' => null,
+    'network_fee_bp' => 500,
+    'currency' => 'USD',
+    'volume_tiers' => [['min_volume_minor' => 0, 'rate_bp' => 2000]],
+    'starts_at' => now(),
+    'ends_at' => now()->addMonths(3),
 ]);
+
+app(RevokeOfferDeal::class)->execute($deal);
 ```
 
-Manual assets live exclusively in Spatie Media Library's single-file
-`creative_asset` collection on the `public` disk. `getAssetUrl()` returns the
-absolute media URL, or null when no file is attached. Replacing an asset
-removes the previous media; deleting its creative or offer removes the media.
-Filament offers an upload field with the same storage contract.
+An active deal overrides the offer's fixed rate, tier, base rate, and fee at
+posting time.
 
-Merchant imports store their public origin in `source_asset_url`, paired with
-`external_creative_id`. This is mirror provenance, not a manual upload URL.
-Use `getAssetUrl()` for display for either source.
+---
 
-> **warning**
-> Breaking change: the generic `url` column is removed. Manual creatives
-> require Media Library attachments. The existing migration defines the
-> schema; there are no URL aliases, compatibility paths, or backfills.
+## 5. Tracking links and linkless coupons
 
-### Creative Types
-
-| Type | Constant | Use Case |
-|------|----------|----------|
-| `banner` | `TYPE_BANNER` | Image banners |
-| `text` | `TYPE_TEXT` | Text links |
-| `email` | `TYPE_EMAIL` | Email templates |
-| `html` | `TYPE_HTML` | HTML widgets |
-| `video` | `TYPE_VIDEO` | Video content |
-| `image` | `TYPE_IMAGE` | Promotional images |
-| `document` | `TYPE_DOCUMENT` | PDFs and downloadable material |
-
-## Checkout Integration
-
-The `affiliate-network` package provides seamless integration with the `checkout` package for internal sites that are part of your network. This allows you to track affiliate referrals and record conversions automatically when an order is placed through the checkout package.
-
-### Enable Integration
-
-To enable the integration, set the following environment variable or update your config:
+### Create links
 
 ```php
-// .env
-AFFILIATE_NETWORK_CHECKOUT_ENABLED=true
-```
-
-When a visitor lands with a valid network link, the middleware validates the
-link and stores a compact snapshot in the current cart metadata. Checkout
-copies that snapshot to `order.metadata.network_attribution`; the order
-listener reads the snapshot before falling back to request cookies, so payment
-retries can create and finalize a provisional leg without cookies.
-
-### How it Works
-
-1. **Tracking**: When a user visits your site with a network link parameter (default: `anl`), `TrackNetworkLinkCookie` validates the link, stores it in an encrypted cookie, and writes a compact snapshot to cart metadata when Cart is installed.
-2. **Attribution**: The cookie persists based on the configured lifetime (default: 30 days).
-3. **Conversion**: When order fulfillment is required (paid and free orders alike), the orders side triggers a `CommissionAttributionRequired` event.
-4. **Provisional leg**: `RecordProvisionalNetworkConversion` reads the order snapshot (or, when absent, the attribution cookie) and posts a `provisional` leg — money sketched, nothing payable yet.
-5. **Last-touch decider**: `FinalizeNetworkAttribution` compares the engine touch against the network touch. An engine win supersedes the provisional leg; a network win confirms and fulfills it. When the engine abstains — or isn't installed — the network wins by default. Every decision is recorded, so exactly one side ever pays.
-
-### Configuration Options
-
-You can customize the integration behavior in `config/affiliate-network.php`:
-
-```php
-'checkout' => [
-    'enabled' => env('AFFILIATE_NETWORK_CHECKOUT_ENABLED', false),
-    'middleware_group' => env('AFFILIATE_NETWORK_MIDDLEWARE_GROUP', 'web'),
-    'listen_for_orders' => env('AFFILIATE_NETWORK_LISTEN_ORDERS', true),
-],
-```
-
-The conversion recording automatically captures:
-- Order total (translated to commission)
-- Currency
-- Link reference
-- Sub IDs (from the original tracking link)
-- Order ID (stored in conversion metadata for audit)
-
-
-## Branded offer links
-
-```php
-use AIArmada\AffiliateNetwork\Services\OfferLinkService;
+use AIArmada\AffiliateNetwork\Features\Attribution\Actions\CreateOfferLink;
+use AIArmada\AffiliateNetwork\Features\Attribution\Actions\CreateCreativeLink;
 use AIArmada\Links\Actions\GenerateLinkUrl;
 
-$link = app(OfferLinkService::class)->createLink($offer, $affiliateId, [
-    'link_style' => 'branded',
+$link = app(CreateOfferLink::class)->execute($offerId, $affiliateId, [
+    'target_url' => 'https://mystore.com/product/123', // must belong to the verified domain
+    'sub_id' => 'blog-post-1',
+    'sub_id_2' => 'sidebar',
+    'sub_id_3' => 'banner-728x90',
+    'link_style' => 'branded',     // short | branded
     'link_label' => 'summer',
+    'custom_parameters' => ['utm_source=creator'],
+    'expires_at' => now()->addMonths(6),
 ]);
-$url = GenerateLinkUrl::run($link->link); // /go/{handle}/summer-{token}
+
+$url = GenerateLinkUrl::run($link->link);  // https://yoursite.com/go/{slug}
+
+$creativeLink = app(CreateCreativeLink::class)->execute($creativeId, $affiliateId);
 ```
 
-Short links remain the default. The branded handle is a snapshot from the
-resolved identity. Renaming a creator never changes an issued link or its
-stored affiliate ID. Both URL segments must match the saved tracking link.
-There are no username aliases, compatibility routes, or backfills. Host-provided
-identity DTOs must include `handle` under the new contract.
+Links are **unsigned public URLs**. There is no signature lifetime; a copied
+URL stays usable until row expiry, deactivation, click limits, or policy blocks
+it.
+
+> **warning**
+> Breaking change: branded links snapshot the creator handle at creation.
+> Renaming a creator never rewrites issued links. Both URL segments must match
+> the stored link.
+
+### Assign promo coupons (linkless attribution)
+
+```php
+use AIArmada\AffiliateNetwork\Features\Attribution\Actions\AssignOfferCoupon;
+use AIArmada\AffiliateNetwork\Features\Attribution\Actions\RevokeOfferCoupon;
+use AIArmada\AffiliateNetwork\Features\Attribution\Api\AttributionApi;
+
+$coupon = app(AssignOfferCoupon::class)->execute(
+    $offerId,
+    $affiliateId,
+    'SUMMER10',
+    now(),
+    now()->addMonths(1),
+);
+
+// Resolve at checkout time; returns ?OfferCouponRecord
+$couponRecord = app(AttributionApi::class)->resolveCouponForSite($siteId, 'SUMMER10');
+
+app(RevokeOfferCoupon::class)->execute((string) $coupon->getKey());
+```
+
+Coupon codes are normalized to uppercase, must match
+`^[A-Z0-9_-]{1,64}$`, and are unique per site. Pass the resolved `coupon_code`
+to `RecordNetworkConversion` to attribute without a link click.
+
+### Link statistics
+
+```php
+$stats = app(AttributionApi::class)->linkStats($linkId);
+// ['clicks' => 1250, 'conversions' => 45, 'revenue' => 267955,
+//  'currency' => 'USD', 'conversion_rate' => 3.6, 'revenue_per_click' => 214.36]
+```
+
+---
+
+## 6. Record conversions and post money legs
+
+```php
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\RecordNetworkConversion;
+use AIArmada\AffiliateNetwork\Data\LegStatus;
+
+$leg = app(RecordNetworkConversion::class)->execute(
+    offerId: $offerId,
+    affiliateId: $affiliateId,
+    revenueMinor: 5999,
+    currency: 'USD',
+    externalReference: 'ORDER-123',
+    eventType: 'purchase',            // signup | lead | purchase | ...
+    status: LegStatus::Posted,
+    linkId: $linkId,                  // optional; omit for coupon-only
+    couponCode: null,
+    linkCode: null,
+    subId: 'blog-post-1',
+    subId2: 'sidebar',
+    subId3: 'banner-728x90',
+    metadata: [],
+);
+```
+
+- A non-empty `externalReference` is required.
+- Idempotent on `(link|coupon, reference, event_type)`; replays return the
+  existing leg with no counter update or event.
+- On a currency mismatch the conversion is counted but commission/fee/payout are
+  zero; the leg keeps reported revenue for audit.
+- Commission precedence: active deal → `event_rates[eventType]` → fixed rate →
+  volume tier → base rate. The fee is basis points on commission; payout is
+  commission minus fee.
+- A non-zero locking window turns `Posted` into `Pending` with `locks_at`.
+- Automatic engine fulfillment runs only when the site does not require
+  settlement; standalone installs stay unfulfilled until the host records a run.
+
+### Lower-level posting
+
+```php
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\PostConversionLeg;
+
+$leg = app(PostConversionLeg::class)->execute(
+    offerId: $offerId,
+    affiliateId: $affiliateId,
+    revenueMinor: 89900,
+    currency: 'MYR',
+    externalReference: 'ORDER-1001',
+    eventType: 'purchase',
+    status: LegStatus::Posted,
+    linkId: $linkId,
+    couponId: null,
+    couponCode: null,
+    siteId: $siteId,
+    linkCode: null,
+    subId: null,
+    subId2: null,
+    subId3: null,
+    metadata: [],
+    occurredAt: null,
+);
+```
+
+`PostConversionLeg` is idempotent on the derived idempotency key
+(`leg:link:{id}:{reference}:{event}` or `leg:coupon:{id}:{reference}:{event}`).
+
+### Creator balances (derived at read time)
+
+```php
+use AIArmada\AffiliateNetwork\Features\Ledger\Queries\CreatorBalancesQuery;
+
+$balances = app(CreatorBalancesQuery::class)->for($affiliateId);
+// array<string, CreatorBalanceSummary> keyed by currency
+
+$usd = $balances['USD'];
+$usd->pendingMinor;      // pending legs
+$usd->payableMinor;      // posted, unfulfilled
+$usd->paidMinor;         // posted, fulfilled
+$usd->reversedMinor;     // reversed legs
+$usd->netPayableMinor;   // payable + clawbacks from reversed fulfilled legs
+```
+
+No balance rows are persisted; every number is computed from legs.
+
+---
+
+## 7. Locking window
+
+```php
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\LockMaturedLegs;
+
+$lockedIds = app(LockMaturedLegs::class)->execute();          // now
+$lockedIds = app(LockMaturedLegs::class)->execute($asOf);      // explicit instant
+// list<string> of matured leg ids; each pending leg -> posted + locked_at
+```
+
+Precedence for the window: `offer.locking_days` →
+`site.default_locking_days` → `locking.default_days`. Matured legs fire
+`ConversionLocked`, then fulfil through the engine when eligible.
+
+---
+
+## 8. Merchant statements
+
+```php
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\GenerateMerchantStatement;
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\IssueMerchantStatement;
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\MarkMerchantStatementPaid;
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\VoidMerchantStatement;
+use Carbon\CarbonImmutable;
+
+// Aggregate posted, unstated legs for a site/currency/period
+$statement = app(GenerateMerchantStatement::class)->execute(
+    $siteId,
+    'USD',
+    CarbonImmutable::parse('2026-10-01'),
+    CarbonImmutable::parse('2026-10-31 23:59:59'),
+);
+
+$statement = app(IssueMerchantStatement::class)->execute((string) $statement->getKey());
+// draft -> issued, stamps issued_at + due_at (statements.due_days)
+
+$statement = app(MarkMerchantStatementPaid::class)->execute(
+    (string) $statement->getKey(),
+    'BANK-REF-778',
+);
+
+$statement = app(VoidMerchantStatement::class)->execute((string) $statement->getKey());
+```
+
+- Only `posted` legs with no `statement_id` and no `parent_leg_id` attach to a
+  statement.
+- `MarkMerchantStatementPaid` fulfils attached legs only when the site has
+  `require_settled_for_payout = true` (pay-when-paid gate).
+- Paid or void statements cannot be voided.
+
+Read receivables:
+
+```php
+use AIArmada\AffiliateNetwork\Features\Ledger\Queries\MerchantReceivablesQuery;
+
+$receivables = app(MerchantReceivablesQuery::class)->execute();
+```
+
+---
+
+## 9. Adjustments and reversals
+
+```php
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\AdjustConversionLeg;
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\ReverseConversionLeg;
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\ConfirmConversionLeg;
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\SupersedeConversionLeg;
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\FulfillConversionLeg;
+
+// Partial refund / price correction: -$10.00 revenue, proportional money split
+$adjustment = app(AdjustConversionLeg::class)->execute(
+    (string) $leg->getKey(),
+    'ADJ-1',            // adjustment reference (idempotency)
+    -1000,              // delta revenue in minor units (non-zero)
+    'partial refund',
+);
+
+// Full reversal posts a negated companion leg; reversed legs never pay
+$reversed = app(ReverseConversionLeg::class)->execute((string) $leg->getKey(), 'refund');
+
+// Attribution deciders
+app(ConfirmConversionLeg::class)->execute($leg, ['attribution_winner' => 'network']);
+app(SupersedeConversionLeg::class)->execute($leg, 'engine_won', ['attribution_winner' => 'engine']);
+
+// Explicit fulfillment (standalone hosts)
+app(FulfillConversionLeg::class)->execute((string) $leg->getKey(), 'PAYOUT-REG-1');
+```
+
+---
+
+## 10. Outbound creator postbacks
+
+```php
+use AIArmada\AffiliateNetwork\Features\Postbacks\Actions\ConfigureCreatorPostback;
+use AIArmada\AffiliateNetwork\Features\Postbacks\Actions\DeleteCreatorPostback;
+use AIArmada\AffiliateNetwork\Features\Postbacks\Api\PostbacksApi;
+use AIArmada\AffiliateNetwork\Data\PostbackEventType;
+
+$endpoint = app(ConfigureCreatorPostback::class)->execute($affiliateId, [
+    'offer_id' => null,                 // null = all offers
+    'url_template' => 'https://creator.app/hooks/affiliate?leg={leg_id}&ref={external_reference}&sub1={sub1}&event={event_type}&sig={status}',
+    'http_method' => 'POST',            // GET | POST
+    'events' => [
+        PostbackEventType::ConversionRecorded->value,
+        PostbackEventType::ConversionLocked->value,
+        PostbackEventType::ConversionReversed->value,
+        PostbackEventType::ConversionAdjusted->value,
+    ],
+    'signing_secret' => 'shared-secret',
+    'is_active' => true,
+]);
+
+$status = app(PostbacksApi::class)->deliveryStatus($deliveryId);
+app(DeleteCreatorPostback::class)->execute((string) $endpoint->getKey());
+```
+
+Supported URL tokens: `{leg_id}`, `{offer_id}`, `{link_code}`,
+`{external_reference}`, `{event_type}`, `{status}`, `{revenue_minor}`,
+`{commission_minor}`, `{payout_minor}`, `{currency}`, `{sub1}`, `{sub2}`,
+`{sub3}`, `{coupon_code}`. Tokens are URL-encoded before substitution.
+
+Deliveries are signed with
+`X-Affiliate-Network-Signature: hash_hmac('sha256', $resolvedUrl, $secret)`.
+Retries are queued; `creator_postbacks.queue` selects the queue.
+
+---
+
+## 11. Marketplace discovery and metrics
+
+```php
+use AIArmada\AffiliateNetwork\Data\OfferDiscoveryFilter;
+use AIArmada\AffiliateNetwork\Features\Catalog\Queries\OfferDiscoveryQuery;
+use AIArmada\AffiliateNetwork\Features\Catalog\Queries\OfferMetricsQuery;
+
+$offers = app(OfferDiscoveryQuery::class)->execute(new OfferDiscoveryFilter(
+    categoryId: $categoryId,
+    search: 'summer',
+    currency: 'USD',
+    minRateBp: 1000,
+    requiresApproval: false,
+    featured: true,
+    country: 'MY',
+    channel: 'web',
+    device: 'mobile',
+    sort: 'epc',          // featured | newest | highest_rate | epc | conversion_rate
+    perPage: 24,
+));
+
+$metrics = app(OfferMetricsQuery::class)->forOffer($offers[0], windowDays: 30);
+// OfferPerformanceMetrics: clicks, conversions, reversedConversions,
+// revenueMinor, payoutMinor, conversionRate, reversalRate, epcMinor,
+// avgApprovalHours, currency
+```
+
+---
+
+## 12. Reconciliation
+
+```php
+use AIArmada\AffiliateNetwork\Features\Ledger\Actions\ReconcileOfferLedger;
+use AIArmada\AffiliateNetwork\Features\Ledger\Queries\LedgerReconciliationQuery;
+
+$report = app(ReconcileOfferLedger::class)->execute($offerId, repairCounters: true);
+
+$linkReport = app(LedgerReconciliationQuery::class)->reconcileLink($linkId);
+// ['link_id','match','network','legs','differences']
+
+$offerReport = app(LedgerReconciliationQuery::class)->reconcileOffer($offerId);
+// ['offer_id','match','links','matched_links','differences']
+```
+
+---
+
+## Artisan commands
+
+```bash
+# Mirror merchant programs as network offers
+php artisan affiliate-network:sync-offers {site} [--program={id}]
+
+# Archive offers whose end date passed
+php artisan affiliate-network:archive-expired [--older-than=90] [--dry-run]
+
+# Prove network legs, counters, and merchant postings agree
+php artisan affiliate-network:reconcile [--offer={offerId}] [--repair] [--fail-on-mismatch]
+
+# Mature pending legs whose locking window elapsed
+php artisan affiliate-network:lock-matured [--as-of=...]
+
+# Generate statements for a period (defaults to last month), optionally issue
+php artisan affiliate-network:generate-statements [--period-start=...] [--period-end=...] [--issue]
+```

@@ -4,26 +4,43 @@ title: Configuration
 
 # Configuration
 
-The package configuration is located at `config/affiliate-network.php`.
+The package configuration lives at `config/affiliate-network.php`. Publish it
+with:
+
+```bash
+php artisan vendor:publish --tag=affiliate-network-config
+```
 
 ## Full Configuration Reference
 
 ```php
 <?php
 
+declare(strict_types=1);
+
+$tablePrefix = 'affiliate_network_';
+
+$tables = [
+    'sites' => $tablePrefix . 'sites',
+    'offers' => $tablePrefix . 'offers',
+    'offer_categories' => $tablePrefix . 'offer_categories',
+    'offer_creatives' => $tablePrefix . 'offer_creatives',
+    'offer_applications' => $tablePrefix . 'offer_applications',
+    'offer_invitations' => $tablePrefix . 'offer_invitations',
+    'offer_deals' => $tablePrefix . 'offer_deals',
+    'offer_coupons' => $tablePrefix . 'offer_coupons',
+    'offer_links' => $tablePrefix . 'offer_links',
+    'conversion_legs' => $tablePrefix . 'conversion_legs',
+    'creator_postbacks' => $tablePrefix . 'creator_postbacks',
+    'postback_deliveries' => $tablePrefix . 'postback_deliveries',
+    'merchant_statements' => $tablePrefix . 'merchant_statements',
+];
+
 return [
     'database' => [
-        'table_prefix' => 'affiliate_network_',
+        'table_prefix' => $tablePrefix,
+        'tables' => $tables,
         'json_column_type' => env('AFFILIATE_NETWORK_JSON_COLUMN_TYPE', 'jsonb'),
-        'tables' => [
-            'sites' => 'affiliate_network_sites',
-            'offers' => 'affiliate_network_offers',
-            'offer_categories' => 'affiliate_network_offer_categories',
-            'offer_creatives' => 'affiliate_network_offer_creatives',
-            'offer_applications' => 'affiliate_network_offer_applications',
-            'offer_links' => 'affiliate_network_offer_links',
-            'conversion_legs' => 'affiliate_network_conversion_legs',
-        ],
     ],
 
     'models' => [
@@ -43,6 +60,14 @@ return [
         'default_bp' => env('AFFILIATE_NETWORK_FEE_BP', 0),
     ],
 
+    'locking' => [
+        'default_days' => env('AFFILIATE_NETWORK_LOCKING_DAYS', 0),
+    ],
+
+    'statements' => [
+        'due_days' => env('AFFILIATE_NETWORK_STATEMENT_DUE_DAYS', 30),
+    ],
+
     'notifications' => [
         'enabled' => env('AFFILIATE_NETWORK_NOTIFICATIONS_ENABLED', true),
     ],
@@ -55,6 +80,7 @@ return [
     'links' => [
         'default_style' => 'short',
         'parameter' => env('AFFILIATE_NETWORK_LINK_PARAM', 'anl'),
+        'default_fallback_url' => env('AFFILIATE_NETWORK_DEFAULT_FALLBACK_URL'),
     ],
 
     'cookies' => [
@@ -77,14 +103,6 @@ return [
         'attribution_window_hours' => env('AFFILIATE_NETWORK_ATTRIBUTION_WINDOW_HOURS', 720),
     ],
 
-    'http' => [
-        'connect_timeout_seconds' => 3,
-        'timeout_seconds' => 5,
-        'retries' => 1,
-        'retry_sleep_ms' => 150,
-        'max_response_bytes' => 1048576,
-    ],
-
     'sync' => [
         'enabled' => env('AFFILIATE_NETWORK_SYNC_ENABLED', true),
         'max_subjects' => env('AFFILIATE_NETWORK_SYNC_MAX_SUBJECTS', 500),
@@ -96,6 +114,21 @@ return [
         'prefix' => env('AFFILIATE_NETWORK_POSTBACKS_PREFIX', 'api/affiliate-network'),
         'middleware' => ['api', 'throttle:60,1'],
     ],
+
+    'creator_postbacks' => [
+        'enabled' => env('AFFILIATE_NETWORK_CREATOR_POSTBACKS_ENABLED', true),
+        'queue' => env('AFFILIATE_NETWORK_CREATOR_POSTBACKS_QUEUE'),
+        'max_attempts' => 3,
+        'backoff_seconds' => [10, 60, 300],
+    ],
+
+    'http' => [
+        'connect_timeout_seconds' => 3,
+        'timeout_seconds' => 5,
+        'retries' => 1,
+        'retry_sleep_ms' => 150,
+        'max_response_bytes' => 1024 * 1024,
+    ],
 ];
 ```
 
@@ -105,77 +138,162 @@ return [
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `table_prefix` | Prefix for all tables | `affiliate_network_` |
-| `json_column_type` | JSON column type (json/jsonb) | `AFFILIATE_NETWORK_JSON_COLUMN_TYPE`, default `jsonb` |
-| `tables` | Table name mapping | Array |
+| `table_prefix` | Prefix prepended to every table name | `affiliate_network_` |
+| `tables` | Map of the 13 logical table keys to physical names | see above |
+| `json_column_type` | JSON column type for array columns (`json`/`jsonb`) | `AFFILIATE_NETWORK_JSON_COLUMN_TYPE`, default `jsonb` |
+
+The 13 `tables` keys are: `sites`, `offers`, `offer_categories`,
+`offer_creatives`, `offer_applications`, `offer_invitations`, `offer_deals`,
+`offer_coupons`, `offer_links`, `conversion_legs`, `creator_postbacks`,
+`postback_deliveries`, `merchant_statements`.
+
+`database.json_column_type` is read by every migration that declares an array
+column (`volume_tiers`, `event_rates`, `restrictions`, `metadata`, `settings`,
+`events`, and so on). Never hardcode `json`/`jsonb` elsewhere.
 
 ### Models
 
-| Key | Description | Default |
-|-----|-------------|---------|
-| `models.affiliate` | Eloquent model behind `affiliate()` relations; set automatically when `aiarmada/affiliates` is installed | `null` (relations throw `AffiliatesNotInstalled`) |
+Only `models.affiliate` ships in the config file. Each `FeatureModule`
+registers its own relation keys at boot, and you may override any of them:
+
+| Key | Bound by | Purpose |
+|-----|----------|---------|
+| `models.affiliate` | `aiarmada/affiliates` or your app | Model behind `affiliate()` relations |
+| `models.site` | Sites feature | `AffiliateSite` |
+| `models.offer` | Catalog feature | `AffiliateOffer` |
+| `models.offer_category` | Catalog feature | `AffiliateOfferCategory` |
+| `models.offer_creative` | Catalog feature | `AffiliateOfferCreative` |
+| `models.offer_application` | Enrollment feature | `AffiliateOfferApplication` |
+| `models.offer_invitation` | Enrollment feature | `AffiliateOfferInvitation` |
+| `models.offer_deal` | Enrollment feature | `AffiliateOfferDeal` |
+| `models.offer_link` | Attribution feature | `AffiliateOfferLink` |
+| `models.offer_coupon` | Attribution feature | `AffiliateOfferCoupon` |
+| `models.conversion_leg` | Ledger feature | `NetworkConversionLeg` |
+| `models.merchant_statement` | Ledger feature | `MerchantStatement` |
+| `models.creator_postback` | Postbacks feature | `CreatorPostbackEndpoint` |
+| `models.postback_delivery` | Postbacks feature | `CreatorPostbackDelivery` |
+
+When `models.affiliate` is `null` and the engine is absent, `affiliate()`
+relations throw `AffiliatesNotInstalled`.
 
 ### Owner (Multi-Tenancy)
 
 | Key | Description | Default |
 |-----|-------------|---------|
 | `enabled` | Enable owner scoping | `false` |
-| `include_global` | Include global (null owner) records | `false` |
+| `include_global` | Include global (`owner_type`/`owner_id` null) rows | `false` |
+
+See [Multi-tenancy](07-multi-tenancy.md) for the full model-by-model scoping map.
 
 ### Currency
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `default` | Fallback ISO currency for reporting totals and currency-less records | `MYR` |
+| `default` | Fallback ISO currency for reporting and currency-less records | `MYR` |
 
 ### Fees
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `default_bp` | Marketplace take-rate in bp on commission (offers override via `network_fee_bp`) | `0` |
+| `default_bp` | Marketplace take-rate in basis points on commission; offers override via `network_fee_bp` | `0` |
+
+The fee is basis points on **commission** (not revenue): `payout = commission - fee`.
+
+### Locking
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `default_days` | Fallback locking window when the offer and site set none | `0` |
+
+Precedence: `offer.locking_days` → `site.default_locking_days` → this value.
+A non-zero window makes new posted conversions land as `pending` legs with a
+`locks_at` deadline.
+
+### Statements
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `due_days` | Days from issuance to `due_at` on a merchant statement | `30` |
 
 ### Notifications
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `enabled` | Managed notifications via `aiarmada/communications` (silent when absent) | `true` |
+| `enabled` | Managed application/conversion notifications via `aiarmada/communications` (silent when absent) | `true` |
 
 ### Applications
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `auto_approve` | Auto-approve applications | `false` |
-| `cooldown_days` | Days before reapplying after rejection | `7` |
+| `auto_approve` | Auto-approve every application | `false` |
+| `cooldown_days` | Days before a rejected affiliate may reapply | `7` |
 
-### Links
+An offer with `requires_approval = false` shares the auto-approval path.
+
+### Deep Links
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `parameter` | URL parameter name | `anl` |
+| `default_style` | `short` or `branded` link style | `short` |
+| `parameter` | Query parameter carrying the network slug | `anl` |
+| `default_fallback_url` | Last-resort redirect target when an offer/site exposes none | `null` |
+
+`CreateOfferLink::execute()` accepts `link_style` and `link_label` to override
+the default per call. Handles come from `AffiliateIdentityResolver`; the
+default user resolver reads `handle` or assigns a stable `creator-{hash}`
+handle. Issued URLs keep their stored handle snapshot.
 
 ### Cookies
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `enabled` | Enable referral cookie tracking | `true` |
-| `name` | Name of the attribution cookie | `affiliate_network_link` |
-| `query_parameters` | URL parameters checked for network links | `['anl']` |
-| `ttl_minutes` | Cookie expiration time | `43200` (30 days) |
+| `enabled` | Enable referral cookie tracking on internal sites | `true` |
+| `name` | Attribution cookie name | `affiliate_network_link` |
+| `query_parameters` | Query params checked for network links | `['anl']` |
+| `ttl_minutes` | Cookie lifetime | `43200` (30 days) |
 | `path` | Cookie path | `/` |
 | `domain` | Cookie domain override | `null` |
-| `secure` | Set secure flag on cookie | `true` |
-| `http_only` | Set HttpOnly flag | `true` |
-| `same_site` | SameSite attribute | `lax` |
-| `respect_dnt` | Honor Do Not Track browser headers | `false` |
+| `secure` | Set `Secure` | `true` |
+| `http_only` | Set `HttpOnly` | `true` |
+| `same_site` | `SameSite` attribute | `lax` |
+| `respect_dnt` | Honor Do Not Track | `false` |
 
 ### Checkout Integration
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `enabled` | Enable tracking on checkout sites | `false` |
-| `middleware_group` | Middleware group for tracking | `web` |
-| `listen_for_orders` | Record conversions on orders | `true` |
+| `enabled` | Enable tracking/conversion on checkout sites | `false` |
+| `middleware_group` | Middleware group for the tracking middleware | `web` |
+| `listen_for_orders` | Record conversions from orders | `true` |
 | `attribution_window_hours` | Link attribution window | `720` |
+
+### Sync (Catalog Mirror)
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `enabled` | Enable catalog sync | `true` |
+| `max_subjects` | Imported subjects per program sync | `500` |
+| `max_programs` | Programs per `syncAll` run | `100` |
+
+### Merchant Postbacks (remote merchant → network)
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `enabled` | Expose the merchant conversion endpoints | `false` |
+| `prefix` | API prefix for postback routes | `api/affiliate-network` |
+| `middleware` | Route middleware | `['api', 'throttle:60,1']` |
+
+### Creator Postbacks (network → creator)
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `enabled` | Enqueue outbound creator postbacks | `true` |
+| `queue` | Queue name for delivery jobs (null = default) | `null` |
+| `max_attempts` | Delivery attempts before marking failed | `3` |
+| `backoff_seconds` | Retry backoff schedule (documented; jobs use queue retry) | `[10, 60, 300]` |
+
+Endpoints are signed with `X-Affiliate-Network-Signature` =
+`hash_hmac('sha256', $resolvedUrl, $secret)` when a signing secret is set.
 
 ### HTTP
 
@@ -185,34 +303,17 @@ return [
 | `timeout_seconds` | Request timeout | `5` |
 | `retries` | Retry attempts | `1` |
 | `retry_sleep_ms` | Delay between retries | `150` |
-| `max_response_bytes` | Maximum catalog/site response body | `1048576` (1 MiB) |
+| `max_response_bytes` | Maximum catalog/site/postback response body | `1048576` (1 MiB) |
 
-Site-content and catalog requests always validate DNS results, reject private/reserved destinations, use HTTP/HTTPS only, reject credentials/fragments and non-standard ports, do not follow redirects, apply timeouts/retries, and cap response bodies. This validation cannot be disabled through configuration.
+Site-content, catalog, and creator-postback requests always use the shared
+public-URL guard: HTTP/HTTPS only, public DNS/IPs, no credentials/fragments,
+pinned transport with redirects disabled, timeouts/retries, and bounded
+response bodies. This validation cannot be disabled through configuration
+(see `Platform\DomainHostValidator` and `commerce-support`'s
+`PublicHttpUrlGuard`).
 
-### Sync
+## Verified Defaults
 
-| Key | Description | Default |
-|-----|-------------|---------|
-| `enabled` | Enable catalog sync | `true` |
-| `max_subjects` | Imported subjects per program sync | `500` |
-| `max_programs` | Programs per `syncAll` run | `100` |
-
-### Postbacks
-
-| Key | Description | Default |
-|-----|-------------|---------|
-| `enabled` | Expose the merchant postback endpoint | `false` |
-| `prefix` | API prefix for postback routes | `api/affiliate-network` |
-| `middleware` | Postback route middleware | `['api', 'throttle:60,1']` |
-
-
-`links.default_style` selects `short` or `branded`. `OfferLinkService::createLink()`
-accepts `link_style` to override the default and `link_label` for the branded
-campaign segment. Handles come from `AffiliateIdentityResolver`, never a second
-network profile. Custom resolvers must provide the required `NetworkAffiliate::handle`.
-The default user resolver reads the host user's `handle` attribute or assigns a
-stable `creator-{identity-hash}` handle when the host does not expose one.
-
-Hosts own onboarding, handle updates, and uniqueness across their public user
-namespace. The affiliates adapter supplies the core affiliate handle. Updating a
-handle affects new links; issued URLs retain their stored handle segment.
+- The default `json_column_type` is `jsonb`; set `AFFILIATE_NETWORK_JSON_COLUMN_TYPE=json` for databases without `jsonb`.
+- The default network fee is `0`; the network ships rate-agnostic until operators set a take-rate.
+- The default locking window is `0`; posted conversions fulfil immediately unless configured.

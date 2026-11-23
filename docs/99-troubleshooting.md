@@ -4,279 +4,266 @@ title: Troubleshooting
 
 # Troubleshooting
 
-Common issues and solutions for the affiliate-network package.
+## Site verification
 
-## Site Verification Issues
+### DNS verification fails
 
-### DNS Verification Fails
+- Wait for propagation (`dig TXT yourdomain.com +short`).
+- The TXT value must equal `$site->verification_token` exactly.
+- Some providers require the record name `@` or the bare domain.
+- `VerifySiteByStrategy::execute()` **throws** on failure; it never returns `false`.
 
-**Symptoms:** `verify($site, 'dns')` returns false despite TXT record being set.
+### Meta-tag / file verification fails
 
-**Solutions:**
+- The site must serve over HTTPS.
+- Meta tag must be `<meta name="affiliate-network-verify" content="…">` in `<head>`.
+- File must be at `/.well-known/affiliate-network-verify.txt` with exactly the
+  token (no trailing whitespace) and the directory reachable.
 
-1. Wait for DNS propagation (up to 48 hours for some providers).
+### "Only pending sites can be verified."
 
-2. Verify TXT record exists:
-```bash
-dig TXT yourdomain.com +short
-```
+`VerifySite` only transitions `pending → verified` (a no-op when already
+verified). Suspended sites are restored with `ReinstateSite`, not `VerifySite`.
+Rejected sites must be resubmitted by the owner (`RegisterSite`) or reset by an
+operator.
 
-3. Check the record value matches exactly:
-```php
-$site->verification_token; // Must match TXT record value
-```
+## Merchant postbacks
 
-4. Some DNS providers require the record name to be `@` or the bare domain.
+### `401 Invalid site credentials`
 
-### Meta Tag Verification Fails
+- `site` must be the site ID or the exact domain (case-insensitive).
+- The bearer token must be the current catalog token. Rotation invalidates the
+  previous token immediately; re-issue and redeploy.
+- Tokens are stored encrypted; a rotated/missing token fails closed.
 
-**Symptoms:** Meta tag verification returns false.
+### Postgres UUID vs domain lookup
 
-**Solutions:**
-
-1. Ensure the site is accessible over HTTPS:
-```bash
-curl -I https://yourdomain.com
-```
-
-2. Check the meta tag is in the `<head>` section:
-```html
-<head>
-    <meta name="affiliate-network-verify" content="affiliatenetwork-verify-xxx">
-</head>
-```
-
-3. Verify no caching is hiding the meta tag.
-
-### File Verification Fails
-
-**Symptoms:** File verification returns false.
-
-**Solutions:**
-
-1. Ensure file exists at correct path:
-```bash
-curl https://yourdomain.com/.well-known/affiliate-network-verify.txt
-```
-
-2. File content must be exactly the token (no extra whitespace).
-
-3. Ensure `.well-known` directory is accessible (not blocked by web server).
-
-## Tracking Link Issues
-
-### Links Return 404
-
-**Symptoms:** `/go/{slug}` returns 404 for a network link.
-
-**Solutions:**
-
-1. Verify routes are registered:
-```bash
-php artisan route:list | grep links.redirect
-```
-
-2. Ensure service provider is loaded:
-```php
-// Check config
-config('affiliate-network.database.table_prefix');
-```
-
-3. Clear route cache:
-```bash
-php artisan route:clear
-```
-
-### Conversion Revenue Is Skipped
-
-**Symptoms:** Link `conversions` increments but `revenue` does not move, and the log shows `affiliate-network.conversion.currency_mismatch`.
-
-**Cause:** The conversion arrived in a different currency than the link (links inherit the offer currency). The conversion is counted but its revenue is skipped so totals never mix currencies.
-
-**Solutions:**
-
-1. Confirm the order currency and the offer currency match the same market — a mismatch often means the wrong offer was linked.
-2. Pass the conversion currency explicitly so the skip is deliberate and logged:
-```php
-$linkService->recordConversion($link, $revenueMinor, $order->currency);
-```
-
-### Links Return 410 (Expired)
-
-**Symptoms:** Links return "Link has expired" error.
-
-**Solutions:**
-
-1. Check link expiration:
-```php
-$link = AffiliateOfferLink::find($id);
-$link->link->expires_at;  // Check if past
-$link->isExpired();        // Should return true
-```
-
-2. If an expiration is intentional, extend it deliberately through `UpdateLink`; for a new permanent link omit `expires_at`.
-
-### Links Return 410 (Offer Inactive)
-
-**Symptoms:** "Offer is no longer active" error.
-
-**Solutions:**
-
-1. Check offer status:
-```php
-$offer->status;     // Should be OfferStatus::Published
-$offer->isActive(); // Should return true
-```
-
-2. Check offer date range:
-```php
-$offer->starts_at;  // Should be past or null
-$offer->ends_at;    // Should be future or null
-```
-
-## Application Issues
-
-### Can't Reapply After Rejection
-
-**Symptoms:** Reapplication throws error.
-
-**Solution:** Cooldown period applies. Wait or adjust config:
-
-```env
-AFFILIATE_NETWORK_APPLICATIONS_COOLDOWN_DAYS=0  # Disable cooldown
-```
-
-Check when reapplication is allowed:
-```php
-($application->rejected_at ?? $application->updated_at)->addDays(7)->isPast(); // Must be true
-```
-
-### Auto-Approve Not Working
-
-**Symptoms:** Applications stay pending despite config.
-
-**Solutions:**
-
-1. Check offer requires approval:
-```php
-$offer->requires_approval; // If true, still requires approval
-```
-
-2. Check global auto-approve:
-```env
-AFFILIATE_NETWORK_APPLICATIONS_AUTO_APPROVE=true
-```
-
-Both conditions must allow auto-approval.
-
-## Multi-Tenancy Issues
-
-### Cross-Tenant Data Visible
-
-**Symptoms:** Users see data from other tenants.
-
-**Solutions:**
-
-1. Verify owner scoping is enabled:
-```env
-AFFILIATE_NETWORK_OWNER_ENABLED=true
-```
-
-2. Check OwnerResolverInterface is bound:
-```php
-app(OwnerResolverInterface::class)->resolve();
-```
-
-3. Ensure models use correct traits:
-   - `AffiliateSite`, `AffiliateOfferCategory`: `HasOwner`
-   - `AffiliateOffer`, `AffiliateOfferCreative`: `ScopesByBelongsToOwner`
-   - `AffiliateOfferApplication`, `AffiliateOfferLink`: `ScopesByBelongsToOwner`
-
-### RuntimeException on Create
-
-**Symptoms:** "Cannot create or update {Class} for an inaccessible or missing owner relation."
-
-**Cause:** Attempting to create record linking to entity from different tenant.
-
-**Solution:** Ensure foreign keys point to same-tenant entities:
+Site identifiers are UUID primary keys. `SitesApi::findByIdOrDomainUnscoped()`
+uses `Str::isUuid()` to decide between `whereKey()` and a `domain` lookup:
 
 ```php
-// Verify site belongs to current owner before creating offer
-$site = AffiliateSite::findOrFail($siteId);
-// Global scope ensures this is current owner's site
+// Domain path (lowercased):
+$sites->findByIdOrDomainUnscoped('merchant.example');
+
+// UUID path:
+$sites->findByIdOrDomainUnscoped('9b1e…-…');
 ```
 
-## Database Issues
+> **warning**
+> Never call `findByIdUnscoped()` with a domain. Postgres rejects
+> `where id = 'merchant.example'` on a `uuid` column with
+> `invalid input syntax for type uuid`. Use `findByIdOrDomainUnscoped()` on any
+> untrusted `site` payload.
 
-### Table Not Found
+### Cross-owner postback writes
 
-**Symptoms:** "Table not found" errors.
+Postbacks arrive with no ambient owner. The ledger actions re-enter the
+record's owner:
 
-**Solutions:**
+- `RecordNetworkConversion` derives the owner from the affiliate identity.
+- `AdjustConversionLeg` and `LockMaturedLegs` use `ResolveLegOwnerQuery`.
+- Standalone installs (no affiliate identity owner) run in global context.
 
-1. Run migrations:
-```bash
-php artisan migrate
-```
+If a write throws a cross-owner `RuntimeException`, confirm the site/affiliate
+identity is resolvable and that `owner.enabled` matches how the rows were
+created. Do not "fix" it by running the action under a different ambient owner —
+resolve the record first.
 
-2. Check table prefix matches:
-```php
-config('affiliate-network.database.table_prefix');
-```
+### `422 affiliate_profile_required`
 
-3. Verify migration files exist:
-```bash
-ls vendor/aiarmada/affiliate-network/database/migrations/
-```
+The Affiliates identity adapter is bound and owner mode is on, but the affiliate
+id has no merchant `Affiliate` row. Complete affiliate registration or (in a
+combined install with both owner settings disabled) use the user-key fallback.
 
-### JSON Column Errors (PostgreSQL)
+### `410 Offer was not active at the click time`
 
-**Symptoms:** JSON operations fail on PostgreSQL.
+`CatalogApi::wasOfferActiveAt()` checks `published_at`/`archived_at`/`starts_at`/
+`ends_at` at the reported `network_clicked_at`. Send the true server-observed
+click instant, not the report time.
 
-**Solution:** Use `jsonb` column type:
+### Pay-when-paid holds
 
-```env
-AFFILIATE_NETWORK_JSON_COLUMN_TYPE=jsonb
-```
+With `site.require_settled_for_payout = true`, automatic fulfillment is skipped.
+Posted legs stay `payable` until `MarkMerchantStatementPaid` fulfils them. This
+is expected, not a bug.
 
-## Debugging Tips
+## Tracking links
 
-### Enable Query Logging
+### `404` for `/go/{slug}`
+
+- Redirects are owned by `aiarmada/links`; verify `php artisan route:list | grep links.redirect`.
+- Unknown slugs return `404`; policy-blocked links return `410` (or fall back
+  when a fallback URL exists).
+- Clear route cache: `php artisan route:clear`.
+
+### `410` for inactive offer / unverified site / missing approval
+
+The `OfferLinkGate` blocks when:
+
+- the link or backing link is inactive/expired,
+- the offer is inactive at redirect time,
+- the site is not verified,
+- the offer requires approval and the affiliate is not approved.
+
+It falls back to `offer.fallback_url`, then `offer.fallback_offer_id`, then
+`links.default_fallback_url` when configured; otherwise `410`.
+
+### Link target rejected
+
+`CreateOfferLink` enforces `Platform\DomainHostValidator::isAllowedTargetUrl()`:
+the target must be HTTP(S), have no credentials, and resolve to the verified
+domain or a subdomain. This prevents open redirects.
+
+> **warning**
+> `allow_deep_linking = false` on an offer rejects any explicit `target_url`.
+> Drop the option or enable deep linking.
+
+### Branded links broke after a rename
+
+Branded URLs snapshot the creator handle at issue time. Renaming a creator does
+not rewrite issued links, and both URL segments must match the stored link.
+Issue new links instead of editing old ones.
+
+## Conversions and money
+
+### Conversion revenue is skipped
+
+Symptom: `conversions` increments but `revenue` does not, with a
+`currency_mismatch` log. Cause: the conversion currency differs from the link's
+pricing currency. The leg keeps reported revenue for audit but earns zero
+commission/fee/payout. Pass the correct currency or align offer currency.
+
+### Duplicate conversion not recorded
+
+Reporting is idempotent on `(link|coupon, external_reference, event_type)`. A
+repeat returns `duplicate: true` with the original leg. If you intended a second
+leg, use a distinct `event_type` or reference.
+
+### Adjustment rejected
+
+- `422` for terminal/companion legs: only `pending`/`posted` originals adjust.
+- A zero `delta_revenue_minor` is invalid.
+- Adjustments are idempotent on `adj:{legId}:{reference}`; reuse the same
+  reference to fetch, not to create a second adjustment.
+
+### Creator balance looks wrong
+
+Balances derive from legs at read time. `superseded` and `reversed` legs never
+enter `payableMinor`. A reversal companion of a fulfilled leg appears in
+`netPayableMinor` as a clawback offset. Run reconciliation before assuming
+counters drifted.
+
+## Caps and restrictions
+
+### `CapExceededException`
+
+Reasons: `daily_conversion_cap`, `monthly_conversion_cap`,
+`total_conversion_cap`, `per_affiliate_conversion_cap`,
+`monthly_payout_cap_minor`, `total_payout_cap_minor`,
+`site_monthly_spend_cap_minor`, `site_prepaid_balance`. Inspect the offer caps
+and the site's `prepaid_balance_minor`/`monthly_spend_cap_minor`.
+
+### `RestrictionViolatedException`
+
+Check the offer's `restrictions` (country/channel/device/order) against the
+`RestrictionContext` sent on apply/redirect/postback.
+
+## Creative assets
+
+### SVG uploads rejected
+
+`AffiliateOfferCreative::registerMediaCollections()` accepts only
+`image/jpeg`, `image/png`, `image/gif`, `image/webp`, `video/mp4`, `video/webm`,
+`application/pdf`, and `application/zip`. `image/svg+xml` is intentionally
+excluded (SVG can carry script). Convert to PNG/WebP.
+
+### `getAssetUrl()` returns null
+
+Manual creatives need a file in the single-file `creative_asset` collection on
+the `public` disk. Imported creatives need `source_asset_url`. With neither,
+the URL is null.
+
+## HTTP and SSRF
+
+### Outbound HTTP blocked
+
+`PublicHttpUrlGuard` / `DomainHostValidator` reject private/reserved IPs,
+`localhost`, `*.local`/`*.internal`, non-HTTP(S) schemes, credentials in the
+URL, fragments, and non-standard ports. Catalog pulls, site-content fetches, and
+creator postbacks all use this guard; it cannot be disabled via config. Use a
+public DNS name with a standard port.
+
+### Response too large
+
+`http.max_response_bytes` (default 1 MiB) caps catalog, site-content, and
+postback response bodies. A larger body yields a transport error / `response_too_large`
+rather than truncation.
+
+## Multi-tenancy
+
+### Cross-tenant data visible
+
+- Verify `AFFILIATE_NETWORK_OWNER_ENABLED=true`.
+- Confirm `OwnerResolverInterface` is bound.
+- Ensure your reads go through owner-scoped models/APIs, not `DB::table()`.
+- `AffiliateOfferApplication` scopes through `offer.site`; a query expecting
+  affiliate-based scoping should use `EnrollmentApi` instead.
+
+### `RuntimeException` on create/update/delete
+
+"Cannot create, update, or delete {Model} without an accessible owner relation."
+The foreign relation points at a row owned by another tenant. Resolve the parent
+inside the current owner context or create the child through the owning action.
+
+## JSON columns
+
+### PostgreSQL JSON errors
+
+Set `AFFILIATE_NETWORK_JSON_COLUMN_TYPE=jsonb` (default) or `json` for engines
+without `jsonb`. Never hardcode the type in a migration.
+
+## Events
+
+### Readonly event errors
+
+Every event is `final readonly` and carries scalars/DTOs only. Do not add
+`InteractsWithSockets`, mutable properties, or Eloquent models. If you need
+broadcastable payloads, create a separate event that wraps the immutable one.
+
+### `NetworkConversionRecorded` fired but nothing paid
+
+The event signals a recorded leg, not a payable one. Check
+`$event->leg->status->paysOut()` and whether the site requires settlement before
+payout.
+
+## Debugging
 
 ```php
 DB::enableQueryLog();
-
-// Perform operations
 $sites = AffiliateSite::all();
-
 dd(DB::getQueryLog());
 ```
 
-### Check Global Scopes
-
 ```php
 $model = new AffiliateSite();
-$scopes = $model->getGlobalScopes();
-dd($scopes);
+dd($model->getGlobalScopes());
 ```
-
-### Verify Service Registration
 
 ```php
-app(SiteVerificationService::class);
-app(OfferManagementService::class);
-app(OfferLinkService::class);
+app(\AIArmada\AffiliateNetwork\Features\Sites\Api\SitesApi::class);
+app(\AIArmada\AffiliateNetwork\Features\Catalog\Api\CatalogApi::class);
+app(\AIArmada\AffiliateNetwork\Features\Attribution\Api\AttributionApi::class);
 ```
 
-## Getting Help
+```bash
+php artisan affiliate-network:reconcile --offer={offerId} --fail-on-mismatch
+php artisan affiliate-network:lock-matured
+php artisan logs | tail -100
+```
 
-If issues persist:
+## Getting help
 
-1. Check the [configuration docs](03-configuration.md)
-2. Verify dependencies are installed
-3. Review error logs: `storage/logs/laravel.log`
-4. Open an issue with:
-   - PHP/Laravel versions
-   - Package version
-   - Full error message
-   - Steps to reproduce
+1. Check [configuration](03-configuration.md) and [usage](04-usage.md).
+2. Run the package verification suite (see [testing](09-testing-factories.md)).
+3. Open an issue with PHP/Laravel versions, package version, full error, and
+   reproduction steps.

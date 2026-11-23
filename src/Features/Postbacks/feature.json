@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "name": "Postbacks",
+  "owns": {
+    "table:affiliate_network_creator_postbacks": [
+      "AIArmada\\AffiliateNetwork\\Features\\Postbacks\\Actions\\ConfigureCreatorPostback",
+      "AIArmada\\AffiliateNetwork\\Features\\Postbacks\\Actions\\DeleteCreatorPostback"
+    ],
+    "table:affiliate_network_postback_deliveries": [
+      "AIArmada\\AffiliateNetwork\\Features\\Postbacks\\Actions\\EnqueueCreatorPostbacks",
+      "AIArmada\\AffiliateNetwork\\Features\\Postbacks\\Actions\\DeliverCreatorPostback"
+    ]
+  },
+  "extensions": {}
+}

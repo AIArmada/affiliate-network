@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "name": "Attribution",
+  "owns": {
+    "table:affiliate_network_offer_links": [
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\CreateOfferLink",
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\CreateCreativeLink",
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\DeactivateOfferLink",
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\IncrementLinkClicks",
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\RecordLinkCounters",
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\RecountLinkCounters",
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\DeleteOfferLinks"
+    ],
+    "table:affiliate_network_offer_coupons": [
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\AssignOfferCoupon",
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\RevokeOfferCoupon",
+      "AIArmada\\AffiliateNetwork\\Features\\Attribution\\Actions\\DeleteOfferLinks"
+    ]
+  },
+  "extensions": {}
+}

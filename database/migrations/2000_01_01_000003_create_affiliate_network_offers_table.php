@@ -11,9 +11,10 @@ return new class extends Migration
     public function up(): void
     {
         $tablePrefix = config('affiliate-network.database.table_prefix', 'affiliate_network_');
+        $tableName = config('affiliate-network.database.tables.offers', $tablePrefix . 'offers');
         $jsonType = commerce_json_column_type('affiliate-network', 'jsonb');
 
-        Schema::create($tablePrefix . 'offers', function (Blueprint $table) use ($jsonType): void {
+        Schema::create($tableName, function (Blueprint $table) use ($jsonType): void {
             $table->uuid('id')->primary();
             $table->foreignUuid('site_id');
             $table->foreignUuid('category_id')->nullable();
@@ -51,6 +52,18 @@ return new class extends Migration
             // operator rate edit flips the offer back to manual.
             $table->string('source', 16)->default('manual')->index();
             $table->unsignedInteger('network_fee_bp')->nullable();
+
+            $table->unsignedSmallInteger('locking_days')->default(0);
+            $table->unsignedInteger('daily_conversion_cap')->nullable();
+            $table->unsignedInteger('monthly_conversion_cap')->nullable();
+            $table->unsignedInteger('total_conversion_cap')->nullable();
+            $table->unsignedInteger('per_affiliate_conversion_cap')->nullable();
+            $table->bigInteger('monthly_payout_cap_minor')->nullable();
+            $table->bigInteger('total_payout_cap_minor')->nullable();
+            $table->string('fallback_url', 2048)->nullable();
+            $table->foreignUuid('fallback_offer_id')->nullable();
+            $table->boolean('allow_deep_linking')->default(true);
+            $table->{$jsonType}('event_rates')->nullable();
 
             $table->timestampTz('starts_at')->nullable();
             $table->timestampTz('ends_at')->nullable();

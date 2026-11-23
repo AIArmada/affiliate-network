@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Database\Factories;
 
-use AIArmada\AffiliateNetwork\Enums\ApplicationStatus;
-use AIArmada\AffiliateNetwork\Models\AffiliateOffer;
-use AIArmada\AffiliateNetwork\Models\AffiliateOfferApplication;
+use AIArmada\AffiliateNetwork\Data\ApplicationStatus;
+use AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOffer;
+use AIArmada\AffiliateNetwork\Features\Enrollment\Models\AffiliateOfferApplication;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -25,11 +25,15 @@ class AffiliateOfferApplicationFactory extends Factory
         return [
             'offer_id' => AffiliateOfferFactory::new(),
             'affiliate_id' => fn () => (string) Str::uuid(),
+            'invitation_id' => null,
             'status' => ApplicationStatus::Pending,
             'reason' => $this->faker->optional()->sentence(),
             'rejection_reason' => null,
             'reviewed_by' => null,
             'reviewed_at' => null,
+            'approved_at' => null,
+            'rejected_at' => null,
+            'revoked_at' => null,
             'metadata' => null,
         ];
     }
