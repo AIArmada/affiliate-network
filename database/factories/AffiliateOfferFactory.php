@@ -75,11 +75,13 @@ class AffiliateOfferFactory extends Factory
                 return;
             }
 
-            $domain = $offer->site?->domain;
+            $site = $offer->site;
 
-            if (is_string($domain) && $domain !== '') {
-                $offer->landing_url = 'https://' . $domain . '/offers/' . $offer->slug;
+            if (! $site instanceof AffiliateSite || $site->domain === '') {
+                return;
             }
+
+            $offer->landing_url = 'https://' . $site->domain . '/offers/' . $offer->slug;
         });
     }
 
