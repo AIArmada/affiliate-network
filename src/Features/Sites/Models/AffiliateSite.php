@@ -6,6 +6,7 @@ namespace AIArmada\AffiliateNetwork\Features\Sites\Models;
 
 use AIArmada\AffiliateNetwork\Data\SiteStatus;
 use AIArmada\AffiliateNetwork\Data\SiteSyncStatus;
+use AIArmada\AffiliateNetwork\Database\Factories\AffiliateSiteFactory;
 use AIArmada\AffiliateNetwork\Features\Sites\Actions\DeleteSiteDependents;
 use AIArmada\AffiliateNetwork\Features\Sites\Api\SiteRecord;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
@@ -47,13 +48,21 @@ use Throwable;
 class AffiliateSite extends Model implements Auditable
 {
     use HasCommerceAudit;
+
+    /** @use HasFactory<AffiliateSiteFactory> */
     use HasFactory;
+
     use HasOwner;
     use HasOwnerScopeConfig;
     use HasUuids;
     use LogsCommerceActivity;
 
     protected static string $ownerScopeConfigKey = 'affiliate-network.owner';
+
+    protected static function newFactory(): AffiliateSiteFactory
+    {
+        return AffiliateSiteFactory::new();
+    }
 
     protected $fillable = [
         'owner_type',
@@ -101,6 +110,14 @@ class AffiliateSite extends Model implements Auditable
     public function offers(): HasMany
     {
         return $this->hasMany(self::relatedModel('offer'), 'site_id');
+    }
+
+    /**
+     * @return HasMany<Model, $this>
+     */
+    public function statements(): HasMany
+    {
+        return $this->hasMany(self::relatedModel('merchant_statement'), 'site_id');
     }
 
     protected static function booted(): void

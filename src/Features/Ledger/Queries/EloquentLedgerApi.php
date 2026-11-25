@@ -50,7 +50,7 @@ final class EloquentLedgerApi implements LedgerApi
             return null;
         }
 
-        return $query->first()?->toSnapshot();
+        return $query->whereNull('parent_leg_id')->first()?->toSnapshot();
     }
 
     public function offerConversionMetrics(array $offerIds, CarbonImmutable $since): array

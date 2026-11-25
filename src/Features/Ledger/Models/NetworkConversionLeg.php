@@ -6,6 +6,7 @@ namespace AIArmada\AffiliateNetwork\Features\Ledger\Models;
 
 use AIArmada\AffiliateNetwork\Data\LegStatus;
 use AIArmada\AffiliateNetwork\Data\NetworkLegSnapshot;
+use AIArmada\AffiliateNetwork\Database\Factories\NetworkConversionLegFactory;
 use AIArmada\AffiliateNetwork\Platform\ResolvesAffiliateModel;
 use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
@@ -57,7 +58,10 @@ use OwenIt\Auditing\Contracts\Auditable;
 class NetworkConversionLeg extends Model implements Auditable
 {
     use HasCommerceAudit;
+
+    /** @use HasFactory<NetworkConversionLegFactory> */
     use HasFactory;
+
     use HasUuids;
     use LogsCommerceActivity;
     use ResolvesAffiliateModel;
@@ -76,6 +80,11 @@ class NetworkConversionLeg extends Model implements Auditable
     protected static function ownerFallbackRelation(): ?string
     {
         return 'offer.site';
+    }
+
+    protected static function newFactory(): NetworkConversionLegFactory
+    {
+        return NetworkConversionLegFactory::new();
     }
 
     protected $fillable = [

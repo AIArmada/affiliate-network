@@ -11,6 +11,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property string $id
@@ -60,6 +61,14 @@ class CreatorPostbackEndpoint extends Model
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * @return HasMany<CreatorPostbackDelivery, $this>
+     */
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(CreatorPostbackDelivery::class, 'endpoint_id');
     }
 
     public function subscribesTo(PostbackEventType $eventType): bool

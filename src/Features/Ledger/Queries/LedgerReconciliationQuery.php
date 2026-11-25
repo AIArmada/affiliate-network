@@ -104,6 +104,19 @@ final class LedgerReconciliationQuery
             ? mb_strtoupper($link->currency)
             : null;
 
+        $counters = $this->expectedCounters($legs, $linkCurrency);
+
+        $this->attribution->setLinkCounters($linkId, $counters['conversions'], $counters['revenue_minor']);
+
+        return $counters;
+    }
+
+    /**
+     * @param  Collection<int, NetworkConversionLeg>  $legs
+     * @return array{conversions: int, revenue_minor: int}
+     */
+    private function expectedCounters(Collection $legs, ?string $linkCurrency): array
+    {
         $conversions = 0;
         $revenue = 0;
 
@@ -112,7 +125,13 @@ final class LedgerReconciliationQuery
                 continue;
             }
 
-            $conversions++;
+            if ($leg->status === LegStatus::Reversed) {
+                continue;
+            }
+
+            if ($leg->parent_leg_id === null) {
+                $conversions++;
+            }
 
             $legCurrency = $leg->revenue_currency !== null ? mb_strtoupper($leg->revenue_currency) : null;
 
@@ -120,8 +139,6 @@ final class LedgerReconciliationQuery
                 $revenue += (int) $leg->revenue_minor;
             }
         }
-
-        $this->attribution->setLinkCounters($linkId, $conversions, $revenue);
 
         return ['conversions' => $conversions, 'revenue_minor' => $revenue];
     }
@@ -136,33 +153,22 @@ final class LedgerReconciliationQuery
             return;
         }
 
-        $counted = $legs->reject(fn (NetworkConversionLeg $leg): bool => is_array($leg->metadata)
-            && isset($leg->metadata['reverses_id']));
+        $linkCurrency = $link->currency !== null ? mb_strtoupper($link->currency) : null;
+        $expected = $this->expectedCounters($legs, $linkCurrency);
 
-        if ($counted->count() !== $link->conversions) {
+        if ($expected['conversions'] !== $link->conversions) {
             $differences[] = sprintf(
                 'conversion count differs: network %d vs legs %d',
                 $link->conversions,
-                $counted->count(),
+                $expected['conversions'],
             );
         }
 
-        $linkCurrency = $link->currency !== null ? mb_strtoupper($link->currency) : null;
-        $expected = 0;
-
-        foreach ($counted as $leg) {
-            $legCurrency = $leg->revenue_currency !== null ? mb_strtoupper($leg->revenue_currency) : null;
-
-            if ($linkCurrency === null || $legCurrency === null || $legCurrency === $linkCurrency) {
-                $expected += (int) $leg->revenue_minor;
-            }
-        }
-
-        if ($expected !== $link->revenue) {
+        if ($expected['revenue_minor'] !== $link->revenue) {
             $differences[] = sprintf(
                 'revenue cache differs: network %d vs legs %d',
                 $link->revenue,
-                $expected,
+                $expected['revenue_minor'],
             );
         }
     }
@@ -207,7 +213,7 @@ final class LedgerReconciliationQuery
             $byCurrency[$currency]['commission_minor'] += (int) ($row['commission_minor'] ?? 0);
         }
 
-        $posted = $legs->where('status', LegStatus::Posted);
+        $posted = $legs->where('status', LegStatus::Posted)->whereNull('parent_leg_id');
         $payoutByCurrency = [];
 
         foreach ($posted as $leg) {

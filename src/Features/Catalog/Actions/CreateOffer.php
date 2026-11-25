@@ -78,6 +78,8 @@ final class CreateOffer
             'last_synced_at' => ['nullable', 'date'],
         ])->validate();
 
+        $validated['locking_days'] = (int) ($validated['locking_days'] ?? 0);
+
         $categoryId = $validated['category_id'] ?? null;
 
         if (is_string($categoryId) && $categoryId !== '') {

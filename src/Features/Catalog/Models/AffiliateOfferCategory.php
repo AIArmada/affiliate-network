@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Features\Catalog\Models;
 
+use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferCategoryFactory;
 use AIArmada\AffiliateNetwork\Features\Catalog\Actions\DeleteCategoryDependents;
 use AIArmada\AffiliateNetwork\Features\Catalog\Api\CategoryRecord;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
@@ -37,13 +38,21 @@ use OwenIt\Auditing\Contracts\Auditable;
 class AffiliateOfferCategory extends Model implements Auditable
 {
     use HasCommerceAudit;
+
+    /** @use HasFactory<AffiliateOfferCategoryFactory> */
     use HasFactory;
+
     use HasOwner;
     use HasOwnerScopeConfig;
     use HasUuids;
     use LogsCommerceActivity;
 
     protected static string $ownerScopeConfigKey = 'affiliate-network.owner';
+
+    protected static function newFactory(): AffiliateOfferCategoryFactory
+    {
+        return AffiliateOfferCategoryFactory::new();
+    }
 
     protected $fillable = [
         'owner_type',

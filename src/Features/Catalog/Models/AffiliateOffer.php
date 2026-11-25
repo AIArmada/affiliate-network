@@ -8,6 +8,7 @@ use AIArmada\AffiliateNetwork\Data\OfferSource;
 use AIArmada\AffiliateNetwork\Data\OfferStatus;
 use AIArmada\AffiliateNetwork\Data\OfferVisibility;
 use AIArmada\AffiliateNetwork\Data\SiteStatus;
+use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferFactory;
 use AIArmada\AffiliateNetwork\Features\Catalog\Actions\DeleteOfferDependents;
 use AIArmada\AffiliateNetwork\Features\Catalog\Api\OfferRecord;
 use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
@@ -76,7 +77,10 @@ use OwenIt\Auditing\Contracts\Auditable;
 class AffiliateOffer extends Model implements Auditable
 {
     use HasCommerceAudit;
+
+    /** @use HasFactory<AffiliateOfferFactory> */
     use HasFactory;
+
     use HasUuids;
     use LogsCommerceActivity;
     use ScopesByBelongsToOwner;
@@ -89,6 +93,11 @@ class AffiliateOffer extends Model implements Auditable
     protected static function ownerTableConfigKey(): string
     {
         return 'affiliate-network.owner';
+    }
+
+    protected static function newFactory(): AffiliateOfferFactory
+    {
+        return AffiliateOfferFactory::new();
     }
 
     protected $fillable = [

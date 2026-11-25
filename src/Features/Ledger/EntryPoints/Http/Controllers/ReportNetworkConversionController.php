@@ -31,6 +31,19 @@ final class ReportNetworkConversionController extends Controller
         LedgerApi $ledger,
         RecordNetworkConversion $recordConversion,
     ): JsonResponse {
+        $siteIdentifier = $request->input('site');
+        $site = is_string($siteIdentifier) && mb_trim($siteIdentifier) !== ''
+            ? $sites->findByIdOrDomainUnscoped($siteIdentifier)
+            : null;
+
+        if (! $site instanceof SiteRecord || ! $sites->matchesCatalogToken($site->id, $request->bearerToken())) {
+            return response()->json(['message' => 'Invalid site credentials.'], 401);
+        }
+
+        if (! $site->isVerified()) {
+            return response()->json(['message' => 'Site is not verified.'], 403);
+        }
+
         $validated = $request->validate([
             'site' => ['required', 'string', 'max:255'],
             'link_code' => ['required_without:coupon_code', 'nullable', 'string', 'max:64'],
@@ -57,16 +70,6 @@ final class ReportNetworkConversionController extends Controller
         if ($networkClickedAt->greaterThan(CarbonImmutable::now()->addMinutes(5))
             || ($engineTouchAt !== null && $engineTouchAt->greaterThan(CarbonImmutable::now()->addMinutes(5)))) {
             return response()->json(['message' => 'Attribution touches cannot be more than five minutes in the future.'], 422);
-        }
-
-        $site = $sites->findByIdOrDomainUnscoped($validated['site']);
-
-        if (! $site instanceof SiteRecord || ! $sites->matchesCatalogToken($site->id, $request->bearerToken())) {
-            return response()->json(['message' => 'Invalid site credentials.'], 401);
-        }
-
-        if (! $site->isVerified()) {
-            return response()->json(['message' => 'Site is not verified.'], 403);
         }
 
         $eventType = is_string($validated['event_type'] ?? null) && $validated['event_type'] !== ''
@@ -110,7 +113,7 @@ final class ReportNetworkConversionController extends Controller
             return response()->json(['message' => 'Offer was not active at the click time.'], 410);
         }
 
-        $idempotencyKey = ($link instanceof OfferLinkRecord ? 'leg:link:' . $link->id : 'leg:coupon:')
+        $idempotencyKey = ($link instanceof OfferLinkRecord ? 'leg:link:' . $link->id : 'leg:coupon:' . ($coupon instanceof OfferCouponRecord ? $coupon->id : ''))
             . ':' . $validated['external_reference']
             . ':' . $eventType;
 
@@ -150,6 +153,7 @@ final class ReportNetworkConversionController extends Controller
                 subId2: $validated['sub_id_2'] ?? null,
                 subId3: $validated['sub_id_3'] ?? null,
                 metadata: $this->decisionMetadata($engineTouchAt, $networkClickedAt),
+                couponId: $coupon instanceof OfferCouponRecord ? $coupon->id : null,
             );
         } catch (AffiliateProfileRequired $exception) {
             return response()->json([

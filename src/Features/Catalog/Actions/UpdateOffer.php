@@ -79,6 +79,10 @@ final class UpdateOffer
             'last_synced_at' => ['sometimes', 'nullable', 'date'],
         ])->validate();
 
+        if (array_key_exists('locking_days', $validated) && $validated['locking_days'] === null) {
+            $validated['locking_days'] = 0;
+        }
+
         $effectiveSiteId = array_key_exists('site_id', $validated)
             ? (string) $validated['site_id']
             : (string) $offer->site_id;

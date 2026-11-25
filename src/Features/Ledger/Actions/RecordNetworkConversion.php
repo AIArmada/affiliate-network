@@ -44,6 +44,7 @@ final class RecordNetworkConversion
         ?string $subId2 = null,
         ?string $subId3 = null,
         array $metadata = [],
+        ?string $couponId = null,
     ): NetworkConversionLeg {
         if (mb_trim($externalReference) === '') {
             throw new InvalidArgumentException('Network conversions require a non-empty external reference.');
@@ -69,6 +70,7 @@ final class RecordNetworkConversion
             subId2: $subId2,
             subId3: $subId3,
             metadata: $metadata,
+            couponId: $couponId,
         ));
     }
 
@@ -90,6 +92,7 @@ final class RecordNetworkConversion
         ?string $subId2,
         ?string $subId3,
         array $metadata,
+        ?string $couponId,
     ): NetworkConversionLeg {
         $leg = DB::transaction(function () use (
             $offerId,
@@ -106,6 +109,7 @@ final class RecordNetworkConversion
             $subId2,
             $subId3,
             $metadata,
+            $couponId,
         ): NetworkConversionLeg {
             $leg = $this->postConversionLeg->execute(
                 offerId: $offerId,
@@ -116,6 +120,7 @@ final class RecordNetworkConversion
                 eventType: $eventType,
                 status: $status,
                 linkId: $linkId,
+                couponId: $couponId,
                 couponCode: $couponCode,
                 linkCode: $linkCode,
                 subId: $subId,

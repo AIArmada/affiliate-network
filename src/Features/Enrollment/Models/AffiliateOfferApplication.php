@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Features\Enrollment\Models;
 
 use AIArmada\AffiliateNetwork\Data\ApplicationStatus;
+use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferApplicationFactory;
 use AIArmada\AffiliateNetwork\Features\Enrollment\Api\ApplicationRecord;
 use AIArmada\AffiliateNetwork\Platform\ResolvesAffiliateModel;
 use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
@@ -37,7 +38,10 @@ use OwenIt\Auditing\Contracts\Auditable;
 class AffiliateOfferApplication extends Model implements Auditable
 {
     use HasCommerceAudit;
+
+    /** @use HasFactory<AffiliateOfferApplicationFactory> */
     use HasFactory;
+
     use HasUuids;
     use LogsCommerceActivity;
     use ResolvesAffiliateModel;
@@ -51,6 +55,11 @@ class AffiliateOfferApplication extends Model implements Auditable
     protected static function ownerTableConfigKey(): string
     {
         return 'affiliate-network.owner';
+    }
+
+    protected static function newFactory(): AffiliateOfferApplicationFactory
+    {
+        return AffiliateOfferApplicationFactory::new();
     }
 
     protected $fillable = [

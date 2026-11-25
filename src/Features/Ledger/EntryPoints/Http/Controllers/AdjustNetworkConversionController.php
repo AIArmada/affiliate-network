@@ -25,6 +25,19 @@ final class AdjustNetworkConversionController extends Controller
         LedgerApi $ledger,
         AdjustConversionLeg $adjustConversionLeg,
     ): JsonResponse {
+        $siteIdentifier = $request->input('site');
+        $site = is_string($siteIdentifier) && mb_trim($siteIdentifier) !== ''
+            ? $sites->findByIdOrDomainUnscoped($siteIdentifier)
+            : null;
+
+        if (! $site instanceof SiteRecord || ! $sites->matchesCatalogToken($site->id, $request->bearerToken())) {
+            return response()->json(['message' => 'Invalid site credentials.'], 401);
+        }
+
+        if (! $site->isVerified()) {
+            return response()->json(['message' => 'Site is not verified.'], 403);
+        }
+
         $validated = $request->validate([
             'site' => ['required', 'string', 'max:255'],
             'link_code' => ['required_without:coupon_code', 'nullable', 'string', 'max:64'],
@@ -36,16 +49,6 @@ final class AdjustNetworkConversionController extends Controller
             'new_revenue_minor' => ['required_without:delta_revenue_minor', 'nullable', 'integer', 'min:0'],
             'reason' => ['nullable', 'string', 'max:120'],
         ]);
-
-        $site = $sites->findByIdOrDomainUnscoped($validated['site']);
-
-        if (! $site instanceof SiteRecord || ! $sites->matchesCatalogToken($site->id, $request->bearerToken())) {
-            return response()->json(['message' => 'Invalid site credentials.'], 401);
-        }
-
-        if (! $site->isVerified()) {
-            return response()->json(['message' => 'Site is not verified.'], 403);
-        }
 
         $eventType = is_string($validated['event_type'] ?? null) && $validated['event_type'] !== ''
             ? $validated['event_type']

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Features\Catalog\Models;
 
 use AIArmada\AffiliateNetwork\Data\CreativeType;
+use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferCreativeFactory;
 use AIArmada\AffiliateNetwork\Features\Catalog\Api\CreativeRecord;
 use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
@@ -36,7 +37,10 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 class AffiliateOfferCreative extends Model implements Auditable, HasMedia
 {
     use HasCommerceAudit;
+
+    /** @use HasFactory<AffiliateOfferCreativeFactory> */
     use HasFactory;
+
     use HasUuids;
     use InteractsWithMedia;
     use LogsCommerceActivity;
@@ -50,6 +54,11 @@ class AffiliateOfferCreative extends Model implements Auditable, HasMedia
     protected static function ownerTableConfigKey(): string
     {
         return 'affiliate-network.owner';
+    }
+
+    protected static function newFactory(): AffiliateOfferCreativeFactory
+    {
+        return AffiliateOfferCreativeFactory::new();
     }
 
     protected $fillable = [

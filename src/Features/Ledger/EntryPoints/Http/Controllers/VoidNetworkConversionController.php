@@ -26,16 +26,10 @@ final class VoidNetworkConversionController extends Controller
         LedgerApi $ledger,
         ReverseConversionLeg $reverseConversionLeg,
     ): JsonResponse {
-        $validated = $request->validate([
-            'site' => ['required', 'string', 'max:255'],
-            'link_code' => ['required_without:coupon_code', 'nullable', 'string', 'max:64'],
-            'coupon_code' => ['required_without:link_code', 'nullable', 'string', 'max:64'],
-            'external_reference' => ['required', 'string', 'max:120'],
-            'event_type' => ['nullable', 'string', 'max:64'],
-            'reason' => ['present', 'nullable', 'string', 'max:120'],
-        ]);
-
-        $site = $sites->findByIdOrDomainUnscoped($validated['site']);
+        $siteIdentifier = $request->input('site');
+        $site = is_string($siteIdentifier) && mb_trim($siteIdentifier) !== ''
+            ? $sites->findByIdOrDomainUnscoped($siteIdentifier)
+            : null;
 
         if (! $site instanceof SiteRecord || ! $sites->matchesCatalogToken($site->id, $request->bearerToken())) {
             return response()->json(['message' => 'Invalid site credentials.'], 401);
@@ -44,6 +38,15 @@ final class VoidNetworkConversionController extends Controller
         if (! $site->isVerified()) {
             return response()->json(['message' => 'Site is not verified.'], 403);
         }
+
+        $validated = $request->validate([
+            'site' => ['required', 'string', 'max:255'],
+            'link_code' => ['required_without:coupon_code', 'nullable', 'string', 'max:64'],
+            'coupon_code' => ['required_without:link_code', 'nullable', 'string', 'max:64'],
+            'external_reference' => ['required', 'string', 'max:120'],
+            'event_type' => ['nullable', 'string', 'max:64'],
+            'reason' => ['present', 'nullable', 'string', 'max:120'],
+        ]);
 
         $eventType = is_string($validated['event_type'] ?? null) && $validated['event_type'] !== ''
             ? $validated['event_type']
@@ -87,7 +90,7 @@ final class VoidNetworkConversionController extends Controller
         }
 
         $reason = isset($validated['reason']) && $validated['reason'] !== '' ? $validated['reason'] : 'refund';
-        $duplicate = $leg->status !== LegStatus::Posted;
+        $duplicate = ! in_array($leg->status, [LegStatus::Pending, LegStatus::Posted], true);
 
         try {
             $reversal = $duplicate ? $leg : $reverseConversionLeg->execute($leg->id, $reason)->toSnapshot();

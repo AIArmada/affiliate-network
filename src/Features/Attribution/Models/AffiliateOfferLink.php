@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Features\Attribution\Models;
 
+use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferLinkFactory;
 use AIArmada\AffiliateNetwork\Features\Attribution\Api\OfferLinkRecord;
 use AIArmada\AffiliateNetwork\Platform\ResolvesAffiliateModel;
 use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
@@ -42,7 +43,10 @@ use OwenIt\Auditing\Contracts\Auditable;
 class AffiliateOfferLink extends Model implements Auditable
 {
     use HasCommerceAudit;
+
+    /** @use HasFactory<AffiliateOfferLinkFactory> */
     use HasFactory;
+
     use HasUuids;
     use LogsCommerceActivity;
     use ResolvesAffiliateModel;
@@ -61,6 +65,11 @@ class AffiliateOfferLink extends Model implements Auditable
     protected static function ownerFallbackRelation(): ?string
     {
         return 'offer.site';
+    }
+
+    protected static function newFactory(): AffiliateOfferLinkFactory
+    {
+        return AffiliateOfferLinkFactory::new();
     }
 
     protected $fillable = [
