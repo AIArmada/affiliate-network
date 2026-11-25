@@ -6,7 +6,7 @@ namespace AIArmada\AffiliateNetwork\Drivers;
 
 use AIArmada\AffiliateNetwork\Contracts\SiteContentClient;
 use AIArmada\AffiliateNetwork\Platform\BoundedHttpResponseBody;
-use AIArmada\CommerceSupport\Http\PinnedHttpClient;
+use AIArmada\CommerceSupport\Drivers\Http\PinnedHttpClient;
 use AIArmada\CommerceSupport\Support\PublicHttpUrlGuard;
 use Throwable;
 

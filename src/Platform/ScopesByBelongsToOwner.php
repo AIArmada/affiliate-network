@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Platform;
 
 use AIArmada\CommerceSupport\Support\OwnerScope;
-use AIArmada\CommerceSupport\Support\OwnerScopeConfig;
+use AIArmada\CommerceSupport\Support\OwnerScopeConfigFactory;
 use AIArmada\CommerceSupport\Traits\HasOwner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -28,7 +28,7 @@ trait ScopesByBelongsToOwner
     public static function bootScopesByBelongsToOwner(): void
     {
         static::addGlobalScope(ScopesByBelongsToOwner::class, function (Builder $builder): void {
-            $config = OwnerScopeConfig::fromConfig(static::ownerTableConfigKey());
+            $config = OwnerScopeConfigFactory::fromConfig(static::ownerTableConfigKey());
 
             if (! $config->enabled) {
                 return;
@@ -63,7 +63,7 @@ trait ScopesByBelongsToOwner
 
     protected static function effectiveOwnerRelation(Model $model): ?string
     {
-        $config = OwnerScopeConfig::fromConfig(static::ownerTableConfigKey());
+        $config = OwnerScopeConfigFactory::fromConfig(static::ownerTableConfigKey());
 
         if (! $config->enabled) {
             return null;
@@ -127,7 +127,7 @@ trait ScopesByBelongsToOwner
 
     private static function assertOwnerRelationAccessible(Model $model): void
     {
-        $config = OwnerScopeConfig::fromConfig(static::ownerTableConfigKey());
+        $config = OwnerScopeConfigFactory::fromConfig(static::ownerTableConfigKey());
 
         if (! $config->enabled) {
             return;
