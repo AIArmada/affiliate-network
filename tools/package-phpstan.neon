@@ -1,5 +1,7 @@
 parameters:
     customRulesetUsed: true
+    configDirectories:
+        - %currentWorkingDirectory%/config
     paths:
         - ../src
         - ../config
@@ -8,8 +10,6 @@ parameters:
             - ../database/migrations/*
             - ../src/Features/*/Database/Migrations/*
     tmpDir: ../../../build/phpstan-arch-affiliate-network
-    ignoreErrors:
-        - identifier: 'larastan.noEnvCallsOutsideOfConfig'
 
 services:
     -

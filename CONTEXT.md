@@ -41,7 +41,7 @@ keywords:
 - Write ownership: every `table:*` is declared in exactly one `feature.json` `owns` entry. Only the listed `Actions/` may mutate it; queries and APIs are read-only. Never bypass via `DB::table(...)`.
 - Platform core (`src/Platform/`) is feature-agnostic: it never imports `src/Features/`, `src/Drivers/`, or Eloquent models.
 - `src/Contracts/` and `src/Data/` stay pure: interfaces, enums, and `final readonly` DTOs only — no Eloquent, `Illuminate\Http`, features, or drivers.
-- Owner scoping: `AffiliateSite` and `AffiliateOfferCategory` use `HasOwner` directly; every other owned model uses `Platform\ScopesByBelongsToOwner` (`offer.site` or `affiliate`, with `offer.site` fallback on links/legs). Cross-tenant writes re-enter the record's own owner with `OwnerContext::withOwner($owner, fn () => ...)` — never rely on ambient request owner.
+- Owner scoping: `AffiliateSite` and `AffiliateOfferCategory` use `HasOwner` directly; every other owned model uses `Platform\ScopesByBelongsToOwner` (site-derived relations, or the identity adapter's connection-checked owner-table projection on links/legs with site fallback). Cross-tenant writes re-enter the record's own owner with `OwnerContext::withOwner($owner, fn () => ...)` — never rely on ambient request owner.
 - If admin UI changes too, audit `filament-affiliate-network` in the same pass.
 - Update `docs/*.md` in the same pass when public behavior or config changes.
 - Verify with `php packages/affiliate-network/tools/package-check.php --root=packages/affiliate-network`, the package PHPStan ruleset, scoped Pint, and the AffiliateNetwork Pest suite.
@@ -59,7 +59,7 @@ keywords:
 - Public seams: `Contracts/{AffiliateIdentityResolver, NetworkLedger, Fulfillment, CatalogReader, DnsResolver, SiteContentClient, SiteVerificationStrategy, CreatorPostbackTransport, NotificationDispatcher}`
 - Drivers: `Drivers/Affiliates/*`, `Drivers/UserKeyIdentityDriver`, `Drivers/HttpCreatorPostbackDriver`, `Drivers/HttpSiteContentDriver`, `Drivers/NativeDnsDriver`, `Drivers/RemoteCatalogHttpDriver`
 - Extensions: `site.verification_strategy` → `DnsVerificationStrategy`, `FileVerificationStrategy`, `MetaTagVerificationStrategy`
-- Config `affiliate-network.php`: `database.{table_prefix,tables,json_column_type}`, `models.affiliate`, `owner`, `currency`, `fees`, `locking`, `statements`, `notifications`, `applications`, `links`, `cookies`, `checkout`, `sync`, `postbacks`, `creator_postbacks`, `http`
+- Config `affiliate-network.php`: `database.{table_prefix,tables,json_column_type}`, `owner`, `currency`, `fees`, `locking`, `statements`, `notifications`, `applications`, `links`, `cookies`, `checkout`, `sync`, `postbacks`, `creator_postbacks`, `http`
 
 ## Docs map
 - Start: `01-overview` → `03-configuration` → `04-usage` → `99-troubleshooting`

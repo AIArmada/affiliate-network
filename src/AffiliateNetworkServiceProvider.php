@@ -16,6 +16,7 @@ use AIArmada\AffiliateNetwork\Drivers\Affiliates\AffiliatesCatalogDriver;
 use AIArmada\AffiliateNetwork\Drivers\Affiliates\AffiliatesIdentityDriver;
 use AIArmada\AffiliateNetwork\Drivers\Affiliates\AffiliatesLedgerDriver;
 use AIArmada\AffiliateNetwork\Drivers\Affiliates\EnginePayoutFulfillmentDriver;
+use AIArmada\AffiliateNetwork\Drivers\Affiliates\NetworkAffiliateRemovalGuard;
 use AIArmada\AffiliateNetwork\Drivers\CommunicationsNotificationDriver;
 use AIArmada\AffiliateNetwork\Drivers\HostManualFulfillmentDriver;
 use AIArmada\AffiliateNetwork\Drivers\HttpCreatorPostbackDriver;
@@ -48,6 +49,7 @@ use AIArmada\AffiliateNetwork\Features\Sites\Models\AffiliateSite;
 use AIArmada\AffiliateNetwork\Platform\ExtensionRegistry;
 use AIArmada\AffiliateNetwork\Platform\FeatureCatalog;
 use AIArmada\AffiliateNetwork\Platform\FeatureModule;
+use AIArmada\Affiliates\Contracts\AffiliateRemovalGuard;
 use AIArmada\Links\Contracts\LinkGateInterface;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Http\Kernel;
@@ -113,8 +115,6 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
             $this->bindEngineAdapters();
         }
 
-        $this->registerAffiliateModel();
-
         foreach (array_keys($this->catalog()['features']) as $name) {
             $instance = $this->app->make($this->moduleClass($name));
 
@@ -151,21 +151,7 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
         $this->app->bind(NetworkLedger::class, AffiliatesLedgerDriver::class);
         $this->app->bind(Fulfillment::class, EnginePayoutFulfillmentDriver::class);
         $this->app->bind(self::LOCAL_READER_KEY, AffiliatesCatalogDriver::class);
-
-        config(['affiliate-network.models.affiliate' => 'AIArmada\Affiliates\Models\Affiliate']);
-    }
-
-    private function registerAffiliateModel(): void
-    {
-        if (config('affiliate-network.models.affiliate') !== null) {
-            return;
-        }
-
-        $userModel = config('auth.providers.users.model');
-
-        if (is_string($userModel) && class_exists($userModel)) {
-            config(['affiliate-network.models.affiliate' => $userModel]);
-        }
+        $this->app->tag([NetworkAffiliateRemovalGuard::class], AffiliateRemovalGuard::class);
     }
 
     private function registerMorphMap(): void
@@ -223,7 +209,7 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
         if ($this->engineInstalled()
             && config('affiliates.features.commission_tracking.enabled', true)
             && class_exists('AIArmada\\Cart\\CartManager')) {
-            Event::listen($eventClass, 'AIArmada\Affiliates\Listeners\RecordCommissionForOrder');
+            $this->app->make('AIArmada\Affiliates\Features\Conversions\Api\OrderCommissionRegistration')->register();
         }
 
         Event::listen($eventClass, FinalizeNetworkAttribution::class);

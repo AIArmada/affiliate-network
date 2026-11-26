@@ -7,7 +7,7 @@ namespace AIArmada\AffiliateNetwork\Drivers\Affiliates;
 use AIArmada\AffiliateNetwork\Contracts\CatalogReader;
 use AIArmada\AffiliateNetwork\Data\SiteCatalogEndpoint;
 use AIArmada\AffiliateNetwork\Exceptions\OfferNotFoundException;
-use AIArmada\Affiliates\Contracts\MerchantCatalog;
+use AIArmada\Affiliates\Features\Programs\Api\MerchantCatalog;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 
 final class AffiliatesCatalogDriver implements CatalogReader
@@ -20,7 +20,7 @@ final class AffiliatesCatalogDriver implements CatalogReader
     {
         $snapshot = OwnerContext::withOwner(
             OwnerContext::fromTypeAndId($site->ownerType, $site->ownerId),
-            fn (): ?\AIArmada\Affiliates\Data\ProgramSnapshot => $this->catalog->snapshotById($programId),
+            fn (): ?\AIArmada\Affiliates\Features\Programs\Api\ProgramSnapshot => $this->catalog->snapshotById($programId),
         );
 
         if ($snapshot === null) {

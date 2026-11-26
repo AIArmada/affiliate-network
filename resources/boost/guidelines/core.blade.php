@@ -28,6 +28,7 @@ Rules:
 - Money is integer minor units plus an explicit ISO currency; format with `AIArmada\CommerceSupport\Support\MoneyFormatter`.
 - Owner scoping uses `Platform\ScopesByBelongsToOwner` (relationship path `site`, `offer.site`, or `affiliate` with `offer.site` fallback) or `HasOwner` for direct rows.
 - Cross-owner writes re-enter the record's owner with `OwnerContext::withOwner($owner, fn () => ...)`. Never trust ambient request owner for postbacks, leg maturation, or prepaid adjustments.
+- Affiliate-facing writes lock the canonical affiliate row through `AffiliateIdentityResolver::lockForWrite()` before touching network tables. Creator postback delivery is lease-based and the transport call runs outside the database transaction.
 - Conversions are idempotent on `(link|coupon, external_reference, event_type)`. `RecordNetworkConversion` takes scalar IDs, never an Eloquent link model.
 - Events are `final readonly` and carry scalars/DTOs — never Eloquent models.
 

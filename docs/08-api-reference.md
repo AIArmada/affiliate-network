@@ -271,7 +271,7 @@ MerchantStatementIssued(MerchantStatementSummary $statement)
 |---|---|
 | `ApplicationAlreadySubmittedException` | Reapplication during cooldown, or after revocation |
 | `AffiliateProfileRequired` | Affiliate write without a merchant `Affiliate` row (combined owner installs) |
-| `AffiliatesNotInstalled` | `affiliate()` relation used without a bound affiliate model |
+| `AffiliatesNotInstalled` | Catalog sync requires an unavailable adapter |
 | `CapExceededException::forOffer($offerId, $reason)` | Offer/site cap reached |
 | `RestrictionViolatedException::forOffer($offerId, $reason)` | Traffic restriction violated |
 | `OfferNotFoundException` | Offer lookup fails |

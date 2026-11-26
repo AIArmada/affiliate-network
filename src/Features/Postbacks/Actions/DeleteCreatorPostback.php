@@ -7,16 +7,22 @@ namespace AIArmada\AffiliateNetwork\Features\Postbacks\Actions;
 use AIArmada\AffiliateNetwork\Features\Postbacks\Models\CreatorPostbackDelivery;
 use AIArmada\AffiliateNetwork\Features\Postbacks\Models\CreatorPostbackEndpoint;
 
-final class DeleteCreatorPostback
+final readonly class DeleteCreatorPostback
 {
     public function execute(string $endpointId): void
     {
-        CreatorPostbackDelivery::query()
-            ->where('endpoint_id', $endpointId)
-            ->delete();
+        (new CreatorPostbackEndpoint)->getConnection()->transaction(function () use ($endpointId): void {
+            $endpoint = CreatorPostbackEndpoint::query()->whereKey($endpointId)->lockForUpdate()->first();
 
-        CreatorPostbackEndpoint::query()
-            ->whereKey($endpointId)
-            ->delete();
+            if ($endpoint === null) {
+                return;
+            }
+
+            CreatorPostbackDelivery::query()
+                ->where('endpoint_id', $endpointId)
+                ->delete();
+
+            $endpoint->delete();
+        });
     }
 }

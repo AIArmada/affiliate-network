@@ -32,8 +32,8 @@ AFFILIATE_NETWORK_OWNER_INCLUDE_GLOBAL=false
 | `AffiliateOfferDeal` | `ScopesByBelongsToOwner` | `offer.site` |
 | `AffiliateOfferCoupon` | `ScopesByBelongsToOwner` | `offer.site` |
 | `AffiliateOfferApplication` | `ScopesByBelongsToOwner` | `offer.site` |
-| `AffiliateOfferLink` | `ScopesByBelongsToOwner` | `affiliate`, fallback `offer.site` |
-| `NetworkConversionLeg` | `ScopesByBelongsToOwner` | `affiliate`, fallback `offer.site` |
+| `AffiliateOfferLink` | `ScopesByBelongsToOwner` | identity owner-table projection, fallback `offer.site` |
+| `NetworkConversionLeg` | `ScopesByBelongsToOwner` | identity owner-table projection, fallback `offer.site` |
 
 `CreatorPostbackEndpoint` and `CreatorPostbackDelivery` are affiliate-scoped by
 query (their `affiliate_id` is the owner boundary) and do not add a global
@@ -42,8 +42,7 @@ scope.
 ## `ScopesByBelongsToOwner`
 
 The trait is the only relationship-based owner scope in the package. It
-delegates the actual predicate to commerce-support's `OwnerScope` and adds
-relationship traversal.
+delegates owner predicates to commerce-support. For links and conversion legs, it uses the identity adapter's read-only owner-table projection when available.
 
 ```php
 use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
@@ -66,16 +65,10 @@ final class AffiliateOffer extends Model
 
 Key behavior:
 
-- **`ownerViaRelation()`** is the primary relation (may be dotted, e.g.
-  `offer.site`). The last segment must be a model using `HasOwner`.
-- **`ownerFallbackRelation()`** lets an affiliate-owned model fall back to the
-  offer's site when the affiliate identity is unavailable (used by
-  `AffiliateOfferLink` and `NetworkConversionLeg`).
-- **`effectiveOwnerRelation(Model $model)`** picks the primary relation when its
-  terminal model uses `HasOwner`, otherwise the fallback, otherwise `null`
-  (unscoped). This is what the global scope and write assertions use.
-- **Create/update/delete assertions** (`assertOwnerRelationAccessible`) re-read
-  the owner relation inside the configured `OwnerScope` and throw when the
+- **`ownerViaRelation()`** names the relation (which may be dotted). Its terminal model must use `HasOwner`.
+- **`ownerViaAffiliateIdentity()`** enables the identity adapter's optional `OwnerTableReference` for links and conversion legs. The reference must use the same database connection. Without a projection, the offer's site determines ownership.
+- Missing owner paths fail closed when owner enforcement is enabled.
+- **Create/update/delete assertions** (`assertOwnerRelationAccessible`) re-read the original and replacement owner references inside the configured `OwnerScope` and throw when the
   relation is missing or owned by someone else. The message interpolates the
   model class:
   `Cannot create, update, or delete {ModelClass} without an accessible owner relation.`
@@ -141,9 +134,12 @@ fail.
 `AffiliateIdentityResolver` exposes the contract:
 
 ```php
-$resolver->requiresMerchantProfile();      // bool
+$resolver->requiresMerchantProfile();        // bool
 $resolver->hasMerchantProfile($affiliateId); // bool
+$resolver->lockForWrite($affiliateId, spl_object_id($connection));       // serialize with affiliate deletion
 ```
+
+`lockForWrite()` must run inside an active transaction. It locks the canonical affiliate identity row (or host user row for `UserKeyIdentityDriver`) so network writes cannot race an affiliate removal guard.
 
 `UserKeyIdentityDriver` returns `false` from `requiresMerchantProfile()`, and
 the identity driver still falls back to the host user for display/reporting

@@ -35,6 +35,8 @@ class CreatorPostbackEndpoint extends Model
         return CreatorPostbackEndpointFactory::new();
     }
 
+    protected $hidden = ['signing_secret_encrypted'];
+
     protected $fillable = [
         'affiliate_id',
         'offer_id',

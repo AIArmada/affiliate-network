@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Features\Ledger;
 
+use AIArmada\AffiliateNetwork\Contracts\AffiliateReferenceReader;
 use AIArmada\AffiliateNetwork\Events\NetworkConversionRecorded;
 use AIArmada\AffiliateNetwork\Features\Ledger\Api\LedgerApi;
 use AIArmada\AffiliateNetwork\Features\Ledger\EntryPoints\Listeners\NotifyNetworkConversion;
@@ -20,6 +21,7 @@ final class FeatureModule implements FeatureModuleContract
 {
     public function register(Application $app): void
     {
+        $app->tag([Queries\LedgerAffiliateReferences::class], AffiliateReferenceReader::class);
         $app->bind(LedgerApi::class, EloquentLedgerApi::class);
 
         config([

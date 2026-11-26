@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Features\Enrollment;
 
+use AIArmada\AffiliateNetwork\Contracts\AffiliateReferenceReader;
 use AIArmada\AffiliateNetwork\Events\ApplicationApproved;
 use AIArmada\AffiliateNetwork\Events\ApplicationSubmitted;
 use AIArmada\AffiliateNetwork\Features\Enrollment\Api\EnrollmentApi;
@@ -21,6 +22,7 @@ final class FeatureModule implements FeatureModuleContract
 {
     public function register(Application $app): void
     {
+        $app->tag([Queries\EnrollmentAffiliateReferences::class], AffiliateReferenceReader::class);
         $app->bind(EnrollmentApi::class, EloquentEnrollmentApi::class);
 
         config([

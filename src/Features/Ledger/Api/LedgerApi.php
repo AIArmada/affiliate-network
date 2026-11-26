@@ -25,4 +25,8 @@ interface LedgerApi
      * @return array<string, array{conversions: int, reversed: int, revenue_minor: int, payout_minor: int}>
      */
     public function offerConversionMetrics(array $offerIds, CarbonImmutable $since): array;
+
+    public function countPendingLegsUnscoped(): int;
+
+    public function countIssuedStatementsUnscoped(): int;
 }

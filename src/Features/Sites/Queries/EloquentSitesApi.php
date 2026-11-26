@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Features\Sites\Queries;
 
+use AIArmada\AffiliateNetwork\Data\SiteStatus;
 use AIArmada\AffiliateNetwork\Data\SiteSyncStatus;
 use AIArmada\AffiliateNetwork\Features\Sites\Actions\AdjustMerchantPrepaidBalance;
 use AIArmada\AffiliateNetwork\Features\Sites\Actions\RecordSiteSyncStatus;
 use AIArmada\AffiliateNetwork\Features\Sites\Api\SiteRecord;
 use AIArmada\AffiliateNetwork\Features\Sites\Api\SitesApi;
+use AIArmada\AffiliateNetwork\Features\Sites\Models\AffiliateSite;
 
 final class EloquentSitesApi implements SitesApi
 {
@@ -51,5 +53,10 @@ final class EloquentSitesApi implements SitesApi
     public function adjustPrepaidBalance(string $siteId, int $deltaMinor): int
     {
         return $this->adjustPrepaidBalance->execute($siteId, $deltaMinor);
+    }
+
+    public function countVerifiedSitesUnscoped(): int
+    {
+        return AffiliateSite::query()->withoutOwnerScope()->where('status', SiteStatus::Verified)->count();
     }
 }

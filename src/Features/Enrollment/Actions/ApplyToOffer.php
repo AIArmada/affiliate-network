@@ -6,6 +6,7 @@ namespace AIArmada\AffiliateNetwork\Features\Enrollment\Actions;
 
 use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
 use AIArmada\AffiliateNetwork\Data\ApplicationStatus;
+use AIArmada\AffiliateNetwork\Data\NetworkAffiliate;
 use AIArmada\AffiliateNetwork\Data\OfferStatus;
 use AIArmada\AffiliateNetwork\Data\OfferVisibility;
 use AIArmada\AffiliateNetwork\Data\RestrictionContext;
@@ -24,7 +25,6 @@ use AIArmada\CommerceSupport\Support\OwnerContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 final class ApplyToOffer
@@ -49,7 +49,7 @@ final class ApplyToOffer
 
         if ($affiliate === null) {
             throw (new ModelNotFoundException)->setModel(
-                (string) config('affiliate-network.models.affiliate', 'affiliate'),
+                NetworkAffiliate::class,
                 [$affiliateId],
             );
         }
@@ -88,90 +88,98 @@ final class ApplyToOffer
         }
 
         $owner = OwnerContext::fromTypeAndId($site->ownerType, $site->ownerId);
+        $affiliateOwner = OwnerContext::fromTypeAndId($affiliate->ownerType, $affiliate->ownerId);
+        $connection = (new AffiliateOfferApplication)->getConnection();
 
-        return OwnerContext::withOwner($owner, function () use ($offer, $site, $affiliateId, $reason, $invitation): AffiliateOfferApplication {
-            $existing = AffiliateOfferApplication::query()
-                ->where('offer_id', $offer->id)
-                ->where('affiliate_id', $affiliateId)
-                ->first();
+        return $connection->transaction(function () use ($offer, $site, $affiliateId, $reason, $invitation, $connection, $owner, $affiliateOwner): AffiliateOfferApplication {
+            OwnerContext::withOwner($affiliateOwner, fn () => $this->affiliateProfileGuard->lockForWrite($affiliateId, spl_object_id($connection)));
 
-            if ($existing instanceof AffiliateOfferApplication) {
-                if ($existing->status === ApplicationStatus::Revoked) {
-                    throw ApplicationAlreadySubmittedException::forOffer($offer->id);
-                }
+            return OwnerContext::withOwner($owner, function () use ($offer, $site, $affiliateId, $reason, $invitation, $connection): AffiliateOfferApplication {
+                return $connection->transaction(function () use ($offer, $site, $affiliateId, $reason, $invitation, $connection): AffiliateOfferApplication {
+                    $existing = AffiliateOfferApplication::query()
+                        ->where('offer_id', $offer->id)
+                        ->where('affiliate_id', $affiliateId)
+                        ->first();
 
-                if ($existing->status === ApplicationStatus::Rejected) {
-                    $cooldownDays = (int) config('affiliate-network.applications.cooldown_days', 7);
-                    $base = $existing->rejected_at ?? $existing->updated_at;
-                    $canReapply = $base === null || CarbonImmutable::parse($base)->addDays($cooldownDays)->isPast();
+                    if ($existing instanceof AffiliateOfferApplication) {
+                        if ($existing->status === ApplicationStatus::Revoked) {
+                            throw ApplicationAlreadySubmittedException::forOffer($offer->id);
+                        }
 
-                    if (! $canReapply) {
-                        throw ApplicationAlreadySubmittedException::forOffer($offer->id);
+                        if ($existing->status === ApplicationStatus::Rejected) {
+                            $cooldownDays = (int) config('affiliate-network.applications.cooldown_days', 7);
+                            $base = $existing->rejected_at ?? $existing->updated_at;
+                            $canReapply = $base === null || CarbonImmutable::parse($base)->addDays($cooldownDays)->isPast();
+
+                            if (! $canReapply) {
+                                throw ApplicationAlreadySubmittedException::forOffer($offer->id);
+                            }
+
+                            $existing->update([
+                                'status' => ApplicationStatus::Pending,
+                                'reason' => $reason,
+                                'rejection_reason' => null,
+                                'reviewed_by' => null,
+                                'reviewed_at' => null,
+                            ]);
+
+                            $application = $existing->fresh() ?? $existing;
+
+                            event(new ApplicationSubmitted(...$this->eventPayload($application, $offer, $site)));
+
+                            return $application;
+                        }
+
+                        return $existing;
                     }
 
-                    $existing->update([
-                        'status' => ApplicationStatus::Pending,
-                        'reason' => $reason,
-                        'rejection_reason' => null,
-                        'reviewed_by' => null,
-                        'reviewed_at' => null,
-                    ]);
+                    $autoApprove = ! $offer->requiresApproval
+                        || (bool) config('affiliate-network.applications.auto_approve', false)
+                        || ($invitation?->auto_approve === true);
 
-                    $application = $existing->fresh() ?? $existing;
+                    $status = $autoApprove ? ApplicationStatus::Approved : ApplicationStatus::Pending;
 
-                    event(new ApplicationSubmitted(...$this->eventPayload($application, $offer, $site)));
+                    try {
+                        return $connection->transaction(function () use ($offer, $site, $affiliateId, $reason, $invitation, $status, $connection): AffiliateOfferApplication {
+                            $application = AffiliateOfferApplication::query()->create([
+                                'offer_id' => $offer->id,
+                                'affiliate_id' => $affiliateId,
+                                'invitation_id' => $invitation?->getKey(),
+                                'status' => $status,
+                                'reason' => $reason,
+                                'reviewed_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
+                                'approved_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
+                            ]);
 
-                    return $application;
-                }
+                            event(new ApplicationSubmitted(...$this->eventPayload($application, $offer, $site)));
 
-                return $existing;
-            }
+                            if ($status === ApplicationStatus::Approved) {
+                                $connection->afterCommit(fn () => event(new ApplicationApproved(
+                                    ...$this->eventPayload($application, $offer, $site),
+                                )));
+                            }
 
-            $autoApprove = ! $offer->requiresApproval
-                || (bool) config('affiliate-network.applications.auto_approve', false)
-                || ($invitation?->auto_approve === true);
+                            return $application;
+                        });
+                    } catch (QueryException $exception) {
+                        if (! self::isUniqueConstraintViolation($exception)) {
+                            throw $exception;
+                        }
 
-            $status = $autoApprove ? ApplicationStatus::Approved : ApplicationStatus::Pending;
+                        $raced = AffiliateOfferApplication::query()
+                            ->where('offer_id', $offer->id)
+                            ->where('affiliate_id', $affiliateId)
+                            ->first();
 
-            try {
-                return DB::transaction(function () use ($offer, $site, $affiliateId, $reason, $invitation, $status): AffiliateOfferApplication {
-                    $application = AffiliateOfferApplication::query()->create([
-                        'offer_id' => $offer->id,
-                        'affiliate_id' => $affiliateId,
-                        'invitation_id' => $invitation?->getKey(),
-                        'status' => $status,
-                        'reason' => $reason,
-                        'reviewed_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
-                        'approved_at' => $status === ApplicationStatus::Approved ? CarbonImmutable::now() : null,
-                    ]);
+                        if ($raced === null) {
+                            throw $exception;
+                        }
 
-                    event(new ApplicationSubmitted(...$this->eventPayload($application, $offer, $site)));
-
-                    if ($status === ApplicationStatus::Approved) {
-                        DB::afterCommit(fn () => event(new ApplicationApproved(
-                            ...$this->eventPayload($application, $offer, $site),
-                        )));
+                        return $raced;
                     }
-
-                    return $application;
-                });
-            } catch (QueryException $exception) {
-                if (! self::isUniqueConstraintViolation($exception)) {
-                    throw $exception;
-                }
-
-                $raced = AffiliateOfferApplication::query()
-                    ->where('offer_id', $offer->id)
-                    ->where('affiliate_id', $affiliateId)
-                    ->first();
-
-                if ($raced === null) {
-                    throw $exception;
-                }
-
-                return $raced;
-            }
-        });
+                }, attempts: 3);
+            });
+        }, attempts: 3);
     }
 
     /**

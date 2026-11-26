@@ -116,8 +116,9 @@ Merchant → network (enabled by `postbacks.enabled`):
 
 Network → creator:
 
-- `ConfigureCreatorPostback($affiliateId, [...])` stores a URL template, method, events, and encrypted signing secret.
+- `ConfigureCreatorPostback($affiliateId, [...])` stores a URL template, method, events, and encrypted signing secret; a supplied offer must resolve to a real offer.
 - Delivery signs `X-Affiliate-Network-Signature: hash_hmac('sha256', $resolvedUrl, $secret)`.
+- Delivery claims an `attempt_token`/`lease_expires_at` before the transport call and finalizes only while the lease is current. Retries are at-least-once, not external exactly-once.
 - Transport validates through `commerce-support`'s `PublicHttpUrlGuard` (public HTTP(S) only, pinned, no redirects, bounded body).
 
 ## Reliability rules

@@ -7,7 +7,6 @@ namespace AIArmada\AffiliateNetwork\Features\Enrollment\Models;
 use AIArmada\AffiliateNetwork\Data\ApplicationStatus;
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferApplicationFactory;
 use AIArmada\AffiliateNetwork\Features\Enrollment\Api\ApplicationRecord;
-use AIArmada\AffiliateNetwork\Platform\ResolvesAffiliateModel;
 use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
@@ -44,7 +43,6 @@ class AffiliateOfferApplication extends Model implements Auditable
 
     use HasUuids;
     use LogsCommerceActivity;
-    use ResolvesAffiliateModel;
     use ScopesByBelongsToOwner;
 
     protected static function ownerViaRelation(): string
@@ -91,14 +89,6 @@ class AffiliateOfferApplication extends Model implements Auditable
     public function offer(): BelongsTo
     {
         return $this->belongsTo(self::relatedModel('offer'), 'offer_id');
-    }
-
-    /**
-     * @return BelongsTo<Model, $this>
-     */
-    public function affiliate(): BelongsTo
-    {
-        return $this->belongsTo(self::affiliateModel(), 'affiliate_id');
     }
 
     protected function casts(): array

@@ -4,13 +4,20 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Platform;
 
+use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
+use AIArmada\CommerceSupport\Data\OwnerScopeConfig;
+use AIArmada\CommerceSupport\Data\OwnerTableReference;
+use AIArmada\CommerceSupport\Support\OwnerContext;
+use AIArmada\CommerceSupport\Support\OwnerQuery;
 use AIArmada\CommerceSupport\Support\OwnerScope;
 use AIArmada\CommerceSupport\Support\OwnerScopeConfigFactory;
+use AIArmada\CommerceSupport\Support\OwnerScopeOverride;
 use AIArmada\CommerceSupport\Traits\HasOwner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use RuntimeException;
 use Throwable;
 
@@ -20,9 +27,9 @@ trait ScopesByBelongsToOwner
 
     abstract protected static function ownerTableConfigKey(): string;
 
-    protected static function ownerFallbackRelation(): ?string
+    protected static function ownerViaAffiliateIdentity(): bool
     {
-        return null;
+        return false;
     }
 
     public static function bootScopesByBelongsToOwner(): void
@@ -34,10 +41,21 @@ trait ScopesByBelongsToOwner
                 return;
             }
 
-            $relation = static::effectiveOwnerRelation($builder->getModel());
+            $model = $builder->getModel();
+            $source = self::affiliateOwnerTable();
+
+            if ($source !== null) {
+                $query = self::affiliateOwnerQuery($model, $source, $config);
+                $query->selectRaw(self::affiliateKeyExpression($model, $source));
+                $builder->whereIn($model->qualifyColumn('affiliate_id'), $query);
+
+                return;
+            }
+
+            $relation = static::effectiveOwnerRelation($model);
 
             if ($relation === null) {
-                return;
+                throw new RuntimeException(sprintf('No owner relation is configured for %s.', $builder->getModel()::class));
             }
 
             $builder->whereHas($relation, function (Builder $query) use ($config): void {
@@ -75,12 +93,6 @@ trait ScopesByBelongsToOwner
             return $primary;
         }
 
-        $fallback = static::ownerFallbackRelation();
-
-        if ($fallback !== null && self::relationUsesHasOwner($model, $fallback)) {
-            return $fallback;
-        }
-
         return null;
     }
 
@@ -91,6 +103,65 @@ trait ScopesByBelongsToOwner
     public function scopeWithoutOwnerScope(Builder $query): Builder
     {
         return $query->withoutGlobalScope(ScopesByBelongsToOwner::class);
+    }
+
+    private static function affiliateOwnerTable(): ?OwnerTableReference
+    {
+        return static::ownerViaAffiliateIdentity() ? app(AffiliateIdentityResolver::class)->ownerTable() : null;
+    }
+
+    private static function affiliateKeyExpression(Model $model, OwnerTableReference $source): string
+    {
+        $connection = $model->getConnection();
+        $key = $connection->getQueryGrammar()->wrap($source->keyColumn);
+
+        return match ($connection->getDriverName()) {
+            'pgsql', 'sqlite' => 'CAST(' . $key . ' AS TEXT)',
+            'mysql', 'mariadb' => 'CAST(' . $key . ' AS CHAR)',
+            'sqlsrv' => 'CAST(' . $key . ' AS NVARCHAR(255))',
+            default => $key,
+        };
+    }
+
+    private static function affiliateOwnerQuery(Model $model, OwnerTableReference $source, OwnerScopeConfig $config): QueryBuilder
+    {
+        $connection = $model->getConnection();
+
+        if (spl_object_id($connection) !== $source->connectionIdentity) {
+            throw new RuntimeException('Affiliate ownership requires a shared database connection.');
+        }
+
+        $owner = OwnerContext::resolveConfigured($config);
+        OwnerContext::assertResolvedOrExplicitGlobal($owner);
+
+        return OwnerQuery::applyToQueryBuilder(
+            $connection->table($source->table),
+            $owner,
+            ! OwnerScopeOverride::suppressIncludeGlobal() && $config->includeGlobal,
+            $config->ownerTypeColumn,
+            $config->ownerIdColumn,
+        );
+    }
+
+    private static function assertAffiliateOwnerAccessible(Model $model, OwnerTableReference $source, OwnerScopeConfig $config): void
+    {
+        $ids = [$model->getAttribute('affiliate_id')];
+
+        if ($model->exists) {
+            $ids[] = $model->getRawOriginal('affiliate_id');
+        }
+
+        if (in_array(null, $ids, true) || in_array('', $ids, true)) {
+            throw new RuntimeException('An affiliate owner reference is required.');
+        }
+
+        $ids = array_values(array_unique($ids));
+        $query = self::affiliateOwnerQuery($model, $source, $config);
+        $query->whereIn($model->getConnection()->raw(self::affiliateKeyExpression($model, $source)), $ids);
+
+        if ($query->count() !== count($ids)) {
+            throw new RuntimeException(sprintf('Cannot create, update, or delete %s without an accessible owner relation.', $model::class));
+        }
     }
 
     private static function relationUsesHasOwner(Model $model, string $relation): bool
@@ -133,10 +204,18 @@ trait ScopesByBelongsToOwner
             return;
         }
 
+        $source = self::affiliateOwnerTable();
+
+        if ($source !== null) {
+            self::assertAffiliateOwnerAccessible($model, $source, $config);
+
+            return;
+        }
+
         $relation = static::effectiveOwnerRelation($model);
 
         if ($relation === null) {
-            return;
+            throw new RuntimeException(sprintf('No owner relation is configured for %s.', $model::class));
         }
 
         $segments = explode('.', $relation);
@@ -149,8 +228,16 @@ trait ScopesByBelongsToOwner
             ));
         }
 
-        if ($model->getAttribute($first->getForeignKeyName()) === null) {
-            return;
+        $foreignKey = $first->getForeignKeyName();
+
+        if ($model->exists && $model->isDirty($foreignKey)) {
+            $original = $model->withoutRelations();
+            $original->setRawAttributes($model->getRawOriginal(), true);
+            self::assertOwnerRelationAccessible($original);
+        }
+
+        if ($model->getAttribute($foreignKey) === null) {
+            throw new RuntimeException(sprintf('An owner relation is required for %s.', $model::class));
         }
 
         $current = $model;

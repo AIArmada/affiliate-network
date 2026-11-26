@@ -26,4 +26,10 @@ final readonly class AffiliateProfileGuard
 
         throw new AffiliateProfileRequired;
     }
+
+    public function lockForWrite(string $affiliateId, int $connectionIdentity): void
+    {
+        $this->assertCanWriteFor($affiliateId);
+        $this->identities->lockForWrite($affiliateId, $connectionIdentity);
+    }
 }

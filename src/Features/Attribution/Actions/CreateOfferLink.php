@@ -16,7 +16,6 @@ use AIArmada\AffiliateNetwork\Platform\QueryParameters;
 use AIArmada\Links\Actions\CreatePublicLink;
 use AIArmada\Links\Models\Link;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use RuntimeException;
 
@@ -63,7 +62,11 @@ final class CreateOfferLink
 
         $targetUrl = $this->resolveTargetUrl($offer, $site->domain, $options);
 
-        return DB::transaction(function () use ($offer, $affiliateId, $options, $targetUrl): AffiliateOfferLink {
+        $connection = (new AffiliateOfferLink)->getConnection();
+
+        return $connection->transaction(function () use ($offer, $affiliateId, $options, $targetUrl, $connection): AffiliateOfferLink {
+            $this->affiliateProfileGuard->lockForWrite($affiliateId, spl_object_id($connection));
+
             $offerLink = AffiliateOfferLink::create([
                 'offer_id' => $offer->id,
                 'affiliate_id' => $affiliateId,

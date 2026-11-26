@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Features\Postbacks;
 
+use AIArmada\AffiliateNetwork\Contracts\AffiliateReferenceReader;
 use AIArmada\AffiliateNetwork\Events\ConversionAdjusted;
 use AIArmada\AffiliateNetwork\Events\ConversionLocked;
 use AIArmada\AffiliateNetwork\Events\ConversionReversed;
@@ -21,6 +22,7 @@ final class FeatureModule implements FeatureModuleContract
 {
     public function register(Application $app): void
     {
+        $app->tag([Queries\PostbacksAffiliateReferences::class], AffiliateReferenceReader::class);
         $app->bind(PostbacksApi::class, EloquentPostbacksApi::class);
 
         config([

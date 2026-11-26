@@ -9,6 +9,16 @@ use AIArmada\AffiliateNetwork\Data\PostbackEventType;
 
 interface PostbacksApi
 {
+    /** @param array<string, mixed> $data */
+    public function configure(string $affiliateId, array $data): CreatorPostbackRecord;
+
+    /** @param array<string, mixed> $data */
+    public function update(string $endpointId, string $affiliateId, array $data): CreatorPostbackRecord;
+
+    public function delete(string $endpointId): void;
+
+    public function retry(string $deliveryId): PostbackDeliveryStatus;
+
     /**
      * @return list<CreatorPostbackRecord>
      */

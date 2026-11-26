@@ -9,11 +9,11 @@ use AIArmada\AffiliateNetwork\Data\NetworkAffiliate;
 use AIArmada\AffiliateNetwork\Drivers\UserKeyIdentityDriver;
 use AIArmada\Affiliates\Contracts\MerchantIdentity;
 use AIArmada\Affiliates\Data\MerchantAffiliate;
-use AIArmada\Affiliates\Models\Affiliate;
-use AIArmada\CommerceSupport\Support\OwnerWriteGuard;
-use Illuminate\Auth\Access\AuthorizationException;
+use AIArmada\Affiliates\Features\Identity\Api\AffiliateAccessGuard;
+use AIArmada\CommerceSupport\Data\OwnerTableReference;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Str;
 
 final class AffiliatesIdentityDriver implements AffiliateIdentityResolver
 {
@@ -21,6 +21,11 @@ final class AffiliatesIdentityDriver implements AffiliateIdentityResolver
         private readonly MerchantIdentity $merchants,
         private readonly UserKeyIdentityDriver $users,
     ) {}
+
+    public function ownerTable(): OwnerTableReference
+    {
+        return $this->merchants->ownerTable();
+    }
 
     public function find(string $affiliateId): ?NetworkAffiliate
     {
@@ -39,31 +44,28 @@ final class AffiliatesIdentityDriver implements AffiliateIdentityResolver
             return $this->find($affiliateId);
         }
 
-        try {
-            $affiliate = OwnerWriteGuard::findOrFailForOwner(
-                Affiliate::class,
-                $affiliateId,
-                includeGlobal: false,
-                message: 'Affiliate is not accessible in the current owner scope.',
-            );
-        } catch (AuthorizationException) {
-            return null;
-        } catch (ModelNotFoundException) {
-            return $this->users->findAccessible($affiliateId);
+        $merchant = $this->merchants->findAccessible($affiliateId);
+
+        return $merchant === null ? null : $this->toNetworkAffiliate($merchant);
+    }
+
+    public function lockForWrite(string $affiliateId, int $connectionIdentity): void
+    {
+        if ($this->merchants->find($affiliateId) !== null) {
+            app(AffiliateAccessGuard::class)->lockForWrite($affiliateId, $connectionIdentity);
+
+            return;
         }
 
-        if (! $affiliate instanceof Affiliate) {
-            return null;
+        if ($this->users->find($affiliateId) !== null) {
+            $this->users->lockForWrite($affiliateId, $connectionIdentity);
+
+            return;
         }
 
-        return new NetworkAffiliate(
-            id: (string) $affiliate->getKey(),
-            code: (string) $affiliate->code,
-            handle: (string) $affiliate->handle,
-            email: $affiliate->contact_email,
-            ownerType: $affiliate->owner_type,
-            ownerId: $affiliate->owner_id,
-        );
+        if (Str::isUuid($affiliateId)) {
+            throw new ModelNotFoundException('Affiliate identity not found.');
+        }
     }
 
     public function requiresMerchantProfile(): bool

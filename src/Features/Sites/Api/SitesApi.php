@@ -21,4 +21,6 @@ interface SitesApi
     public function recordSyncStatus(string $siteId, SiteSyncStatus $status): void;
 
     public function adjustPrepaidBalance(string $siteId, int $deltaMinor): int;
+
+    public function countVerifiedSitesUnscoped(): int;
 }

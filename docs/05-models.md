@@ -162,7 +162,7 @@ Properties: `id`, `offer_id`, `affiliate_id`, `invitation_id`, `status`
 (`ApplicationStatus`), `reason`, `rejection_reason`, `reviewed_by`,
 `reviewed_at`, `approved_at`, `rejected_at`, `revoked_at`, `metadata`.
 
-Relations: `offer()`, `affiliate()` (bound at `models.affiliate`).
+Relations: `offer()`. Affiliate identity is resolved through `AffiliateIdentityResolver` using `affiliate_id`, not an Eloquent relationship.
 
 Methods: `isPending()`, `isApproved()`, `toRecord(): ApplicationRecord`.
 
@@ -219,7 +219,7 @@ Properties: `id`, `link_id` (backing `AIArmada\Links\Models\Link`), `offer_id`,
 `affiliate_id`, `site_id`, `sub_id`, `sub_id_2`, `sub_id_3`, `clicks`,
 `conversions`, `revenue` (minor), `currency`, `is_active`, `metadata`.
 
-Relations: `link()`, `offer()`, `affiliate()`, `site()`.
+Relations: `link()`, `offer()`, `site()`. Affiliate identity is resolved by `AffiliateIdentityResolver`.
 
 Methods: `isExpired()`, `trackedSlug(): ?string`, `toRecord(): OfferLinkRecord`.
 
@@ -241,7 +241,7 @@ Append-only money leg.
 | Attribution | `external_reference`, `event_type`, `coupon_code`, `sub_id`, `sub_id_2`, `sub_id_3`, `metadata` |
 | Lifecycle | `status` (`LegStatus`), `statement_id`, `locks_at`, `locked_at`, `fulfilled_at`, `occurred_at` |
 
-Relations: `offer()`, `site()`, `affiliate()`.
+Relations: `offer()`, `site()`. Affiliate identity is resolved by `AffiliateIdentityResolver`.
 
 Methods: `paysOut(): bool`, `toSnapshot(): NetworkLegSnapshot`.
 

@@ -23,6 +23,8 @@ return new class extends Migration
             $table->unsignedSmallInteger('http_status')->nullable();
             $table->unsignedSmallInteger('attempts')->default(0);
             $table->text('last_error')->nullable();
+            $table->string('attempt_token', 64)->nullable();
+            $table->timestampTz('lease_expires_at')->nullable()->index();
             $table->timestampTz('delivered_at')->nullable();
             $table->timestampsTz();
 

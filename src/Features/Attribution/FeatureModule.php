@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Features\Attribution;
 
+use AIArmada\AffiliateNetwork\Contracts\AffiliateReferenceReader;
 use AIArmada\AffiliateNetwork\Features\Attribution\Api\AttributionApi;
 use AIArmada\AffiliateNetwork\Features\Attribution\EntryPoints\Listeners\IncrementNetworkLinkClicks;
 use AIArmada\AffiliateNetwork\Features\Attribution\Models\AffiliateOfferCoupon;
@@ -18,6 +19,7 @@ final class FeatureModule implements FeatureModuleContract
 {
     public function register(Application $app): void
     {
+        $app->tag([Queries\AttributionAffiliateReferences::class], AffiliateReferenceReader::class);
         $app->bind(AttributionApi::class, EloquentAttributionApi::class);
 
         config([

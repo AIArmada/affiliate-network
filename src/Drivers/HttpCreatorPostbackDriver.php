@@ -50,8 +50,8 @@ final class HttpCreatorPostbackDriver implements CreatorPostbackTransport
                 $response->status(),
                 $response->successful() ? null : 'http_' . $response->status(),
             );
-        } catch (Throwable $exception) {
-            return new CreatorPostbackResponse(false, null, $exception->getMessage());
+        } catch (Throwable) {
+            return new CreatorPostbackResponse(false, null, 'transport_failed');
         }
     }
 }

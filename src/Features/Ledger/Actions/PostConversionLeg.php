@@ -16,7 +16,6 @@ use AIArmada\AffiliateNetwork\Features\Sites\Api\SitesApi;
 use AIArmada\AffiliateNetwork\Platform\AffiliateProfileGuard;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Facades\DB;
 
 final class PostConversionLeg
 {
@@ -121,7 +120,12 @@ final class PostConversionLeg
         ];
 
         try {
-            $leg = DB::transaction(fn (): NetworkConversionLeg => NetworkConversionLeg::create($attributes), attempts: 1);
+            $connection = (new NetworkConversionLeg)->getConnection();
+            $leg = $connection->transaction(function () use ($attributes, $affiliateId, $connection): NetworkConversionLeg {
+                $this->affiliateProfileGuard->lockForWrite($affiliateId, spl_object_id($connection));
+
+                return NetworkConversionLeg::create($attributes);
+            }, attempts: 1);
         } catch (QueryException $exception) {
             if (! self::isUniqueViolation($exception)) {
                 throw $exception;

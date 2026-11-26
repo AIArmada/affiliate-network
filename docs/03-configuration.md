@@ -153,12 +153,10 @@ column (`volume_tiers`, `event_rates`, `restrictions`, `metadata`, `settings`,
 
 ### Models
 
-Only `models.affiliate` ships in the config file. Each `FeatureModule`
-registers its own relation keys at boot, and you may override any of them:
+Each `FeatureModule` registers its internal relation keys at boot:
 
 | Key | Bound by | Purpose |
 |-----|----------|---------|
-| `models.affiliate` | `aiarmada/affiliates` or your app | Model behind `affiliate()` relations |
 | `models.site` | Sites feature | `AffiliateSite` |
 | `models.offer` | Catalog feature | `AffiliateOffer` |
 | `models.offer_category` | Catalog feature | `AffiliateOfferCategory` |
@@ -173,8 +171,7 @@ registers its own relation keys at boot, and you may override any of them:
 | `models.creator_postback` | Postbacks feature | `CreatorPostbackEndpoint` |
 | `models.postback_delivery` | Postbacks feature | `CreatorPostbackDelivery` |
 
-When `models.affiliate` is `null` and the engine is absent, `affiliate()`
-relations throw `AffiliatesNotInstalled`.
+Affiliate identity and its optional owner-table projection are supplied by `AffiliateIdentityResolver`, not an Eloquent model configuration.
 
 ### Owner (Multi-Tenancy)
 

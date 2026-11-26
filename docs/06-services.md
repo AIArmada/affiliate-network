@@ -207,7 +207,7 @@ use AIArmada\AffiliateNetwork\Features\Postbacks\Api\PostbacksApi;
 
 | Contract | Methods |
 |---|---|
-| `AffiliateIdentityResolver` | `find(string): ?NetworkAffiliate`, `findAccessible(string): ?NetworkAffiliate`, `findIdForVerifiedEmail(string): ?string`, `requiresMerchantProfile(): bool`, `hasMerchantProfile(string): bool` |
+| `AffiliateIdentityResolver` | `find(string): ?NetworkAffiliate`, `findAccessible(string): ?NetworkAffiliate`, `lockForWrite(string): void`, `findIdForVerifiedEmail(string): ?string`, `requiresMerchantProfile(): bool`, `hasMerchantProfile(string): bool` |
 | `NetworkLedger` | `post(NetworkConversionDraft): ?NetworkPostedConversion`, `findPosted(string, string): ?NetworkPostedConversion`, `voidPosting(string, string, string): ?NetworkPostedConversion`, `rowsForLink(string): array`, `postingsForExternalReference(string): array` |
 | `Fulfillment` | `fulfillsAutomatically(): bool`, `fulfill(NetworkLegSnapshot, ?string $reference = null): FulfillmentResult` |
 | `CatalogReader` | `snapshot(SiteCatalogEndpoint, string $programId): array`, `programIds(SiteCatalogEndpoint): array` |

@@ -6,12 +6,36 @@ namespace AIArmada\AffiliateNetwork\Features\Postbacks\Queries;
 
 use AIArmada\AffiliateNetwork\Data\PostbackDeliveryStatus;
 use AIArmada\AffiliateNetwork\Data\PostbackEventType;
+use AIArmada\AffiliateNetwork\Features\Postbacks\Actions\ConfigureCreatorPostback;
+use AIArmada\AffiliateNetwork\Features\Postbacks\Actions\DeleteCreatorPostback;
+use AIArmada\AffiliateNetwork\Features\Postbacks\Actions\DeliverCreatorPostback;
+use AIArmada\AffiliateNetwork\Features\Postbacks\Api\CreatorPostbackRecord;
 use AIArmada\AffiliateNetwork\Features\Postbacks\Api\PostbacksApi;
 use AIArmada\AffiliateNetwork\Features\Postbacks\Models\CreatorPostbackDelivery;
 use AIArmada\AffiliateNetwork\Features\Postbacks\Models\CreatorPostbackEndpoint;
 
 final class EloquentPostbacksApi implements PostbacksApi
 {
+    public function configure(string $affiliateId, array $data): CreatorPostbackRecord
+    {
+        return app(ConfigureCreatorPostback::class)->execute($affiliateId, $data)->toRecord();
+    }
+
+    public function update(string $endpointId, string $affiliateId, array $data): CreatorPostbackRecord
+    {
+        return app(ConfigureCreatorPostback::class)->execute($affiliateId, $data, $endpointId)->toRecord();
+    }
+
+    public function delete(string $endpointId): void
+    {
+        app(DeleteCreatorPostback::class)->execute($endpointId);
+    }
+
+    public function retry(string $deliveryId): PostbackDeliveryStatus
+    {
+        return app(DeliverCreatorPostback::class)->execute($deliveryId)->status;
+    }
+
     public function endpointsFor(string $affiliateId, ?string $offerId, PostbackEventType $eventType): array
     {
         $records = [];

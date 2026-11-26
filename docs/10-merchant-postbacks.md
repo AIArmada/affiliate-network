@@ -235,15 +235,23 @@ redirects, applies the configured timeouts/retries, and caps the response body
 (`http.max_response_bytes`). Delivery attempts and errors are stored on
 `CreatorPostbackDelivery`; retries are queued (`creator_postbacks.queue`).
 
+Each delivery attempt claims a short lease (`attempt_token`, `lease_expires_at`)
+before the transport call and finalizes only while its token and lease still
+match. Overlapping retries do not call the transport concurrently, and a stale
+worker cannot overwrite a newer attempt. The transport call runs outside the
+database transaction. Attempts are counted once per claimed send and stored
+errors are sanitized; delivery is at-least-once from the network's perspective,
+not an external exactly-once guarantee.
+
 ## Merchant SDK (`aiarmada/affiliates`)
 
 Merchant apps use `CaptureNetworkReferral` (middleware) plus
-`NetworkPostbackClient` instead of hand-rolled HTTP:
+`NetworkPostbackGateway` instead of hand-rolled HTTP:
 
 ```php
-use AIArmada\Affiliates\Merchant\NetworkPostbackClient;
+use AIArmada\Affiliates\Contracts\NetworkPostbackGateway;
 
-$client = app(NetworkPostbackClient::class);
+$client = app(NetworkPostbackGateway::class);
 
 $result = $client->report(
     linkCode: $linkCode,
@@ -257,8 +265,8 @@ $result = $client->report(
     subIds: ['sub1' => 'blog', 'sub2' => 'sidebar'],
 );
 
-$result['ok'];        // bool
-$result['decision'];  // parsed decision array or null
+$result->ok;        // bool
+$result->decision;  // parsed decision array or null
 
 $client->adjustConversion(
     linkCode: $linkCode,

@@ -6,15 +6,31 @@ namespace AIArmada\AffiliateNetwork\Drivers;
 
 use AIArmada\AffiliateNetwork\Contracts\AffiliateIdentityResolver;
 use AIArmada\AffiliateNetwork\Data\NetworkAffiliate;
+use AIArmada\CommerceSupport\Data\OwnerTableReference;
 use AIArmada\CommerceSupport\Support\OwnerContext;
 use AIArmada\CommerceSupport\Support\PublicHandle;
+use AIArmada\CommerceSupport\Traits\HasOwner;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use LogicException;
 
 final class UserKeyIdentityDriver implements AffiliateIdentityResolver
 {
+    public function ownerTable(): ?OwnerTableReference
+    {
+        $model = $this->userModelClass();
+
+        if ($model === null || ! in_array(HasOwner::class, class_uses_recursive($model), true)) {
+            return null;
+        }
+
+        $user = new $model;
+
+        return new OwnerTableReference($user->getTable(), $user->getKeyName(), spl_object_id($user->getConnection()));
+    }
+
     public function find(string $affiliateId): ?NetworkAffiliate
     {
         $user = $this->userByKey($affiliateId);
@@ -36,16 +52,27 @@ final class UserKeyIdentityDriver implements AffiliateIdentityResolver
             return $affiliate;
         }
 
-        $user = $this->userByKey($affiliateId);
-
-        if (! $user instanceof Model) {
-            return null;
-        }
-
-        $sameOwner = $scope->getMorphClass() === $user->getMorphClass()
-            && (string) $scope->getKey() === (string) $user->getKey();
+        $sameOwner = $scope->getMorphClass() === $affiliate->ownerType
+            && (string) $scope->getKey() === (string) $affiliate->ownerId;
 
         return $sameOwner ? $affiliate : null;
+    }
+
+    public function lockForWrite(string $affiliateId, int $connectionIdentity): void
+    {
+        $model = $this->userModelClass();
+
+        if ($model === null) {
+            return;
+        }
+
+        $instance = new $model;
+
+        if (spl_object_id($instance->getConnection()) !== $connectionIdentity || $instance->getConnection()->transactionLevel() < 1) {
+            throw new LogicException('Affiliate identity locks require an active shared-connection transaction.');
+        }
+
+        $instance->newQuery()->whereKey($affiliateId)->lockForUpdate()->first();
     }
 
     public function findIdForVerifiedEmail(string $email): ?string
@@ -57,9 +84,9 @@ final class UserKeyIdentityDriver implements AffiliateIdentityResolver
         }
 
         $instance = new $model;
-        $key = $instance->newQuery()->where('email', $email)->value($instance->getKeyName());
+        $keys = $instance->newQuery()->where('email', $email)->limit(2)->pluck($instance->getKeyName());
 
-        return $key === null ? null : (string) $key;
+        return $keys->count() === 1 ? (string) $keys->first() : null;
     }
 
     public function requiresMerchantProfile(): bool

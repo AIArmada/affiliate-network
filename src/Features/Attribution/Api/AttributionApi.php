@@ -37,4 +37,7 @@ interface AttributionApi
     public function offerLinkTotals(array $offerIds): array;
 
     public function deleteForOffer(string $offerId): void;
+
+    /** @return list<array{currency: string|null, revenue: int, clicks: int, conversions: int}> */
+    public function networkLinkTotalsUnscoped(): array;
 }

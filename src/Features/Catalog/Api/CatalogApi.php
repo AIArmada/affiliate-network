@@ -27,4 +27,6 @@ interface CatalogApi
     public function deleteOffersForSite(string $siteId): void;
 
     public function fallbackUrlForOffer(string $offerId): ?string;
+
+    public function countPublishedOffersUnscoped(): int;
 }

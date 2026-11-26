@@ -22,6 +22,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $http_status
  * @property int $attempts
  * @property string|null $last_error
+ * @property string|null $attempt_token
+ * @property CarbonImmutable|null $lease_expires_at
  * @property CarbonImmutable|null $delivered_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
@@ -46,6 +48,8 @@ class CreatorPostbackDelivery extends Model
         'http_status',
         'attempts',
         'last_error',
+        'attempt_token',
+        'lease_expires_at',
         'delivered_at',
     ];
 
@@ -71,6 +75,7 @@ class CreatorPostbackDelivery extends Model
             'status' => PostbackDeliveryStatus::class,
             'http_status' => 'integer',
             'attempts' => 'integer',
+            'lease_expires_at' => 'immutable_datetime',
             'delivered_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',

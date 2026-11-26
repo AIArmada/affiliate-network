@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AIArmada\AffiliateNetwork\Contracts;
 
 use AIArmada\AffiliateNetwork\Data\NetworkAffiliate;
+use AIArmada\CommerceSupport\Data\OwnerTableReference;
 
 /**
  * Resolve affiliate identity for the network.
@@ -16,9 +17,13 @@ use AIArmada\AffiliateNetwork\Data\NetworkAffiliate;
  */
 interface AffiliateIdentityResolver
 {
+    public function ownerTable(): ?OwnerTableReference;
+
     public function find(string $affiliateId): ?NetworkAffiliate;
 
     public function findAccessible(string $affiliateId): ?NetworkAffiliate;
+
+    public function lockForWrite(string $affiliateId, int $connectionIdentity): void;
 
     /**
      * Resolve the affiliate id for a verified account email.

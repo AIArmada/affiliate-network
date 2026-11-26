@@ -33,4 +33,9 @@ interface EnrollmentApi
     public function deleteForOffer(string $offerId): void;
 
     public function averageApprovalHoursForOffer(string $offerId, CarbonImmutable $since): ?float;
+
+    public function countPendingApplicationsUnscoped(): int;
+
+    /** @return list<RecentApplication> */
+    public function recentPendingApplications(int $limit = 5): array;
 }

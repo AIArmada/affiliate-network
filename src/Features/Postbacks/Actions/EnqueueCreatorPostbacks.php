@@ -10,9 +10,8 @@ use AIArmada\AffiliateNetwork\Data\PostbackEventType;
 use AIArmada\AffiliateNetwork\Features\Postbacks\EntryPoints\Jobs\DeliverCreatorPostbackJob;
 use AIArmada\AffiliateNetwork\Features\Postbacks\Models\CreatorPostbackDelivery;
 use AIArmada\AffiliateNetwork\Features\Postbacks\Models\CreatorPostbackEndpoint;
-use Illuminate\Support\Facades\DB;
 
-final class EnqueueCreatorPostbacks
+final readonly class EnqueueCreatorPostbacks
 {
     public function execute(NetworkLegSnapshot $leg, PostbackEventType $eventType): int
     {
@@ -38,32 +37,24 @@ final class EnqueueCreatorPostbacks
                 continue;
             }
 
-            $delivery = DB::transaction(function () use ($endpoint, $leg, $eventType): ?CreatorPostbackDelivery {
-                $existing = CreatorPostbackDelivery::query()
-                    ->where('endpoint_id', $endpoint->getKey())
-                    ->where('leg_id', $leg->id)
-                    ->where('event_type', $eventType->value)
-                    ->first();
-
-                if ($existing instanceof CreatorPostbackDelivery) {
-                    return null;
-                }
-
-                return CreatorPostbackDelivery::create([
+            $delivery = CreatorPostbackDelivery::query()->firstOrCreate(
+                [
                     'endpoint_id' => $endpoint->getKey(),
                     'leg_id' => $leg->id,
                     'event_type' => $eventType->value,
+                ],
+                [
                     'resolved_url' => $this->resolveUrl($endpoint, $leg, $eventType),
                     'status' => PostbackDeliveryStatus::Pending,
                     'attempts' => 0,
-                ]);
-            });
+                ],
+            );
 
-            if (! $delivery instanceof CreatorPostbackDelivery) {
+            if (! $delivery->wasRecentlyCreated) {
                 continue;
             }
 
-            $job = DeliverCreatorPostbackJob::dispatch((string) $delivery->getKey());
+            $job = DeliverCreatorPostbackJob::dispatch((string) $delivery->getKey())->afterCommit();
 
             if ($queue !== null) {
                 $job->onQueue($queue);

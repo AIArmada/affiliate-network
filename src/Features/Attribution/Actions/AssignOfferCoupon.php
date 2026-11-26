@@ -11,7 +11,6 @@ use AIArmada\AffiliateNetwork\Features\Enrollment\Api\EnrollmentApi;
 use AIArmada\AffiliateNetwork\Features\Sites\Api\SitesApi;
 use AIArmada\AffiliateNetwork\Platform\AffiliateProfileGuard;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 final class AssignOfferCoupon
@@ -53,7 +52,11 @@ final class AssignOfferCoupon
             throw new RuntimeException('Affiliate is not approved for this offer.');
         }
 
-        return DB::transaction(function () use ($offer, $affiliateId, $normalized, $startsAt, $endsAt, $metadata): AffiliateOfferCoupon {
+        $connection = (new AffiliateOfferCoupon)->getConnection();
+
+        return $connection->transaction(function () use ($offer, $affiliateId, $normalized, $startsAt, $endsAt, $metadata, $connection): AffiliateOfferCoupon {
+            $this->affiliateProfileGuard->lockForWrite($affiliateId, spl_object_id($connection));
+
             $exists = AffiliateOfferCoupon::query()
                 ->withoutGlobalScopes()
                 ->where('site_id', $offer->siteId)

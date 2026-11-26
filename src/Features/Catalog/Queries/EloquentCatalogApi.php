@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AIArmada\AffiliateNetwork\Features\Catalog\Queries;
 
+use AIArmada\AffiliateNetwork\Data\OfferStatus;
 use AIArmada\AffiliateNetwork\Data\RestrictionContext;
 use AIArmada\AffiliateNetwork\Features\Catalog\Actions\DeleteOffer;
 use AIArmada\AffiliateNetwork\Features\Catalog\Api\CatalogApi;
@@ -12,6 +13,7 @@ use AIArmada\AffiliateNetwork\Features\Catalog\Api\OfferRecord;
 use AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOffer;
 use AIArmada\AffiliateNetwork\Features\Catalog\Models\AffiliateOfferCreative;
 use AIArmada\AffiliateNetwork\Features\Sites\Api\SitesApi;
+use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
 use Carbon\CarbonImmutable;
 
 final class EloquentCatalogApi implements CatalogApi
@@ -118,5 +120,10 @@ final class EloquentCatalogApi implements CatalogApi
         $default = config('affiliate-network.links.default_fallback_url');
 
         return is_string($default) && $default !== '' ? $default : null;
+    }
+
+    public function countPublishedOffersUnscoped(): int
+    {
+        return AffiliateOffer::withoutGlobalScope(ScopesByBelongsToOwner::class)->where('status', OfferStatus::Published)->count();
     }
 }

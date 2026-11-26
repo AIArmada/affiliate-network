@@ -6,8 +6,10 @@ namespace AIArmada\AffiliateNetwork\Features\Ledger\Queries;
 
 use AIArmada\AffiliateNetwork\Data\LegStatus;
 use AIArmada\AffiliateNetwork\Data\NetworkLegSnapshot;
+use AIArmada\AffiliateNetwork\Data\SettlementStatus;
 use AIArmada\AffiliateNetwork\Features\Ledger\Actions\CheckOfferCaps;
 use AIArmada\AffiliateNetwork\Features\Ledger\Api\LedgerApi;
+use AIArmada\AffiliateNetwork\Features\Ledger\Models\MerchantStatement;
 use AIArmada\AffiliateNetwork\Features\Ledger\Models\NetworkConversionLeg;
 use Carbon\CarbonImmutable;
 
@@ -94,5 +96,15 @@ final class EloquentLedgerApi implements LedgerApi
         }
 
         return $metrics;
+    }
+
+    public function countPendingLegsUnscoped(): int
+    {
+        return NetworkConversionLeg::withoutOwnerScope()->where('status', LegStatus::Pending)->count();
+    }
+
+    public function countIssuedStatementsUnscoped(): int
+    {
+        return MerchantStatement::withoutOwnerScope()->where('status', SettlementStatus::Issued)->count();
     }
 }

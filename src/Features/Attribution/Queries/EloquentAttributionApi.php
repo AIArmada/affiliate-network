@@ -11,6 +11,7 @@ use AIArmada\AffiliateNetwork\Features\Attribution\Api\AttributionApi;
 use AIArmada\AffiliateNetwork\Features\Attribution\Api\OfferCouponRecord;
 use AIArmada\AffiliateNetwork\Features\Attribution\Api\OfferLinkRecord;
 use AIArmada\AffiliateNetwork\Features\Attribution\Models\AffiliateOfferLink;
+use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
 use Carbon\CarbonImmutable;
 
 final class EloquentAttributionApi implements AttributionApi
@@ -104,5 +105,21 @@ final class EloquentAttributionApi implements AttributionApi
     public function deleteForOffer(string $offerId): void
     {
         $this->deleteOfferLinks->execute($offerId);
+    }
+
+    public function networkLinkTotalsUnscoped(): array
+    {
+        return AffiliateOfferLink::withoutGlobalScope(ScopesByBelongsToOwner::class)
+            ->toBase()
+            ->selectRaw('currency, COALESCE(SUM(revenue), 0) as revenue, COALESCE(SUM(clicks), 0) as clicks, COALESCE(SUM(conversions), 0) as conversions')
+            ->groupBy('currency')
+            ->get()
+            ->map(static fn (object $row): array => [
+                'currency' => $row->currency,
+                'revenue' => (int) $row->revenue,
+                'clicks' => (int) $row->clicks,
+                'conversions' => (int) $row->conversions,
+            ])
+            ->all();
     }
 }

@@ -6,7 +6,6 @@ namespace AIArmada\AffiliateNetwork\Features\Attribution\Models;
 
 use AIArmada\AffiliateNetwork\Database\Factories\AffiliateOfferLinkFactory;
 use AIArmada\AffiliateNetwork\Features\Attribution\Api\OfferLinkRecord;
-use AIArmada\AffiliateNetwork\Platform\ResolvesAffiliateModel;
 use AIArmada\AffiliateNetwork\Platform\ScopesByBelongsToOwner;
 use AIArmada\CommerceSupport\Concerns\HasCommerceAudit;
 use AIArmada\CommerceSupport\Concerns\LogsCommerceActivity;
@@ -37,7 +36,6 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property CarbonImmutable $updated_at
  * @property-read Link|null $link
  * @property-read Model|null $offer
- * @property-read Model|null $affiliate
  * @property-read Model|null $site
  */
 class AffiliateOfferLink extends Model implements Auditable
@@ -49,12 +47,11 @@ class AffiliateOfferLink extends Model implements Auditable
 
     use HasUuids;
     use LogsCommerceActivity;
-    use ResolvesAffiliateModel;
     use ScopesByBelongsToOwner;
 
     protected static function ownerViaRelation(): string
     {
-        return 'affiliate';
+        return 'offer.site';
     }
 
     protected static function ownerTableConfigKey(): string
@@ -62,9 +59,9 @@ class AffiliateOfferLink extends Model implements Auditable
         return 'affiliate-network.owner';
     }
 
-    protected static function ownerFallbackRelation(): ?string
+    protected static function ownerViaAffiliateIdentity(): bool
     {
-        return 'offer.site';
+        return true;
     }
 
     protected static function newFactory(): AffiliateOfferLinkFactory
@@ -107,14 +104,6 @@ class AffiliateOfferLink extends Model implements Auditable
     public function offer(): BelongsTo
     {
         return $this->belongsTo(self::relatedModel('offer'), 'offer_id');
-    }
-
-    /**
-     * @return BelongsTo<Model, $this>
-     */
-    public function affiliate(): BelongsTo
-    {
-        return $this->belongsTo(self::affiliateModel(), 'affiliate_id');
     }
 
     /**
