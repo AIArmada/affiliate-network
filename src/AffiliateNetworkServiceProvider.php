@@ -208,7 +208,7 @@ final class AffiliateNetworkServiceProvider extends PackageServiceProvider
 
         if ($this->engineInstalled()
             && config('affiliates.features.commission_tracking.enabled', true)
-            && class_exists('AIArmada\\Cart\\CartManager')) {
+            && interface_exists('AIArmada\\Cart\\Runtime\\CartManagerInterface')) {
             $this->app->make('AIArmada\Affiliates\Features\Conversions\Api\OrderCommissionRegistration')->register();
         }
 

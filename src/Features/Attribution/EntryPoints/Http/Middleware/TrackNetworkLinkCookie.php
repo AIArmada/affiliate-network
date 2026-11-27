@@ -211,7 +211,7 @@ final class TrackNetworkLinkCookie
 
     private function currentCart(): ?object
     {
-        $contract = 'AIArmada\\Cart\\Contracts\\CartManagerInterface';
+        $contract = 'AIArmada\\Cart\\Runtime\\CartManagerInterface';
 
         if (! interface_exists($contract) || ! app()->bound($contract)) {
             return null;
