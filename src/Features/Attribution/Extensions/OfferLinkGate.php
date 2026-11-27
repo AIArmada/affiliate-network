@@ -15,7 +15,7 @@ use AIArmada\AffiliateNetwork\Features\Ledger\Api\LedgerApi;
 use AIArmada\AffiliateNetwork\Features\Sites\Api\SitesApi;
 use AIArmada\Links\Contracts\FallbackRedirectGateInterface;
 use AIArmada\Links\Contracts\LinkGateInterface;
-use AIArmada\Links\Models\Link;
+use AIArmada\Links\Data\LinkGateContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
@@ -29,15 +29,15 @@ final class OfferLinkGate implements FallbackRedirectGateInterface, LinkGateInte
         private readonly LedgerApi $ledger,
     ) {}
 
-    public function blockedReason(Link $link): ?string
+    public function blockedReason(LinkGateContext $link): ?string
     {
-        if ($link->subject_type !== (new AffiliateOfferLink)->getMorphClass()) {
+        if ($link->subjectType !== (new AffiliateOfferLink)->getMorphClass()) {
             return null;
         }
 
-        $offerLink = $this->attribution->findLinkByIdUnscoped((string) $link->subject_id);
+        $offerLink = $this->attribution->findLinkByIdUnscoped((string) $link->subjectId);
 
-        if (! $offerLink instanceof OfferLinkRecord) {
+        if (! $offerLink instanceof OfferLinkRecord || $offerLink->linkId !== $link->id) {
             return 'link_unknown';
         }
 
@@ -70,15 +70,15 @@ final class OfferLinkGate implements FallbackRedirectGateInterface, LinkGateInte
         return $this->catalog->evaluateRestrictions($offer, $this->restrictionContext());
     }
 
-    public function fallbackUrl(Link $link, string $reason): ?string
+    public function fallbackUrl(LinkGateContext $link, string $reason): ?string
     {
-        if ($link->subject_type !== (new AffiliateOfferLink)->getMorphClass()) {
+        if ($link->subjectType !== (new AffiliateOfferLink)->getMorphClass()) {
             return null;
         }
 
-        $offerLink = $this->attribution->findLinkByIdUnscoped((string) $link->subject_id);
+        $offerLink = $this->attribution->findLinkByIdUnscoped((string) $link->subjectId);
 
-        if (! $offerLink instanceof OfferLinkRecord) {
+        if (! $offerLink instanceof OfferLinkRecord || $offerLink->linkId !== $link->id) {
             return null;
         }
 
