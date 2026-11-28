@@ -10,7 +10,7 @@ use AIArmada\AffiliateNetwork\Notifications\ApplicationApprovedNotification;
 use AIArmada\AffiliateNetwork\Notifications\ApplicationSubmittedNotification;
 use AIArmada\AffiliateNetwork\Notifications\NetworkConversionNotification;
 use AIArmada\CommerceSupport\Support\OwnerContext;
-use AIArmada\Communications\Actions\DispatchManagedNotificationAction;
+use AIArmada\Communications\Contracts\CommunicationManager;
 use AIArmada\Communications\Data\CommunicationContextData;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -46,7 +46,7 @@ final class CommunicationsNotificationDriver implements NotificationDispatcher
             return;
         }
 
-        $dispatcher->handle(
+        $dispatcher->notify(
             $user,
             $this->notificationFor($purpose, $payload),
             new CommunicationContextData(
@@ -83,7 +83,7 @@ final class CommunicationsNotificationDriver implements NotificationDispatcher
             return;
         }
 
-        $dispatcher->handle(
+        $dispatcher->notify(
             $owner,
             $this->notificationFor($purpose, $payload),
             new CommunicationContextData(
@@ -158,23 +158,23 @@ final class CommunicationsNotificationDriver implements NotificationDispatcher
         return $model;
     }
 
-    private function dispatcher(): ?DispatchManagedNotificationAction
+    private function dispatcher(): ?CommunicationManager
     {
         if (! config('affiliate-network.notifications.enabled', true)) {
             return null;
         }
 
-        if (! class_exists(DispatchManagedNotificationAction::class)) {
+        if (! interface_exists(CommunicationManager::class)) {
             return null;
         }
 
-        $bound = app()->bound(DispatchManagedNotificationAction::class);
+        $bound = app()->bound(CommunicationManager::class);
         $loaded = isset(app()->getLoadedProviders()['AIArmada\Communications\CommunicationsServiceProvider']);
 
         if (! $bound && ! $loaded) {
             return null;
         }
 
-        return app(DispatchManagedNotificationAction::class);
+        return app(CommunicationManager::class);
     }
 }
